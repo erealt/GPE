@@ -212,15 +212,15 @@ public class FormPrincipal : Form
         panel.Controls.Add(btnFiltrar);
         panel.Controls.Add(btnLimpiar);
 
-        // Se filtra al pulsar el botón (o Enter en el buscador), no en cada tecla
-        // btnFiltrar.Click += (s, e) => AplicarFiltros();
-        // btnLimpiar.Click += (s, e) => LimpiarFiltros();
-        // txtBuscar.KeyDown += (s, e) =>
-        // {
-        //     if (e.KeyCode != Keys.Enter) return;
-        //     AplicarFiltros();
-        //     e.SuppressKeyPress = true;
-        // };
+       
+        btnFiltrar.Click += (s, e) => AplicarFiltros();
+        btnLimpiar.Click += (s, e) => LimpiarFiltros();
+        txtBuscar.KeyDown += (s, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            AplicarFiltros();
+            e.SuppressKeyPress = true;
+        };
 
         return panel;
     }
@@ -328,53 +328,53 @@ public class FormPrincipal : Form
             .OrderBy(v => v);
     }
 
-    // private void AplicarFiltros()
-    // {
-    //     string texto = txtBuscar.Text.Trim();
-    //     string estado = cmbEstado.SelectedIndex > 0 ? cmbEstado.Text : "";
-    //     DateTime? desde = dtpDesde.Checked ? dtpDesde.Value.Date : null;
-    //     DateTime? hasta = dtpHasta.Checked ? dtpHasta.Value.Date : null;
+    private void AplicarFiltros()
+    {
+        string texto = txtBuscar.Text.Trim();
+        string estado = cmbEstado.SelectedIndex > 0 ? cmbEstado.Text : "";
+        DateTime? desde = dtpDesde.Checked ? dtpDesde.Value.Date : null;
+        DateTime? hasta = dtpHasta.Checked ? dtpHasta.Value.Date : null;
 
-    //     if (desde != null && hasta != null && desde > hasta)
-    //     {
-    //         MessageBox.Show(this, "La fecha \"desde\" no puede ser posterior a \"hasta\".",
-    //             "Fechas incorrectas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-    //         return;
-    //     }
+        if (desde != null && hasta != null && desde > hasta)
+        {
+            MessageBox.Show(this, "La fecha \"desde\" no puede ser posterior a \"hasta\".",
+                "Fechas incorrectas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
     
-    //     grid.CurrentCell = null;
+        grid.CurrentCell = null;
 
-    //     foreach (DataGridViewRow fila in grid.Rows)
-    //     {
-    //         string numero = fila.Cells[0].Value?.ToString() ?? "";
-    //         string cli = fila.Cells[1].Value?.ToString() ?? "";
-    //         string albaran = fila.Cells[2].Value?.ToString() ?? "";
-    //         string est = fila.Cells[7].Value?.ToString() ?? "";
+        foreach (DataGridViewRow fila in grid.Rows)
+        {
+            string numero = fila.Cells[0].Value?.ToString() ?? "";
+            string cli = fila.Cells[1].Value?.ToString() ?? "";
+            string albaran = fila.Cells[2].Value?.ToString() ?? "";
+            string est = fila.Cells[7].Value?.ToString() ?? "";
 
-    //         bool coincideTexto = texto == ""
-    //             || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
-    //             || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
-    //             || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
-    //         bool coincideEstado = estado == "" || est == estado;
+            bool coincideTexto = texto == ""
+                || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
+                || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
+                || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
+            bool coincideEstado = estado == "" || est == estado;
 
-    //         bool coincideFecha = fila.Tag is not DateTime f
-    //             || ((desde == null || f >= desde) && (hasta == null || f <= hasta));
+            bool coincideFecha = fila.Tag is not DateTime f
+                || ((desde == null || f >= desde) && (hasta == null || f <= hasta));
 
-    //         fila.Visible = coincideTexto && coincideEstado && coincideFecha;
-    //     }
+            fila.Visible = coincideTexto && coincideEstado && coincideFecha;
+        }
 
-    //     ActualizarContador();
-    // }
+        ActualizarContador();
+    }
 
-    // private void LimpiarFiltros()
-    // {
-    //     txtBuscar.Clear();
-    //     cmbEstado.SelectedIndex = 0;
-    //     dtpDesde.Checked = false;
-    //     dtpHasta.Checked = false;
-    //     AplicarFiltros();
-    // }
+    private void LimpiarFiltros()
+    {
+        txtBuscar.Clear();
+        cmbEstado.SelectedIndex = 0;
+        dtpDesde.Checked = false;
+        dtpHasta.Checked = false;
+        AplicarFiltros();
+    }
 
     private void ActualizarContador()
     {
