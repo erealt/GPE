@@ -1,0 +1,52 @@
+CREATE TABLE FABRICA (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE ROL (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE USUARIO (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL,
+    email NVARCHAR(150) NOT NULL UNIQUE
+);
+
+CREATE TABLE CLIENTE (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL
+);
+
+CREATE TABLE PRODUCTO (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    codigo NVARCHAR(30) NOT NULL UNIQUE,
+    nombre NVARCHAR(100) NOT NULL
+);
+CREATE TABLE USUARIO_ROL (
+    usuario_id INT NOT NULL,
+    rol_id INT NOT NULL,
+    fabrica_id INT NOT NULL,
+    CONSTRAINT PK_usuario_rol PRIMARY KEY (usuario_id, rol_id, fabrica_id),
+    CONSTRAINT FK_usuario_rol_usuario FOREIGN KEY (usuario_id) REFERENCES USUARIO(id),
+    CONSTRAINT FK_usuario_rol_rol FOREIGN KEY (rol_id) REFERENCES ROL(id),
+    CONSTRAINT FK_usuario_rol_fabrica FOREIGN KEY (fabrica_id) REFERENCES FABRICA(id)
+);
+CREATE TABLE LOTE (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    producto_id INT NOT NULL,
+    fabrica_id INT NOT NULL,
+    codigo NVARCHAR(20) NOT NULL,
+    caducidad DATE NOT NULL,
+    CONSTRAINT FK_lote_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id),
+    CONSTRAINT FK_lote_fabrica FOREIGN KEY (fabrica_id) REFERENCES FABRICA(id),
+    CONSTRAINT UQ_lote_producto_codigo UNIQUE (producto_id, codigo)
+);
+
+CREATE TABLE ESTADO_DEVOLUCION (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(60) NOT NULL UNIQUE,
+    rol_responsable_id INT NULL,
+    CONSTRAINT FK_estado_rol FOREIGN KEY (rol_responsable_id) REFERENCES ROL(id)
+);
