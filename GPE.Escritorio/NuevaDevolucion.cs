@@ -205,7 +205,6 @@ private Control CrearAcciones()
 
     pantalla.Show();
 
-    this.Hide();
     };
 
     panel.Controls.Add(btnCrear);

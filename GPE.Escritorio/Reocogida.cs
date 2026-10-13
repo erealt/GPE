@@ -32,8 +32,14 @@ namespace GPE.Escritorio
                 AutoSize = true,
                 Location = new Point(42, 85)
             };
-            
+            var barra = new BarraProgresoDevolucion
+            {
+                FaseActual = 2,
+                FasesCompletadas = 1,
+                Dock = DockStyle.Top
+            };
 
+            Controls.Add(barra);
             Controls.Add(titulo);
             Controls.Add(subtitulo);
         }
