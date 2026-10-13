@@ -4,17 +4,18 @@ namespace GPE.Escritorio;
 
 public class FormPrincipal : Form
 {
-    // Colores 
+    // Colores
     private static readonly Color ColorFondo = Color.FromArgb(245, 246, 244);
-    private static readonly Color ColorVerde = Color.FromArgb(22, 101, 74);
+    private static readonly Color ColorAzul = Color.FromArgb(89, 0, 246);
     private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
     private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
 
-   
     private readonly TextBox txtBuscar = new();
     private readonly ComboBox cmbEstado = new();
-    private readonly ComboBox cmbCliente = new();
-    private readonly DateTimePicker dtpFecha = new();
+    private readonly DateTimePicker dtpDesde = new();
+    private readonly DateTimePicker dtpHasta = new();
+    private readonly Button btnFiltrar = new();
+    private readonly Button btnLimpiar = new();
     private readonly Label lblContador = new();
     private readonly DataGridView grid = new();
     private readonly Button btnNueva = new();
@@ -23,10 +24,11 @@ public class FormPrincipal : Form
     {
         Text = "GPE - Devoluciones";
         Size = new Size(1200, 750);
-        MinimumSize = new Size(900, 600);
+        MinimumSize = new Size(1150, 600);
         BackColor = ColorFondo;
         Font = new Font("Segoe UI", 10);
 
+        // Con Dock el orden importa: primero lo que rellena, al final la barra superior
         Controls.Add(CrearContenido());
         Controls.Add(CrearBarraSuperior());
 
@@ -59,13 +61,13 @@ public class FormPrincipal : Form
             Dock = DockStyle.Right,
             Width = 50,
             TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = ColorVerde,
+            ForeColor = ColorAzul,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
             Text = "BM"
         };
 
         barra.Controls.Add(lblFecha);
-        barra.Controls.Add(lblUsuario); // el último añadido queda más a la derecha
+        barra.Controls.Add(lblUsuario); 
         return barra;
     }
 
@@ -85,7 +87,7 @@ public class FormPrincipal : Form
             RowCount = 4
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 65));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -135,25 +137,25 @@ public class FormPrincipal : Form
         titulos.Controls.Add(lblSubtitulo);
         titulos.Controls.Add(lblTitulo); // el último añadido queda arriba
 
-        // Botón verde
+        // Botón principal
         btnNueva.Text = "+  Nueva devolución";
         btnNueva.Size = new Size(210, 46);
         btnNueva.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnNueva.Margin = new Padding(0, 10, 0, 0);
         btnNueva.FlatStyle = FlatStyle.Flat;
         btnNueva.FlatAppearance.BorderSize = 0;
-        btnNueva.BackColor = ColorVerde;
+        btnNueva.BackColor = ColorAzul;
         btnNueva.ForeColor = Color.White;
         btnNueva.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         btnNueva.Cursor = Cursors.Hand;
         btnNueva.Click += (s, e) =>
-{
-    using var formulario = new FormNuevaDevolucion();
-    if (formulario.ShowDialog(this) == DialogResult.OK)
-    {
-        // TODO (tuyo): recargar la lista para que aparezca la nueva devolución
-    }
-};
+        {
+            using var formulario = new FormNuevaDevolucion();
+            if (formulario.ShowDialog(this) == DialogResult.OK)
+            {
+                
+            }
+        };
 
         cabecera.Controls.Add(titulos, 0, 0);
         cabecera.Controls.Add(btnNueva, 1, 0);
@@ -166,36 +168,79 @@ public class FormPrincipal : Form
         {
             Dock = DockStyle.Fill,
             BackColor = Color.White,
-            Padding = new Padding(15, 15, 15, 0)
+            Padding = new Padding(15, 8, 15, 0)
         };
 
-        txtBuscar.Width = 380;
-        txtBuscar.PlaceholderText = "Buscar por nº, cliente o albarán...";
+        txtBuscar.Width = 340;
+        txtBuscar.PlaceholderText = "Nº, cliente o albarán";
 
         cmbEstado.Width = 210;
         cmbEstado.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        cmbCliente.Width = 230;
-        cmbCliente.DropDownStyle = ComboBoxStyle.DropDownList;
-
-        dtpFecha.Width = 190;
-        dtpFecha.Format = DateTimePickerFormat.Short;
-        dtpFecha.ShowCheckBox = true;   // desmarcado = "cualquier fecha"
-        dtpFecha.Checked = false;
-
-        foreach (Control c in new Control[] { txtBuscar, cmbEstado, cmbCliente, dtpFecha })
+        foreach (var fecha in new[] { dtpDesde, dtpHasta })
         {
-            c.Margin = new Padding(0, 0, 12, 0);
-            panel.Controls.Add(c);
+            fecha.Width = 150;
+            fecha.Format = DateTimePickerFormat.Short;
+            fecha.ShowCheckBox = true;   
+            fecha.Checked = false;
         }
 
-        // Cada cambio en un filtro vuelve a filtrar la tabla
-        txtBuscar.TextChanged += (s, e) => AplicarFiltros();
-        cmbEstado.SelectedIndexChanged += (s, e) => AplicarFiltros();
-        cmbCliente.SelectedIndexChanged += (s, e) => AplicarFiltros();
-        // TODO (tuyo): filtrar también por dtpFecha (ValueChanged) contra la fecha de solicitud
+        btnFiltrar.Text = "Filtrar";
+        btnFiltrar.Size = new Size(110, 30);
+        btnFiltrar.Margin = new Padding(0, 22, 8, 0);
+        btnFiltrar.FlatStyle = FlatStyle.Flat;
+        btnFiltrar.FlatAppearance.BorderSize = 0;
+        btnFiltrar.BackColor = ColorAzul;
+        btnFiltrar.ForeColor = Color.White;
+        btnFiltrar.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        btnFiltrar.Cursor = Cursors.Hand;
+
+        btnLimpiar.Text = "Limpiar filtros";
+        btnLimpiar.Size = new Size(130, 30);
+        btnLimpiar.Margin = new Padding(0, 22, 0, 0);
+        btnLimpiar.FlatStyle = FlatStyle.Flat;
+        btnLimpiar.FlatAppearance.BorderColor = Color.FromArgb(200, 205, 200);
+        btnLimpiar.BackColor = Color.White;
+        btnLimpiar.ForeColor = ColorTexto;
+        btnLimpiar.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        btnLimpiar.Cursor = Cursors.Hand;
+
+        panel.Controls.Add(CampoFiltro("Buscar", txtBuscar));
+        panel.Controls.Add(CampoFiltro("Estado", cmbEstado));
+        panel.Controls.Add(CampoFiltro("Fecha desde", dtpDesde));
+        panel.Controls.Add(CampoFiltro("Fecha hasta", dtpHasta));
+        panel.Controls.Add(btnFiltrar);
+        panel.Controls.Add(btnLimpiar);
+
+        // Se filtra al pulsar el botón (o Enter en el buscador), no en cada tecla
+        // btnFiltrar.Click += (s, e) => AplicarFiltros();
+        // btnLimpiar.Click += (s, e) => LimpiarFiltros();
+        // txtBuscar.KeyDown += (s, e) =>
+        // {
+        //     if (e.KeyCode != Keys.Enter) return;
+        //     AplicarFiltros();
+        //     e.SuppressKeyPress = true;
+        // };
 
         return panel;
+    }
+
+    
+    private static Control CampoFiltro(string etiqueta, Control control)
+    {
+        var campo = new Panel { Size = new Size(control.Width, 58), Margin = new Padding(0, 0, 12, 0) };
+        var lbl = new Label
+        {
+            Text = etiqueta,
+            Dock = DockStyle.Top,
+            Height = 22,
+            ForeColor = ColorSuave,
+            Font = new Font("Segoe UI", 9)
+        };
+        control.Dock = DockStyle.Top;
+        campo.Controls.Add(control);
+        campo.Controls.Add(lbl);   
+        return campo;
     }
 
     private Control ConfigurarGrid()
@@ -230,7 +275,7 @@ public class FormPrincipal : Form
 
         // Celdas
         grid.DefaultCellStyle.ForeColor = ColorTexto;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(232, 243, 238);
+        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(240, 236, 255);
         grid.DefaultCellStyle.SelectionForeColor = ColorTexto;
         grid.DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
 
@@ -242,8 +287,8 @@ public class FormPrincipal : Form
         foreach (string nombre in columnas)
             grid.Columns.Add(nombre, nombre);
 
-        // El número de devolución en verde y negrita
-        grid.Columns[0].DefaultCellStyle.ForeColor = ColorVerde;
+        // El número de devolución con el color principal y en negrita
+        grid.Columns[0].DefaultCellStyle.ForeColor = ColorAzul;
         grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
 
         return grid;
@@ -253,24 +298,26 @@ public class FormPrincipal : Form
 
     private void CargarDatosDePrueba()
     {
-       
-        grid.Rows.Add("DEV-2026-001", "Distribuciones Rivera", "ALB-45872", "Producto dañado", "12 Mar 2026", "14 Mar 2026", "16 Mar 2026", "Abonada");
-        grid.Rows.Add("DEV-2026-002", "Alimentación Sánchez", "ALB-45901", "Error en pedido", "12 Mar 2026", "15 Mar 2026", "18 Mar 2026", "En almacén");
-        grid.Rows.Add("DEV-2026-003", "Supermercados Norte", "ALB-45834", "Caducidad próxima", "11 Mar 2026", "13 Mar 2026", "15 Mar 2026", "Abonada");
-        grid.Rows.Add("DEV-2026-004", "Comercial del Sur", "ALB-45798", "Envase defectuoso", "10 Mar 2026", "—", "—", "Pendiente de recogida");
+        AnadirDevolucion("DEV-2026-001", "Distribuciones Rivera", "ALB-45872", "Producto dañado", new DateTime(2026, 3, 12), "14 mar 2026", "16 mar 2026", "Abonada");
+        AnadirDevolucion("DEV-2026-002", "Alimentación Sánchez", "ALB-45901", "Error en pedido", new DateTime(2026, 3, 12), "15 mar 2026", "18 mar 2026", "En almacén");
+        AnadirDevolucion("DEV-2026-003", "Supermercados Norte", "ALB-45834", "Caducidad próxima", new DateTime(2026, 3, 11), "13 mar 2026", "15 mar 2026", "Abonada");
+        AnadirDevolucion("DEV-2026-004", "Comercial del Sur", "ALB-45798", "Envase defectuoso", new DateTime(2026, 3, 10), "—", "—", "Pendiente de recogida");
 
-        // Rellenar los desplegables a partir de los datos
         cmbEstado.Items.Add("Todos los estados");
         foreach (string estado in ValoresDistintos(7))
             cmbEstado.Items.Add(estado);
-
-        cmbCliente.Items.Add("Todos los clientes");
-        foreach (string cliente in ValoresDistintos(1))
-            cmbCliente.Items.Add(cliente);
-
         cmbEstado.SelectedIndex = 0;
-        cmbCliente.SelectedIndex = 0;
+
         ActualizarContador();
+    }
+
+    private void AnadirDevolucion(string numero, string cliente, string albaran, string motivo,
+        DateTime solicitud, string recogida, string llegada, string estado)
+    {
+        int i = grid.Rows.Add(numero, cliente, albaran, motivo,
+            solicitud.ToString("dd MMM yyyy", new CultureInfo("es-ES")), recogida, llegada, estado);
+
+        grid.Rows[i].Tag = solicitud;
     }
 
     private IEnumerable<string> ValoresDistintos(int columna)
@@ -281,34 +328,53 @@ public class FormPrincipal : Form
             .OrderBy(v => v);
     }
 
-    private void AplicarFiltros()
-    {
-        string texto = txtBuscar.Text.Trim();
-        string estado = cmbEstado.SelectedIndex > 0 ? cmbEstado.Text : "";
-        string cliente = cmbCliente.SelectedIndex > 0 ? cmbCliente.Text : "";
+    // private void AplicarFiltros()
+    // {
+    //     string texto = txtBuscar.Text.Trim();
+    //     string estado = cmbEstado.SelectedIndex > 0 ? cmbEstado.Text : "";
+    //     DateTime? desde = dtpDesde.Checked ? dtpDesde.Value.Date : null;
+    //     DateTime? hasta = dtpHasta.Checked ? dtpHasta.Value.Date : null;
 
-        // Hay que quitar la selección para poder ocultar la fila seleccionada
-        grid.CurrentCell = null;
+    //     if (desde != null && hasta != null && desde > hasta)
+    //     {
+    //         MessageBox.Show(this, "La fecha \"desde\" no puede ser posterior a \"hasta\".",
+    //             "Fechas incorrectas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    //         return;
+    //     }
 
-        foreach (DataGridViewRow fila in grid.Rows)
-        {
-            string numero = fila.Cells[0].Value?.ToString() ?? "";
-            string cli = fila.Cells[1].Value?.ToString() ?? "";
-            string albaran = fila.Cells[2].Value?.ToString() ?? "";
-            string est = fila.Cells[7].Value?.ToString() ?? "";
+    
+    //     grid.CurrentCell = null;
 
-            bool coincideTexto = texto == ""
-                || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
-                || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
-                || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
-            bool coincideEstado = estado == "" || est == estado;
-            bool coincideCliente = cliente == "" || cli == cliente;
+    //     foreach (DataGridViewRow fila in grid.Rows)
+    //     {
+    //         string numero = fila.Cells[0].Value?.ToString() ?? "";
+    //         string cli = fila.Cells[1].Value?.ToString() ?? "";
+    //         string albaran = fila.Cells[2].Value?.ToString() ?? "";
+    //         string est = fila.Cells[7].Value?.ToString() ?? "";
 
-            fila.Visible = coincideTexto && coincideEstado && coincideCliente;
-        }
+    //         bool coincideTexto = texto == ""
+    //             || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
+    //             || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
+    //             || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
+    //         bool coincideEstado = estado == "" || est == estado;
 
-        ActualizarContador();
-    }
+    //         bool coincideFecha = fila.Tag is not DateTime f
+    //             || ((desde == null || f >= desde) && (hasta == null || f <= hasta));
+
+    //         fila.Visible = coincideTexto && coincideEstado && coincideFecha;
+    //     }
+
+    //     ActualizarContador();
+    // }
+
+    // private void LimpiarFiltros()
+    // {
+    //     txtBuscar.Clear();
+    //     cmbEstado.SelectedIndex = 0;
+    //     dtpDesde.Checked = false;
+    //     dtpHasta.Checked = false;
+    //     AplicarFiltros();
+    // }
 
     private void ActualizarContador()
     {
