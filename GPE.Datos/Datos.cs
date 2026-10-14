@@ -32,3 +32,30 @@ public record DatosNuevaDevolucion(
     string? Observaciones,
     DateTime FechaSolicitud,
     List<LineaNuevaDevolucion> Lineas);
+
+public record Usuario(int Id, string Nombre, string Email)
+{
+    public string Iniciales => string.Concat(Nombre
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        .Take(2)
+        .Select(p => char.ToUpper(p[0])));
+
+    public override string ToString() => Nombre;
+}
+
+// Fila tal cual se guarda en HISTORIAL_CAMBIOS (los valores van en JSON)
+public record CambioHistorial(
+    DateTime Fecha,
+    string Usuario,
+    string Tabla,
+    int RegistroId,
+    string Accion,
+    string? ValoresAnteriores,
+    string? ValoresNuevos);
+
+// Usuario que está usando la aplicación. Se envía a SQL Server al abrir cada
+// conexión para que los triggers sepan quién hace cada cambio.
+public static class Sesion
+{
+    public static Usuario? UsuarioActual { get; set; }
+}

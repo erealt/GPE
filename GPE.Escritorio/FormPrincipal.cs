@@ -69,8 +69,9 @@ public class FormPrincipal : Form
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = ColorAzul,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Text = "BM"
+            Text = Sesion.UsuarioActual?.Iniciales ?? ""
         };
+        new ToolTip().SetToolTip(lblUsuario, Sesion.UsuarioActual?.Nombre);
 
         barra.Controls.Add(lblFecha);
         barra.Controls.Add(lblUsuario);
@@ -268,6 +269,17 @@ public class FormPrincipal : Form
 
         grid.CellDoubleClick += (s, e) => AbrirDevolucion(e.RowIndex);
 
+        // Clic derecho sobre una fila: la selecciona y muestra el menú
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("Ver historial de cambios", null, (s, e) => AbrirHistorial());
+        grid.ContextMenuStrip = menu;
+        grid.CellMouseDown += (s, e) =>
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0) return;
+            grid.CurrentCell = grid.Rows[e.RowIndex].Cells[Math.Max(e.ColumnIndex, 0)];
+        };
+        menu.Opening += (s, e) => e.Cancel = grid.CurrentRow?.Tag is not DevolucionFila;
+
         // Cabecera
         grid.EnableHeadersVisualStyles = false;
         grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
@@ -397,6 +409,14 @@ public class FormPrincipal : Form
 
         CargarDatos();
         SeleccionarDevolucion(devolucion.Id);
+    }
+
+    private void AbrirHistorial()
+    {
+        if (grid.CurrentRow?.Tag is not DevolucionFila devolucion) return;
+
+        using var pantalla = new FormHistorial(devolucion);
+        pantalla.ShowDialog(this);
     }
 
     private static string FormatoFecha(DateTime? fecha) =>

@@ -109,18 +109,14 @@ CREATE TABLE TRANSPORTISTA (
     activo BIT NOT NULL CONSTRAINT DF_transportista_activo DEFAULT 1
 );
  
--- Recogida acordada para una devolución (si se reprograma, puede haber más de una)
+-- Recogida acordada para una devolución
 CREATE TABLE RECOGIDA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
     transportista_id INT NOT NULL,
     fecha_recogida DATE NOT NULL,
-    franja NVARCHAR(20) NULL,
     direccion NVARCHAR(200) NOT NULL,
-    persona_contacto NVARCHAR(100) NULL,
     telefono_contacto NVARCHAR(30) NULL,
-    num_bultos INT NULL CHECK (num_bultos > 0),
-    referencia_seguimiento NVARCHAR(50) NULL,
     observaciones NVARCHAR(MAX) NULL,
     creada_en DATETIME2 NOT NULL CONSTRAINT DF_recogida_creada DEFAULT SYSDATETIME(),
     CONSTRAINT FK_recogida_devolucion FOREIGN KEY (devolucion_id)
@@ -129,6 +125,129 @@ CREATE TABLE RECOGIDA (
         REFERENCES TRANSPORTISTA(id)
 );
 GO
- 
 
- 
+/* ============================================================
+   3) HISTORIAL DE CAMBIOS
+   ============================================================ */
+
+-- Quién modificó qué y cuándo. Lo rellenan los triggers de abajo.
+CREATE TABLE HISTORIAL_CAMBIOS (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+
+    devolucion_id INT NULL,
+    usuario_id INT NOT NULL,
+
+    tabla_afectada NVARCHAR(100) NOT NULL,
+    registro_id INT NOT NULL,
+    accion NVARCHAR(20) NOT NULL,
+
+    fecha DATETIME2 NOT NULL
+        CONSTRAINT DF_historial_fecha DEFAULT SYSDATETIME(),
+
+    valores_anteriores NVARCHAR(MAX) NULL,
+    valores_nuevos NVARCHAR(MAX) NULL,
+
+    CONSTRAINT FK_historial_usuario
+        FOREIGN KEY (usuario_id) REFERENCES USUARIO(id),
+
+    -- devolucion_id no lleva FK a propósito: así se conserva el historial
+    -- aunque la devolución se borre.
+
+    CONSTRAINT CK_historial_accion
+        CHECK (accion IN ('INSERT', 'UPDATE', 'DELETE'))
+);
+
+CREATE INDEX IX_historial_devolucion ON HISTORIAL_CAMBIOS (devolucion_id, fecha);
+GO
+
+/* La aplicación indica el usuario al abrir cada conexión con:
+       EXEC sp_set_session_context @key = N'usuario_id', @value = <id>;
+   Para modificar datos a mano desde SSMS hay que ejecutar esa misma línea antes.
+
+   Los UPDATE que no cambian ningún valor no se registran. */
+
+CREATE OR ALTER TRIGGER TR_DEVOLUCION_HISTORIAL ON DEVOLUCION
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos)
+    SELECT c.registro_id, @usuario, 'DEVOLUCION', c.registro_id, c.accion, c.anteriores, c.nuevos
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+CREATE OR ALTER TRIGGER TR_DEVOLUCION_PRODUCTO_HISTORIAL ON DEVOLUCION_PRODUCTO
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos)
+    SELECT c.devolucion_id, @usuario, 'DEVOLUCION_PRODUCTO', c.registro_id, c.accion, c.anteriores, c.nuevos
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        COALESCE(i.devolucion_id, d.devolucion_id) AS devolucion_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+CREATE OR ALTER TRIGGER TR_RECOGIDA_HISTORIAL ON RECOGIDA
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos)
+    SELECT c.devolucion_id, @usuario, 'RECOGIDA', c.registro_id, c.accion, c.anteriores, c.nuevos
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        COALESCE(i.devolucion_id, d.devolucion_id) AS devolucion_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO

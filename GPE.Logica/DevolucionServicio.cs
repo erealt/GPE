@@ -21,6 +21,13 @@ public class DevolucionServicio
 
     public List<Producto> ObtenerProductos() => repositorio.ObtenerProductos();
 
+    public List<Usuario> ObtenerUsuarios() => repositorio.ObtenerUsuarios();
+
+    public List<EntradaHistorial> ObtenerHistorial(int devolucionId) =>
+        repositorio.ObtenerHistorial(devolucionId)
+            .Select(HistorialFormateador.Formatear)
+            .ToList();
+
     // ---------- Operaciones ----------
 
     public int CrearDevolucion(DatosNuevaDevolucion datos)

@@ -76,7 +76,7 @@ public class FormNuevaDevolucion : Form
         cmbMotivo.Items.AddRange(new object[]
             { "Producto dañado", "Error en pedido", "Caducidad próxima", "Envase defectuoso", "Otro" });
 
-        dtpSolicitud.Format = DateTimePickerFormat.Short;   // por defecto: hoy
+        dtpSolicitud.Format = DateTimePickerFormat.Short;   
 
         txtAlbaran.PlaceholderText = "Ej. ALB-45872";
         txtObservaciones.PlaceholderText = "Añade cualquier información relevante sobre la solicitud...";
@@ -239,7 +239,7 @@ public class FormNuevaDevolucion : Form
             return;
         }
 
-        // Solo se guardan las filas que tienen producto elegido
+    
         var lineas = filas
             .Where(f => f.Producto.SelectedItem is Producto)
             .Select(f => new LineaNuevaDevolucion(
