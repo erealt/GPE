@@ -1,3 +1,5 @@
+using GPE.Datos;
+using GPE.Logica;
 using System.Data.Common;
 using System.Globalization;
 
@@ -13,7 +15,7 @@ public class FormPrincipal : Form
 
     private static readonly CultureInfo Es = new("es-ES");
 
-    private readonly DevolucionRepositorio repositorio = new();
+    private readonly DevolucionServicio servicio = new();
 
     private readonly TextBox txtBuscar = new();
     private readonly ComboBox cmbEstado = new();
@@ -33,11 +35,9 @@ public class FormPrincipal : Form
         BackColor = ColorFondo;
         Font = new Font("Segoe UI", 10);
 
-        // Con Dock el orden importa: primero lo que rellena, al final la barra superior
         Controls.Add(CrearContenido());
         Controls.Add(CrearBarraSuperior());
 
-        // Los datos se cargan cuando la ventana ya está lista, no en el constructor
         Load += (s, e) => CargarDatos();
     }
 
@@ -85,7 +85,6 @@ public class FormPrincipal : Form
             Padding = new Padding(40, 30, 40, 20)
         };
 
-        // 4 filas: cabecera, filtros, contador, tabla
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -123,7 +122,6 @@ public class FormPrincipal : Form
         cabecera.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         cabecera.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
 
-        // Título y subtítulo apilados
         var titulos = new Panel { Dock = DockStyle.Fill };
         var lblSubtitulo = new Label
         {
@@ -141,7 +139,7 @@ public class FormPrincipal : Form
             ForeColor = ColorTexto
         };
         titulos.Controls.Add(lblSubtitulo);
-        titulos.Controls.Add(lblTitulo); // el último añadido queda arriba
+        titulos.Controls.Add(lblTitulo); 
 
         // Botón principal
         btnNueva.Text = "+  Nueva devolución";
@@ -159,8 +157,7 @@ public class FormPrincipal : Form
             using var formulario = new FormNuevaDevolucion();
             if (formulario.ShowDialog(this) == DialogResult.OK)
             {
-                // Al volver de crear una devolución, se recarga la lista desde la base de datos
-                // y se deja seleccionada la devolución nueva
+               
                 CargarDatos();
                 SeleccionarDevolucion(formulario.IdCreado);
             }
@@ -269,6 +266,8 @@ public class FormPrincipal : Form
         grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         grid.RowTemplate.Height = 50;
 
+        grid.CellDoubleClick += (s, e) => AbrirDevolucion(e.RowIndex);
+
         // Cabecera
         grid.EnableHeadersVisualStyles = false;
         grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
@@ -296,7 +295,7 @@ public class FormPrincipal : Form
         foreach (string nombre in columnas)
             grid.Columns.Add(nombre, nombre);
 
-        // El número de devolución con el color principal y en negrita
+        
         grid.Columns[0].DefaultCellStyle.ForeColor = ColorAzul;
         grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
 
@@ -310,18 +309,18 @@ public class FormPrincipal : Form
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = repositorio.ObtenerDevoluciones();
+            devoluciones = servicio.ObtenerDevoluciones();
 
-            // El combo de estados se rellena una sola vez, con todos los estados posibles
+          
             if (cmbEstado.Items.Count == 0)
             {
                 cmbEstado.Items.Add("Todos los estados");
-                foreach (string estado in repositorio.ObtenerEstados())
+                foreach (string estado in servicio.ObtenerEstados())
                     cmbEstado.Items.Add(estado);
                 cmbEstado.SelectedIndex = 0;
             }
         }
-        catch (DbException ex)   // SqlException hereda de DbException
+        catch (DbException ex)   
         {
             MessageBox.Show(this,
                 "No se pudieron cargar las devoluciones de la base de datos.\n\n" + ex.Message,
@@ -333,7 +332,7 @@ public class FormPrincipal : Form
         foreach (var devolucion in devoluciones)
             AnadirDevolucion(devolucion);
 
-        // Se vuelven a aplicar los filtros que hubiera activos y se actualiza el contador
+    
         AplicarFiltros();
     }
 
@@ -349,12 +348,10 @@ public class FormPrincipal : Form
             FormatoFecha(d.FechaLlegada),
             d.Estado);
 
-        // La fila guarda la devolución completa: así tendremos el Id y la Fase
-        // cuando haya que abrir la pantalla correspondiente.
         grid.Rows[i].Tag = d;
     }
 
-    /// <summary>Selecciona en la tabla la devolución con ese id y la deja a la vista.</summary>
+    
     private void SeleccionarDevolucion(int id)
     {
         var fila = grid.Rows.Cast<DataGridViewRow>()
@@ -362,7 +359,7 @@ public class FormPrincipal : Form
 
         if (fila == null) return;
 
-        // Si los filtros activos la ocultan, se limpian para que se vea la nueva
+       
         if (!fila.Visible)
             LimpiarFiltros();
 
@@ -370,6 +367,36 @@ public class FormPrincipal : Form
         grid.CurrentCell = fila.Cells[0];
         fila.Selected = true;
         grid.FirstDisplayedScrollingRowIndex = fila.Index;
+    }
+
+   
+    private void AbrirDevolucion(int indiceFila)
+    {
+        if (indiceFila < 0) return;   // doble clic en la cabecera de la tabla
+        if (grid.Rows[indiceFila].Tag is not DevolucionFila devolucion) return;
+
+        
+        switch (devolucion.Fase)
+        {
+            case 1:   // Solicitud recibida 
+                using (var pantalla = new Recogida(devolucion))
+                    pantalla.ShowDialog(this);
+                break;
+
+            case 2:   // Recogida solicitada
+            case 3:   // Mercancía recibida
+                MessageBox.Show(this, "La pantalla de almacén todavía no está disponible.",
+                    "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+
+            default:  
+                MessageBox.Show(this, "La pantalla de abono todavía no está disponible.",
+                    "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+        }
+
+        CargarDatos();
+        SeleccionarDevolucion(devolucion.Id);
     }
 
     private static string FormatoFecha(DateTime? fecha) =>
@@ -405,7 +432,6 @@ public class FormPrincipal : Form
                 || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
             bool coincideEstado = estado == "" || est == estado;
 
-            // El filtro de fechas se aplica sobre la fecha de solicitud
             bool coincideFecha = fila.Tag is not DevolucionFila d
                 || ((desde == null || d.FechaSolicitud >= desde)
                     && (hasta == null || d.FechaSolicitud <= hasta));

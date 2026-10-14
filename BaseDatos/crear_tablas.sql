@@ -100,3 +100,35 @@ CREATE TABLE DEVOLUCION_PRODUCTO (
     CONSTRAINT FK_devprod_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
 );
 GO
+
+-- Transportistas que pueden hacer las recogidas
+CREATE TABLE TRANSPORTISTA (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL UNIQUE,
+    telefono NVARCHAR(30) NULL,
+    activo BIT NOT NULL CONSTRAINT DF_transportista_activo DEFAULT 1
+);
+ 
+-- Recogida acordada para una devolución (si se reprograma, puede haber más de una)
+CREATE TABLE RECOGIDA (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    devolucion_id INT NOT NULL,
+    transportista_id INT NOT NULL,
+    fecha_recogida DATE NOT NULL,
+    franja NVARCHAR(20) NULL,
+    direccion NVARCHAR(200) NOT NULL,
+    persona_contacto NVARCHAR(100) NULL,
+    telefono_contacto NVARCHAR(30) NULL,
+    num_bultos INT NULL CHECK (num_bultos > 0),
+    referencia_seguimiento NVARCHAR(50) NULL,
+    observaciones NVARCHAR(MAX) NULL,
+    creada_en DATETIME2 NOT NULL CONSTRAINT DF_recogida_creada DEFAULT SYSDATETIME(),
+    CONSTRAINT FK_recogida_devolucion FOREIGN KEY (devolucion_id)
+        REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
+    CONSTRAINT FK_recogida_transportista FOREIGN KEY (transportista_id)
+        REFERENCES TRANSPORTISTA(id)
+);
+GO
+ 
+
+ 

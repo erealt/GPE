@@ -1,50 +1,10 @@
 using Microsoft.Data.SqlClient;
 
-namespace GPE.Escritorio;
+namespace GPE.Datos;
 
-/// <summary>Una fila de la lista de devoluciones (ya con el nombre del cliente y del estado).</summary>
-public record DevolucionFila(
-    int Id,
-    string Numero,
-    string Cliente,
-    string? Albaran,
-    string Motivo,
-    DateTime FechaSolicitud,
-    DateTime? FechaRecogida,
-    DateTime? FechaLlegada,
-    string Estado,
-    int Fase);
-
-/// <summary>Cliente para el desplegable. ToString lo que muestra el ComboBox.</summary>
-public record Cliente(int Id, string Nombre)
-{
-    public override string ToString() => Nombre;
-}
-
-/// <summary>Producto para el desplegable.</summary>
-public record Producto(int Id, string Codigo, string Nombre)
-{
-    public override string ToString() => Nombre;
-}
-
-/// <summary>Una línea de producto de una devolución nueva.</summary>
-public record LineaNuevaDevolucion(int ProductoId, int Cantidad, string? Lote);
-
-/// <summary>Todos los datos necesarios para crear una devolución.</summary>
-public record DatosNuevaDevolucion(
-    int FabricaId,
-    int ClienteId,
-    string Motivo,
-    string? Albaran,
-    string? Observaciones,
-    DateTime FechaSolicitud,
-    List<LineaNuevaDevolucion> Lineas);
-
-/// <summary>Único sitio donde se habla con la base de datos de devoluciones.</summary>
 public class DevolucionRepositorio
 {
-    // Windows Authentication contra la instancia local. Si usas una instancia con nombre,
-    // cambia "localhost" por "localhost\\SQLEXPRESS" (o el nombre que tenga).
+
     private const string CadenaConexion =
         "Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;";
 
@@ -86,7 +46,6 @@ public class DevolucionRepositorio
         return lista;
     }
 
-    /// <summary>Todos los estados posibles, en el orden del proceso (para el filtro).</summary>
     public List<string> ObtenerEstados()
     {
         const string sql = "SELECT nombre FROM ESTADO_DEVOLUCION ORDER BY fase;";
@@ -140,13 +99,8 @@ public class DevolucionRepositorio
 
     // ---------- Escritura ----------
 
-    /// <summary>
-    /// Guarda la devolución y sus líneas en una sola transacción: o se guarda todo o no se guarda nada.
-    /// Devuelve el id de la devolución creada.
-    /// </summary>
     public int InsertarDevolucion(DatosNuevaDevolucion datos)
     {
-        // El estado inicial es el de la fase 1 ("Solicitud recibida"); el número DEV-AAAA-NNN se calcula solo.
         const string sqlCabecera = @"
             INSERT INTO DEVOLUCION
                 (fabrica_id, cliente_id, estado_id, albaran, motivo, observaciones, fecha_solicitud)

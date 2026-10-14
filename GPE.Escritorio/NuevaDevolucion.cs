@@ -1,3 +1,5 @@
+using GPE.Datos;
+using GPE.Logica;
 using System.Data.Common;
 
 namespace GPE.Escritorio;
@@ -8,12 +10,10 @@ public class FormNuevaDevolucion : Form
     private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
     private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
 
-    // Provisional: hasta que haya inicio de sesión, todas las devoluciones son de la fábrica 1
     private const int FabricaProvisional = 1;
 
-    private readonly DevolucionRepositorio repositorio = new();
+    private readonly DevolucionServicio servicio = new();
 
-    /// <summary>Id de la devolución que se acaba de crear (para que la lista pueda seleccionarla).</summary>
     public int IdCreado { get; private set; }
 
     // Datos cargados de la base de datos
@@ -27,14 +27,13 @@ public class FormNuevaDevolucion : Form
     private readonly TextBox txtAlbaran = new();
     private readonly TextBox txtObservaciones = new();
 
-    // Productos esperados (cada fila es un conjunto de controles)
     private record FilaProducto(
         TableLayoutPanel Panel,
         ComboBox Producto,
         NumericUpDown Cantidad,
         TextBox Lote);
 
-    private readonly Label lblResumenProductos = new();   // "2 productos · 36 unidades"
+    private readonly Label lblResumenProductos = new(); 
     private readonly TableLayoutPanel contenedorFilas = new();
     private readonly List<FilaProducto> filas = new();
 
@@ -47,7 +46,6 @@ public class FormNuevaDevolucion : Form
         BackColor = ColorFondo;
         Font = new Font("Segoe UI", 10);
 
-        // Primero se cargan los datos: las filas de producto ya los necesitan al crearse
         PrepararControles();
 
         Controls.Add(CrearContenido());
@@ -60,23 +58,21 @@ public class FormNuevaDevolucion : Form
         cmbCliente.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbMotivo.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        // Clientes y productos vienen de la base de datos (se cargan una sola vez)
         try
         {
-            var clientes = repositorio.ObtenerClientes();
-            productos = repositorio.ObtenerProductos();
+            var clientes = servicio.ObtenerClientes();
+            productos = servicio.ObtenerProductos();
 
             cmbCliente.Items.AddRange(clientes.Cast<object>().ToArray());
             cargaCorrecta = true;
         }
-        catch (DbException ex)   // SqlException hereda de DbException
+        catch (DbException ex)   
         {
             MessageBox.Show(this,
                 "No se pudieron cargar los clientes y productos de la base de datos.\n\n" + ex.Message,
                 "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        // Los motivos siguen siendo una lista fija; se guardan como texto
         cmbMotivo.Items.AddRange(new object[]
             { "Producto dañado", "Error en pedido", "Caducidad próxima", "Envase defectuoso", "Otro" });
 
@@ -100,7 +96,6 @@ public class FormNuevaDevolucion : Form
             Padding = new Padding(40, 25, 40, 25)
         };
 
-        // Pila vertical: cada hijo es una fila que ocupa todo el ancho
         var pila = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -181,7 +176,6 @@ public class FormNuevaDevolucion : Form
         var btnAnadir = CrearBotonSecundario("+  Añadir producto", 170);
         btnAnadir.Click += (s, e) => AnadirFilaProducto();
 
-        // El subtítulo es el resumen ("N productos · M unidades") y se actualiza solo
         var tarjeta = CrearTarjeta("", "Productos esperados", "", btnAnadir, lblResumenProductos);
 
         contenedorFilas.Dock = DockStyle.Fill;
@@ -192,7 +186,7 @@ public class FormNuevaDevolucion : Form
         tarjeta.Controls.Add(CrearEncabezadoProductos());
         tarjeta.Controls.Add(contenedorFilas);
 
-        AnadirFilaProducto();   // una fila vacía de partida
+        AnadirFilaProducto();   
         return tarjeta;
     }
 
@@ -217,7 +211,7 @@ public class FormNuevaDevolucion : Form
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
             Cursor = Cursors.Hand,
             Margin = new Padding(0),
-            Enabled = cargaCorrecta   // sin datos de la base de datos no se puede guardar
+            Enabled = cargaCorrecta   
         };
 
         btnGuardar.FlatAppearance.BorderSize = 0;
@@ -254,12 +248,6 @@ public class FormNuevaDevolucion : Form
                 string.IsNullOrWhiteSpace(f.Lote.Text) ? null : f.Lote.Text.Trim()))
             .ToList();
 
-        if (lineas.Count == 0)
-        {
-            Avisar("Añade al menos un producto a la devolución.", filas[0].Producto);
-            return;
-        }
-
         // 2. Guardar en la base de datos
         var datos = new DatosNuevaDevolucion(
             FabricaProvisional,
@@ -272,7 +260,12 @@ public class FormNuevaDevolucion : Form
 
         try
         {
-            IdCreado = repositorio.InsertarDevolucion(datos);
+            IdCreado = servicio.CrearDevolucion(datos);
+        }
+        catch (ReglaNegocioException ex)   
+        {
+            MessageBox.Show(this, ex.Message, "Faltan datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
         catch (DbException ex)
         {
@@ -282,7 +275,6 @@ public class FormNuevaDevolucion : Form
             return;
         }
 
-        // 3. Al devolver OK, el diálogo se cierra y la lista principal se recarga sola
         DialogResult = DialogResult.OK;
     }
 
@@ -296,7 +288,6 @@ public class FormNuevaDevolucion : Form
 
     private static TableLayoutPanel PlantillaFilaProducto()
     {
-        // Columnas: producto, referencia, cantidad esperada, lote, botón quitar
         var fila = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 5 };
         foreach (float peso in new float[] { 36, 18, 18, 28 })
             fila.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, peso));
@@ -349,7 +340,6 @@ public class FormNuevaDevolucion : Form
 
         var registro = new FilaProducto(panel, cmbProducto, numCantidad, txtLote);
 
-        // Al elegir un producto se rellena su referencia y se recalcula el resumen
         cmbProducto.SelectedIndexChanged += (s, e) =>
         {
             txtReferencia.Text = cmbProducto.SelectedItem is Producto p ? p.Codigo : "";
@@ -359,7 +349,7 @@ public class FormNuevaDevolucion : Form
 
         btnQuitar.Click += (s, e) =>
         {
-            if (filas.Count <= 1) return;   // siempre dejamos al menos una fila
+            if (filas.Count <= 1) return;  
             filas.Remove(registro);
             contenedorFilas.Controls.Remove(panel);
             panel.Dispose();
@@ -389,8 +379,6 @@ public class FormNuevaDevolucion : Form
             : $"{conProducto.Count} {(conProducto.Count == 1 ? "producto" : "productos")} · {unidades} unidades";
     }
 
-    // ---------- Ayudas para construir la interfaz ----------
-
     private TableLayoutPanel CrearTarjeta(string numero, string titulo, string subtitulo,
         Control? accion = null, Label? etiquetaSubtitulo = null)
     {
@@ -406,7 +394,6 @@ public class FormNuevaDevolucion : Form
         };
         tarjeta.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        // Fila de cabecera: textos a la izquierda, botón opcional a la derecha
         var cabecera = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -435,7 +422,7 @@ public class FormNuevaDevolucion : Form
             ForeColor = ColorTexto
         };
         textos.Controls.Add(lblSubtitulo);
-        textos.Controls.Add(lblTitulo);   // el último añadido queda arriba
+        textos.Controls.Add(lblTitulo);   
 
         cabecera.Controls.Add(textos, 0, 0);
         if (accion != null) cabecera.Controls.Add(accion, 1, 0);
