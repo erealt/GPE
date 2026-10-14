@@ -19,25 +19,25 @@ namespace GPE.Escritorio
         };
 
         private int faseActual = 1;
-[System.ComponentModel.Browsable(false)]
-[System.ComponentModel.EditorBrowsable(
-    System.ComponentModel.EditorBrowsableState.Never)]
-[System.ComponentModel.DesignerSerializationVisibility(
-    System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-public int FaseActual
-{
-    get => faseActual;
-    set
-    {
-        faseActual = Math.Max(1, Math.Min(6, value));
-        Invalidate();
-    }
-}
-[System.ComponentModel.Browsable(false)]
-[System.ComponentModel.DesignerSerializationVisibility(
-    System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-public int FasesCompletadas { get; set; } = 1;
-      
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.EditorBrowsable(
+            System.ComponentModel.EditorBrowsableState.Never)]
+        [System.ComponentModel.DesignerSerializationVisibility(
+            System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int FaseActual
+        {
+            get => faseActual;
+            set
+            {
+                faseActual = Math.Max(1, Math.Min(6, value));
+                Invalidate();
+            }
+        }
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(
+            System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int FasesCompletadas { get; set; } = 1;
+
 
         public BarraProgresoDevolucion()
         {

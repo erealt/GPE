@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Globalization;
 
 namespace GPE.Escritorio;
@@ -9,6 +10,10 @@ public class FormPrincipal : Form
     private static readonly Color ColorAzul = Color.FromArgb(89, 0, 246);
     private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
     private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
+
+    private static readonly CultureInfo Es = new("es-ES");
+
+    private readonly DevolucionRepositorio repositorio = new();
 
     private readonly TextBox txtBuscar = new();
     private readonly ComboBox cmbEstado = new();
@@ -32,7 +37,8 @@ public class FormPrincipal : Form
         Controls.Add(CrearContenido());
         Controls.Add(CrearBarraSuperior());
 
-        CargarDatosDePrueba();
+        // Los datos se cargan cuando la ventana ya está lista, no en el constructor
+        Load += (s, e) => CargarDatos();
     }
 
     // ---------- Construcción de la interfaz ----------
@@ -53,7 +59,7 @@ public class FormPrincipal : Form
             Width = 220,
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = ColorSuave,
-            Text = DateTime.Now.ToString("d 'de' MMMM 'de' yyyy", new CultureInfo("es-ES"))
+            Text = DateTime.Now.ToString("d 'de' MMMM 'de' yyyy", Es)
         };
 
         var lblUsuario = new Label
@@ -67,7 +73,7 @@ public class FormPrincipal : Form
         };
 
         barra.Controls.Add(lblFecha);
-        barra.Controls.Add(lblUsuario); 
+        barra.Controls.Add(lblUsuario);
         return barra;
     }
 
@@ -153,7 +159,10 @@ public class FormPrincipal : Form
             using var formulario = new FormNuevaDevolucion();
             if (formulario.ShowDialog(this) == DialogResult.OK)
             {
-                
+                // Al volver de crear una devolución, se recarga la lista desde la base de datos
+                // y se deja seleccionada la devolución nueva
+                CargarDatos();
+                SeleccionarDevolucion(formulario.IdCreado);
             }
         };
 
@@ -181,7 +190,7 @@ public class FormPrincipal : Form
         {
             fecha.Width = 150;
             fecha.Format = DateTimePickerFormat.Short;
-            fecha.ShowCheckBox = true;   
+            fecha.ShowCheckBox = true;
             fecha.Checked = false;
         }
 
@@ -212,7 +221,7 @@ public class FormPrincipal : Form
         panel.Controls.Add(btnFiltrar);
         panel.Controls.Add(btnLimpiar);
 
-       
+
         btnFiltrar.Click += (s, e) => AplicarFiltros();
         btnLimpiar.Click += (s, e) => LimpiarFiltros();
         txtBuscar.KeyDown += (s, e) =>
@@ -225,7 +234,7 @@ public class FormPrincipal : Form
         return panel;
     }
 
-    
+
     private static Control CampoFiltro(string etiqueta, Control control)
     {
         var campo = new Panel { Size = new Size(control.Width, 58), Margin = new Padding(0, 0, 12, 0) };
@@ -239,7 +248,7 @@ public class FormPrincipal : Form
         };
         control.Dock = DockStyle.Top;
         campo.Controls.Add(control);
-        campo.Controls.Add(lbl);   
+        campo.Controls.Add(lbl);
         return campo;
     }
 
@@ -296,37 +305,75 @@ public class FormPrincipal : Form
 
     // ---------- Datos y filtros ----------
 
-    private void CargarDatosDePrueba()
+    private void CargarDatos()
     {
-        AnadirDevolucion("DEV-2026-001", "Distribuciones Rivera", "ALB-45872", "Producto dañado", new DateTime(2026, 3, 12), "14 mar 2026", "16 mar 2026", "Abonada");
-        AnadirDevolucion("DEV-2026-002", "Alimentación Sánchez", "ALB-45901", "Error en pedido", new DateTime(2026, 3, 12), "15 mar 2026", "18 mar 2026", "En almacén");
-        AnadirDevolucion("DEV-2026-003", "Supermercados Norte", "ALB-45834", "Caducidad próxima", new DateTime(2026, 3, 11), "13 mar 2026", "15 mar 2026", "Abonada");
-        AnadirDevolucion("DEV-2026-004", "Comercial del Sur", "ALB-45798", "Envase defectuoso", new DateTime(2026, 3, 10), "—", "—", "Pendiente de recogida");
+        List<DevolucionFila> devoluciones;
+        try
+        {
+            devoluciones = repositorio.ObtenerDevoluciones();
 
-        cmbEstado.Items.Add("Todos los estados");
-        foreach (string estado in ValoresDistintos(7))
-            cmbEstado.Items.Add(estado);
-        cmbEstado.SelectedIndex = 0;
+            // El combo de estados se rellena una sola vez, con todos los estados posibles
+            if (cmbEstado.Items.Count == 0)
+            {
+                cmbEstado.Items.Add("Todos los estados");
+                foreach (string estado in repositorio.ObtenerEstados())
+                    cmbEstado.Items.Add(estado);
+                cmbEstado.SelectedIndex = 0;
+            }
+        }
+        catch (DbException ex)   // SqlException hereda de DbException
+        {
+            MessageBox.Show(this,
+                "No se pudieron cargar las devoluciones de la base de datos.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
 
-        ActualizarContador();
+        grid.Rows.Clear();
+        foreach (var devolucion in devoluciones)
+            AnadirDevolucion(devolucion);
+
+        // Se vuelven a aplicar los filtros que hubiera activos y se actualiza el contador
+        AplicarFiltros();
     }
 
-    private void AnadirDevolucion(string numero, string cliente, string albaran, string motivo,
-        DateTime solicitud, string recogida, string llegada, string estado)
+    private void AnadirDevolucion(DevolucionFila d)
     {
-        int i = grid.Rows.Add(numero, cliente, albaran, motivo,
-            solicitud.ToString("dd MMM yyyy", new CultureInfo("es-ES")), recogida, llegada, estado);
+        int i = grid.Rows.Add(
+            d.Numero,
+            d.Cliente,
+            d.Albaran ?? "—",
+            d.Motivo,
+            FormatoFecha(d.FechaSolicitud),
+            FormatoFecha(d.FechaRecogida),
+            FormatoFecha(d.FechaLlegada),
+            d.Estado);
 
-        grid.Rows[i].Tag = solicitud;
+        // La fila guarda la devolución completa: así tendremos el Id y la Fase
+        // cuando haya que abrir la pantalla correspondiente.
+        grid.Rows[i].Tag = d;
     }
 
-    private IEnumerable<string> ValoresDistintos(int columna)
+    /// <summary>Selecciona en la tabla la devolución con ese id y la deja a la vista.</summary>
+    private void SeleccionarDevolucion(int id)
     {
-        return grid.Rows.Cast<DataGridViewRow>()
-            .Select(f => f.Cells[columna].Value?.ToString() ?? "")
-            .Distinct()
-            .OrderBy(v => v);
+        var fila = grid.Rows.Cast<DataGridViewRow>()
+            .FirstOrDefault(f => f.Tag is DevolucionFila d && d.Id == id);
+
+        if (fila == null) return;
+
+        // Si los filtros activos la ocultan, se limpian para que se vea la nueva
+        if (!fila.Visible)
+            LimpiarFiltros();
+
+        grid.ClearSelection();
+        grid.CurrentCell = fila.Cells[0];
+        fila.Selected = true;
+        grid.FirstDisplayedScrollingRowIndex = fila.Index;
     }
+
+    private static string FormatoFecha(DateTime? fecha) =>
+        fecha?.ToString("dd MMM yyyy", Es) ?? "—";
 
     private void AplicarFiltros()
     {
@@ -342,7 +389,7 @@ public class FormPrincipal : Form
             return;
         }
 
-    
+
         grid.CurrentCell = null;
 
         foreach (DataGridViewRow fila in grid.Rows)
@@ -358,8 +405,10 @@ public class FormPrincipal : Form
                 || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
             bool coincideEstado = estado == "" || est == estado;
 
-            bool coincideFecha = fila.Tag is not DateTime f
-                || ((desde == null || f >= desde) && (hasta == null || f <= hasta));
+            // El filtro de fechas se aplica sobre la fecha de solicitud
+            bool coincideFecha = fila.Tag is not DevolucionFila d
+                || ((desde == null || d.FechaSolicitud >= desde)
+                    && (hasta == null || d.FechaSolicitud <= hasta));
 
             fila.Visible = coincideTexto && coincideEstado && coincideFecha;
         }

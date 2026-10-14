@@ -10,8 +10,8 @@ namespace GPE.Escritorio
         public Recogida()
         {
             Text = "Gestión de recogida";
-            Size = new Size(1000, 700);
-            MinimumSize = new Size(800, 600);
+            Size = new Size(1200, 750);
+            MinimumSize = new Size(1150, 600);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Color.FromArgb(245, 246, 244);
             Font = new Font("Segoe UI", 10);

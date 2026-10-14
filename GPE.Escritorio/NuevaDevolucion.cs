@@ -1,3 +1,5 @@
+using System.Data.Common;
+
 namespace GPE.Escritorio;
 
 public class FormNuevaDevolucion : Form
@@ -5,6 +7,18 @@ public class FormNuevaDevolucion : Form
     private static readonly Color ColorFondo = Color.FromArgb(245, 246, 244);
     private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
     private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
+
+    // Provisional: hasta que haya inicio de sesión, todas las devoluciones son de la fábrica 1
+    private const int FabricaProvisional = 1;
+
+    private readonly DevolucionRepositorio repositorio = new();
+
+    /// <summary>Id de la devolución que se acaba de crear (para que la lista pueda seleccionarla).</summary>
+    public int IdCreado { get; private set; }
+
+    // Datos cargados de la base de datos
+    private List<Producto> productos = new();
+    private bool cargaCorrecta;
 
     // 1. Datos de la devolución
     private readonly ComboBox cmbCliente = new();
@@ -24,26 +38,18 @@ public class FormNuevaDevolucion : Form
     private readonly TableLayoutPanel contenedorFilas = new();
     private readonly List<FilaProducto> filas = new();
 
-    // Datos inventados: más adelante vendrán de la base de datos
-    private readonly Dictionary<string, string> catalogoProductos = new()
-    {
-        { "Bombones surtidos 250 g", "REF-0001" },
-        { "Tableta chocolate negro 100 g", "REF-0002" },
-        { "Trufas de cacao 200 g", "REF-0003" },
-        { "Praliné de avellana 150 g", "REF-0004" }
-    };
-
     public FormNuevaDevolucion()
     {
         Text = "Nueva devolución";
-        Size = new Size(1000, 800);
-        MinimumSize = new Size(800, 600);
+        Size = new Size(1200, 750);
+        MinimumSize = new Size(1150, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = ColorFondo;
         Font = new Font("Segoe UI", 10);
 
+        // Primero se cargan los datos: las filas de producto ya los necesitan al crearse
         PrepararControles();
-        
+
         Controls.Add(CrearContenido());
     }
 
@@ -54,8 +60,23 @@ public class FormNuevaDevolucion : Form
         cmbCliente.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbMotivo.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        cmbCliente.Items.AddRange(new object[]
-            { "Distribuciones Rivera", "Alimentación Sánchez", "Supermercados Norte", "Comercial del Sur" });
+        // Clientes y productos vienen de la base de datos (se cargan una sola vez)
+        try
+        {
+            var clientes = repositorio.ObtenerClientes();
+            productos = repositorio.ObtenerProductos();
+
+            cmbCliente.Items.AddRange(clientes.Cast<object>().ToArray());
+            cargaCorrecta = true;
+        }
+        catch (DbException ex)   // SqlException hereda de DbException
+        {
+            MessageBox.Show(this,
+                "No se pudieron cargar los clientes y productos de la base de datos.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        // Los motivos siguen siendo una lista fija; se guardan como texto
         cmbMotivo.Items.AddRange(new object[]
             { "Producto dañado", "Error en pedido", "Caducidad próxima", "Envase defectuoso", "Otro" });
 
@@ -174,44 +195,104 @@ public class FormNuevaDevolucion : Form
         AnadirFilaProducto();   // una fila vacía de partida
         return tarjeta;
     }
-    
-private Control CrearAcciones()
-{
-    var panel = new FlowLayoutPanel
+
+    private Control CrearAcciones()
     {
-        Dock = DockStyle.Top,
-        AutoSize = true,
-        FlowDirection = FlowDirection.RightToLeft,
-        WrapContents = false,
-        Margin = new Padding(0, 0, 0, 20)
-    };
+        var panel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 20)
+        };
 
-    var btnCrear = new Button
+        var btnGuardar = new Button
+        {
+            Text = "Guardar devolución",
+            Size = new Size(190, 45),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(35, 90, 65),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0),
+            Enabled = cargaCorrecta   // sin datos de la base de datos no se puede guardar
+        };
+
+        btnGuardar.FlatAppearance.BorderSize = 0;
+        btnGuardar.Click += (s, e) => Guardar();
+
+        panel.Controls.Add(btnGuardar);
+
+        return panel;
+    }
+
+    // ---------- Guardado ----------
+
+    private void Guardar()
     {
-        Text = "Crear recogida →",
-        Size = new Size(190, 45),
-        FlatStyle = FlatStyle.Flat,
-        BackColor = Color.FromArgb(35, 90, 65),
-        ForeColor = Color.White,
-        Font = new Font("Segoe UI", 10, FontStyle.Bold),
-        Cursor = Cursors.Hand,
-        Margin = new Padding(0)
-    };
+        // 1. Validaciones
+        if (cmbCliente.SelectedItem is not Cliente cliente)
+        {
+            Avisar("Selecciona un cliente.", cmbCliente);
+            return;
+        }
 
-    btnCrear.FlatAppearance.BorderSize = 0;
+        if (cmbMotivo.SelectedItem is not string motivo)
+        {
+            Avisar("Selecciona el motivo de la devolución.", cmbMotivo);
+            return;
+        }
 
-    btnCrear.Click += (s, e) =>
-    { var pantalla = new Recogida();
+        // Solo se guardan las filas que tienen producto elegido
+        var lineas = filas
+            .Where(f => f.Producto.SelectedItem is Producto)
+            .Select(f => new LineaNuevaDevolucion(
+                ((Producto)f.Producto.SelectedItem!).Id,
+                (int)f.Cantidad.Value,
+                string.IsNullOrWhiteSpace(f.Lote.Text) ? null : f.Lote.Text.Trim()))
+            .ToList();
 
-    pantalla.Show();
+        if (lineas.Count == 0)
+        {
+            Avisar("Añade al menos un producto a la devolución.", filas[0].Producto);
+            return;
+        }
 
-    };
+        // 2. Guardar en la base de datos
+        var datos = new DatosNuevaDevolucion(
+            FabricaProvisional,
+            cliente.Id,
+            motivo,
+            string.IsNullOrWhiteSpace(txtAlbaran.Text) ? null : txtAlbaran.Text.Trim(),
+            string.IsNullOrWhiteSpace(txtObservaciones.Text) ? null : txtObservaciones.Text.Trim(),
+            dtpSolicitud.Value,
+            lineas);
 
-    panel.Controls.Add(btnCrear);
+        try
+        {
+            IdCreado = repositorio.InsertarDevolucion(datos);
+        }
+        catch (DbException ex)
+        {
+            MessageBox.Show(this,
+                "No se pudo guardar la devolución.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
 
-    return panel;
-}
+        // 3. Al devolver OK, el diálogo se cierra y la lista principal se recarga sola
+        DialogResult = DialogResult.OK;
+    }
 
+    private void Avisar(string mensaje, Control campo)
+    {
+        MessageBox.Show(this, mensaje, "Faltan datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        campo.Focus();
+    }
+
+    // ---------- Filas de producto ----------
 
     private static TableLayoutPanel PlantillaFilaProducto()
     {
@@ -250,10 +331,11 @@ private Control CrearAcciones()
         panel.Margin = new Padding(0, 8, 0, 0);
 
         var cmbProducto = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        cmbProducto.Items.AddRange(catalogoProductos.Keys.Cast<object>().ToArray());
+        cmbProducto.Items.AddRange(productos.Cast<object>().ToArray());
 
         var txtReferencia = new TextBox { ReadOnly = true, PlaceholderText = "REF-0000" };
-        var numCantidad = new NumericUpDown { Minimum = 0, Maximum = 100000 };
+        // Mínimo 1: la base de datos no admite cantidades de 0
+        var numCantidad = new NumericUpDown { Minimum = 1, Maximum = 100000 };
         var txtLote = new TextBox { PlaceholderText = "Lote" };
 
         var btnQuitar = new Button
@@ -270,7 +352,7 @@ private Control CrearAcciones()
         // Al elegir un producto se rellena su referencia y se recalcula el resumen
         cmbProducto.SelectedIndexChanged += (s, e) =>
         {
-            txtReferencia.Text = catalogoProductos[cmbProducto.Text];
+            txtReferencia.Text = cmbProducto.SelectedItem is Producto p ? p.Codigo : "";
             ActualizarResumen();
         };
         numCantidad.ValueChanged += (s, e) => ActualizarResumen();
