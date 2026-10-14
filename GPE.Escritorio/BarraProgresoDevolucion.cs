@@ -60,16 +60,17 @@ namespace GPE.Escritorio
             int margen = 45;
             int paso = (ancho - margen * 2) / 5;
 
-            Color verde = Color.FromArgb(43, 137, 103);
+            Color acento = Tema.Acento;
             Color gris = Color.FromArgb(218, 226, 221);
-            Color texto = Color.FromArgb(35, 48, 42);
+            Color texto = Tema.Texto;
 
             using var fuente = new Font("Segoe UI", 8.5f);
             using var negrita = new Font(
                 "Segoe UI", 8.5f, FontStyle.Bold);
+            using var fuenteNumero = new Font("Segoe UI", 9, FontStyle.Bold);
 
             using var lapiz = new Pen(gris, 3);
-            using var lapizVerde = new Pen(verde, 3);
+            using var lapizAcento = new Pen(acento, 3);
 
             // Línea de progreso
             g.DrawLine(lapiz, margen, centroY,
@@ -79,7 +80,7 @@ namespace GPE.Escritorio
 
             if (faseActual > 1)
             {
-                g.DrawLine(lapizVerde, margen, centroY,
+                g.DrawLine(lapizAcento, margen, centroY,
                     xActual, centroY);
             }
 
@@ -91,11 +92,17 @@ namespace GPE.Escritorio
                 bool completada = numero <= FasesCompletadas;
                 bool actual = numero == faseActual;
 
-                Color colorCirculo = completada
-                 ? verde : Color.White;
+                // Completada: círculo lleno. Actual: círculo suave con borde de acento.
+                Color colorCirculo = completada ? acento
+                    : actual ? Tema.AcentoSuave
+                    : Color.White;
 
                 Color colorBorde = completada || actual
-                 ? verde : gris;
+                 ? acento : gris;
+
+                Color colorNumero = completada ? Color.White
+                    : actual ? acento
+                    : Tema.Suave;
 
                 using var relleno = new SolidBrush(colorCirculo);
                 using var borde = new Pen(colorBorde, 2);
@@ -107,9 +114,9 @@ namespace GPE.Escritorio
 
                 TextRenderer.DrawText(
                     g, simbolo,
-                    new Font("Segoe UI", 9, FontStyle.Bold),
+                    fuenteNumero,
                     new Rectangle(x - 14, centroY - 13, 28, 26),
-                    completada || actual ? Color.White : verde,
+                    colorNumero,
                     TextFormatFlags.HorizontalCenter |
                     TextFormatFlags.VerticalCenter);
 

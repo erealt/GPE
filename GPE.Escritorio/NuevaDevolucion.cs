@@ -6,9 +6,9 @@ namespace GPE.Escritorio;
 
 public class FormNuevaDevolucion : Form
 {
-    private static readonly Color ColorFondo = Color.FromArgb(245, 246, 244);
-    private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
-    private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
+    private static readonly Color ColorFondo = Tema.Fondo;
+    private static readonly Color ColorTexto = Tema.Texto;
+    private static readonly Color ColorSuave = Tema.Suave;
 
     private const int FabricaProvisional = 1;
 
@@ -33,7 +33,11 @@ public class FormNuevaDevolucion : Form
         NumericUpDown Cantidad,
         TextBox Lote);
 
-    private readonly Label lblResumenProductos = new(); 
+    // Mensajes de error que aparecen debajo de cada campo
+    private readonly Dictionary<Control, Label> errores = new();
+    private readonly Label lblErrorProductos = CrearEtiquetaError();
+
+    private readonly Label lblResumenProductos = new();
     private readonly TableLayoutPanel contenedorFilas = new();
     private readonly List<FilaProducto> filas = new();
 
@@ -76,7 +80,8 @@ public class FormNuevaDevolucion : Form
         cmbMotivo.Items.AddRange(new object[]
             { "Producto dañado", "Error en pedido", "Caducidad próxima", "Envase defectuoso", "Otro" });
 
-        dtpSolicitud.Format = DateTimePickerFormat.Short;   
+        dtpSolicitud.Format = DateTimePickerFormat.Short;
+        dtpSolicitud.MaxDate = DateTime.Today;   // no se admiten solicitudes futuras
 
         txtAlbaran.PlaceholderText = "Ej. ALB-45872";
         txtObservaciones.PlaceholderText = "Añade cualquier información relevante sobre la solicitud...";
@@ -173,18 +178,21 @@ public class FormNuevaDevolucion : Form
 
     private Control CrearTarjetaProductos()
     {
-        var btnAnadir = CrearBotonSecundario("+  Añadir producto", 170);
+        var btnAnadir = Tema.BotonSecundario("+  Añadir producto", 190);
         btnAnadir.Click += (s, e) => AnadirFilaProducto();
 
-        var tarjeta = CrearTarjeta("", "Productos esperados", "", btnAnadir, lblResumenProductos);
+        var tarjeta = CrearTarjeta("2", "Productos esperados", "", btnAnadir, lblResumenProductos);
 
         contenedorFilas.Dock = DockStyle.Fill;
         contenedorFilas.AutoSize = true;
         contenedorFilas.ColumnCount = 1;
         contenedorFilas.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
+        lblErrorProductos.Margin = new Padding(0, 10, 0, 0);
+
         tarjeta.Controls.Add(CrearEncabezadoProductos());
         tarjeta.Controls.Add(contenedorFilas);
+        tarjeta.Controls.Add(lblErrorProductos);
 
         AnadirFilaProducto();   
         return tarjeta;
@@ -201,23 +209,21 @@ public class FormNuevaDevolucion : Form
             Margin = new Padding(0, 0, 0, 20)
         };
 
-        var btnGuardar = new Button
-        {
-            Text = "Guardar devolución",
-            Size = new Size(190, 45),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(35, 90, 65),
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Cursor = Cursors.Hand,
-            Margin = new Padding(0),
-            Enabled = cargaCorrecta   
-        };
-
-        btnGuardar.FlatAppearance.BorderSize = 0;
+        var btnGuardar = Tema.BotonPrincipal("Guardar devolución", 190);
+        btnGuardar.Height = 45;
+        btnGuardar.Margin = new Padding(0);
+        btnGuardar.Enabled = cargaCorrecta;
         btnGuardar.Click += (s, e) => Guardar();
 
+        var btnCancelar = Tema.BotonSecundario("Cancelar", 130);
+        btnCancelar.Height = 45;
+        btnCancelar.Margin = new Padding(0, 0, 10, 0);
+        btnCancelar.DialogResult = DialogResult.Cancel;
+
+        CancelButton = btnCancelar;   
+
         panel.Controls.Add(btnGuardar);
+        panel.Controls.Add(btnCancelar);
 
         return panel;
     }
@@ -226,20 +232,43 @@ public class FormNuevaDevolucion : Form
 
     private void Guardar()
     {
-        // 1. Validaciones
-        if (cmbCliente.SelectedItem is not Cliente cliente)
+        // 1. Validaciones: se marcan todos los campos con error a la vez
+        LimpiarErrores();
+        Control? primerError = null;
+
+        if (cmbCliente.SelectedItem is not Cliente)
         {
-            Avisar("Selecciona un cliente.", cmbCliente);
+            MarcarError(cmbCliente, "Selecciona un cliente.");
+            primerError ??= cmbCliente;
+        }
+
+        if (cmbMotivo.SelectedItem is not string)
+        {
+            MarcarError(cmbMotivo, "Selecciona el motivo de la devolución.");
+            primerError ??= cmbMotivo;
+        }
+
+        var filasSinProducto = filas.Where(f => f.Producto.SelectedItem is not Producto).ToList();
+        if (filasSinProducto.Count == filas.Count)
+        {
+            MostrarErrorProductos("Añade al menos un producto a la devolución.");
+            primerError ??= filas[0].Producto;
+        }
+        else if (filasSinProducto.Count > 0)
+        {
+            MostrarErrorProductos("Hay filas sin producto: elige uno o quítalas con ✕.");
+            primerError ??= filasSinProducto[0].Producto;
+        }
+
+        if (primerError != null)
+        {
+            primerError.Focus();
             return;
         }
 
-        if (cmbMotivo.SelectedItem is not string motivo)
-        {
-            Avisar("Selecciona el motivo de la devolución.", cmbMotivo);
-            return;
-        }
+        var cliente = (Cliente)cmbCliente.SelectedItem!;
+        var motivo = (string)cmbMotivo.SelectedItem!;
 
-    
         var lineas = filas
             .Where(f => f.Producto.SelectedItem is Producto)
             .Select(f => new LineaNuevaDevolucion(
@@ -278,10 +307,35 @@ public class FormNuevaDevolucion : Form
         DialogResult = DialogResult.OK;
     }
 
-    private void Avisar(string mensaje, Control campo)
+    // ---------- Mensajes de error ----------
+
+    private static Label CrearEtiquetaError() => new()
     {
-        MessageBox.Show(this, mensaje, "Faltan datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        campo.Focus();
+        AutoSize = true,
+        ForeColor = Tema.Error,
+        Font = new Font("Segoe UI", 9),
+        Margin = new Padding(0, 4, 0, 0),
+        Visible = false
+    };
+
+    private void MarcarError(Control campo, string mensaje)
+    {
+        var etiqueta = errores[campo];
+        etiqueta.Text = mensaje;
+        etiqueta.Visible = true;
+    }
+
+    private void MostrarErrorProductos(string mensaje)
+    {
+        lblErrorProductos.Text = mensaje;
+        lblErrorProductos.Visible = true;
+    }
+
+    private void LimpiarErrores()
+    {
+        foreach (var etiqueta in errores.Values)
+            etiqueta.Visible = false;
+        lblErrorProductos.Visible = false;
     }
 
     // ---------- Filas de producto ----------
@@ -298,7 +352,7 @@ public class FormNuevaDevolucion : Form
     private Control CrearEncabezadoProductos()
     {
         var encabezado = PlantillaFilaProducto();
-        encabezado.BackColor = Color.FromArgb(243, 244, 241);
+        encabezado.BackColor = Tema.CabeceraTabla;
 
         string[] titulos = { "PRODUCTO", "REFERENCIA", "CANTIDAD ESPERADA", "LOTE", "" };
         for (int i = 0; i < titulos.Length; i++)
@@ -343,6 +397,7 @@ public class FormNuevaDevolucion : Form
         cmbProducto.SelectedIndexChanged += (s, e) =>
         {
             txtReferencia.Text = cmbProducto.SelectedItem is Producto p ? p.Codigo : "";
+            lblErrorProductos.Visible = false;
             ActualizarResumen();
         };
         numCantidad.ValueChanged += (s, e) => ActualizarResumen();
@@ -439,7 +494,7 @@ public class FormNuevaDevolucion : Form
         return rejilla;
     }
 
-    private static Control Campo(string etiqueta, Control control)
+    private Control Campo(string etiqueta, Control control)
     {
         var panel = new TableLayoutPanel
         {
@@ -458,22 +513,14 @@ public class FormNuevaDevolucion : Form
 
         control.Dock = DockStyle.Top;
         panel.Controls.Add(control);
-        return panel;
-    }
 
-    private static Button CrearBotonSecundario(string texto, int ancho)
-    {
-        var boton = new Button
-        {
-            Text = texto,
-            Size = new Size(ancho, 46),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.White,
-            ForeColor = ColorTexto,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Cursor = Cursors.Hand
-        };
-        boton.FlatAppearance.BorderColor = Color.FromArgb(200, 205, 200);
-        return boton;
+        // Al corregir el campo desaparece su error
+        var error = CrearEtiquetaError();
+        errores[control] = error;
+        panel.Controls.Add(error);
+        if (control is ComboBox combo)
+            combo.SelectedIndexChanged += (s, e) => error.Visible = false;
+
+        return panel;
     }
 }

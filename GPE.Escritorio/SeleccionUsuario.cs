@@ -8,10 +8,10 @@ namespace GPE.Escritorio;
 // para que el historial de cambios sepa a quién atribuir cada modificación.
 public class FormSeleccionUsuario : Form
 {
-    private static readonly Color ColorFondo = Color.FromArgb(245, 246, 244);
-    private static readonly Color ColorAzul = Color.FromArgb(89, 0, 246);
-    private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
-    private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
+    private static readonly Color ColorFondo = Tema.Fondo;
+    private static readonly Color ColorAzul = Tema.Acento;
+    private static readonly Color ColorTexto = Tema.Texto;
+    private static readonly Color ColorSuave = Tema.Suave;
 
     private readonly DevolucionServicio servicio = new();
 

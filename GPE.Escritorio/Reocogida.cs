@@ -10,14 +10,14 @@ namespace GPE.Escritorio
             Size = new Size(1000, 700);
             MinimumSize = new Size(800, 600);
             StartPosition = FormStartPosition.CenterParent;
-            BackColor = Color.FromArgb(245, 246, 244);
+            BackColor = Tema.Fondo;
             Font = new Font("Segoe UI", 10);
 
             var titulo = new Label
             {
                 Text = "Gestión de recogida",
                 Font = new Font("Segoe UI", 22, FontStyle.Bold),
-                ForeColor = Color.FromArgb(20, 35, 30),
+                ForeColor = Tema.Texto,
                 AutoSize = false,
                 Dock = DockStyle.Top,
                 Height = 60,
@@ -27,7 +27,7 @@ namespace GPE.Escritorio
             var subtitulo = new Label
             {
                 Text = $"Gestiona la recogida de la devolución {devolucion.Numero} de {devolucion.Cliente}.",
-                ForeColor = Color.FromArgb(110, 120, 115),
+                ForeColor = Tema.Suave,
                 AutoSize = false,
                 Dock = DockStyle.Top,
                 Height = 40,

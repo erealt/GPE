@@ -159,6 +159,33 @@ public class DevolucionRepositorio
         return cambios;
     }
 
+
+    public Dictionary<string, Dictionary<int, string>> ObtenerNombresPorCampo()
+    {
+        const string sql = @"
+            SELECT 'estado_id', id, nombre FROM ESTADO_DEVOLUCION
+            UNION ALL SELECT 'cliente_id', id, nombre FROM CLIENTE
+            UNION ALL SELECT 'fabrica_id', id, nombre FROM FABRICA
+            UNION ALL SELECT 'producto_id', id, nombre FROM PRODUCTO
+            UNION ALL SELECT 'transportista_id', id, nombre FROM TRANSPORTISTA;";
+
+        var nombres = new Dictionary<string, Dictionary<int, string>>();
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            string campo = lector.GetString(0);
+            if (!nombres.TryGetValue(campo, out var porId))
+                nombres[campo] = porId = new Dictionary<int, string>();
+            porId[lector.GetInt32(1)] = lector.GetString(2);
+        }
+
+        return nombres;
+    }
+
     // ---------- Escritura ----------
 
     public int InsertarDevolucion(DatosNuevaDevolucion datos)

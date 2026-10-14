@@ -1,19 +1,16 @@
 using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 
 namespace GPE.Escritorio;
 
 public class FormPrincipal : Form
 {
-    // Colores
-    private static readonly Color ColorFondo = Color.FromArgb(245, 246, 244);
-    private static readonly Color ColorAzul = Color.FromArgb(89, 0, 246);
-    private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
-    private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
-
     private static readonly CultureInfo Es = new("es-ES");
+
+    private const int ColumnaEstado = 7;
 
     private readonly DevolucionServicio servicio = new();
 
@@ -21,18 +18,20 @@ public class FormPrincipal : Form
     private readonly ComboBox cmbEstado = new();
     private readonly DateTimePicker dtpDesde = new();
     private readonly DateTimePicker dtpHasta = new();
-    private readonly Button btnFiltrar = new();
-    private readonly Button btnLimpiar = new();
+    private readonly Button btnLimpiar = Tema.BotonSecundario("Limpiar filtros", 140);
     private readonly Label lblContador = new();
     private readonly DataGridView grid = new();
-    private readonly Button btnNueva = new();
+    private readonly Label lblVacio = new();
+    private readonly Button btnNueva = Tema.BotonPrincipal("+  Nueva devolución", 210);
+    private readonly Button btnAbrir = Tema.BotonPrincipal("Abrir", 110);
+    private readonly Button btnHistorial = Tema.BotonSecundario("Ver historial", 140);
 
     public FormPrincipal()
     {
         Text = "GPE - Devoluciones";
         Size = new Size(1200, 750);
         MinimumSize = new Size(1150, 600);
-        BackColor = ColorFondo;
+        BackColor = Tema.Fondo;
         Font = new Font("Segoe UI", 10);
 
         Controls.Add(CrearContenido());
@@ -58,22 +57,42 @@ public class FormPrincipal : Form
             Dock = DockStyle.Right,
             Width = 220,
             TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = ColorSuave,
+            ForeColor = Tema.Suave,
             Text = DateTime.Now.ToString("d 'de' MMMM 'de' yyyy", Es)
         };
 
+        // Iniciales dentro de un círculo (se dibujan a mano en Paint)
+        string iniciales = Sesion.UsuarioActual?.Iniciales ?? "";
         var lblUsuario = new Label
         {
             Dock = DockStyle.Right,
             Width = 50,
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = ColorAzul,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Text = Sesion.UsuarioActual?.Iniciales ?? ""
+            Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
-        new ToolTip().SetToolTip(lblUsuario, Sesion.UsuarioActual?.Nombre);
+        lblUsuario.Paint += (s, e) =>
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            int lado = 34;
+            var circulo = new Rectangle((lblUsuario.Width - lado) / 2, (lblUsuario.Height - lado) / 2, lado, lado);
+            using var relleno = new SolidBrush(Tema.AcentoSuave);
+            e.Graphics.FillEllipse(relleno, circulo);
+            TextRenderer.DrawText(e.Graphics, iniciales, lblUsuario.Font, circulo, Tema.Acento,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        };
 
+        var lblNombre = new Label
+        {
+            Dock = DockStyle.Right,
+            AutoSize = false,
+            Width = 200,
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = Tema.Texto,
+            Text = Sesion.UsuarioActual?.Nombre ?? ""
+        };
+
+        // Con Dock = Right, el último añadido queda más a la derecha
         barra.Controls.Add(lblFecha);
+        barra.Controls.Add(lblNombre);
         barra.Controls.Add(lblUsuario);
         return barra;
     }
@@ -94,19 +113,13 @@ public class FormPrincipal : Form
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        lblContador.Dock = DockStyle.Fill;
-        lblContador.BackColor = Color.White;
-        lblContador.ForeColor = ColorSuave;
-        lblContador.TextAlign = ContentAlignment.MiddleLeft;
-        lblContador.Padding = new Padding(15, 0, 0, 0);
 
         layout.Controls.Add(CrearCabecera(), 0, 0);
         layout.Controls.Add(CrearFiltros(), 0, 1);
-        layout.Controls.Add(lblContador, 0, 2);
-        layout.Controls.Add(ConfigurarGrid(), 0, 3);
+        layout.Controls.Add(CrearBarraAcciones(), 0, 2);
+        layout.Controls.Add(CrearZonaTabla(), 0, 3);
 
         contenido.Controls.Add(layout);
         return contenido;
@@ -129,7 +142,7 @@ public class FormPrincipal : Form
             Text = "Consulta y gestiona todas las devoluciones de clientes.",
             Dock = DockStyle.Top,
             Height = 28,
-            ForeColor = ColorSuave
+            ForeColor = Tema.Suave
         };
         var lblTitulo = new Label
         {
@@ -137,28 +150,20 @@ public class FormPrincipal : Form
             Dock = DockStyle.Top,
             Height = 50,
             Font = new Font("Segoe UI", 22, FontStyle.Bold),
-            ForeColor = ColorTexto
+            ForeColor = Tema.Texto
         };
         titulos.Controls.Add(lblSubtitulo);
-        titulos.Controls.Add(lblTitulo); 
+        titulos.Controls.Add(lblTitulo);
 
         // Botón principal
-        btnNueva.Text = "+  Nueva devolución";
-        btnNueva.Size = new Size(210, 46);
+        btnNueva.Height = 46;
         btnNueva.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnNueva.Margin = new Padding(0, 10, 0, 0);
-        btnNueva.FlatStyle = FlatStyle.Flat;
-        btnNueva.FlatAppearance.BorderSize = 0;
-        btnNueva.BackColor = ColorAzul;
-        btnNueva.ForeColor = Color.White;
-        btnNueva.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        btnNueva.Cursor = Cursors.Hand;
         btnNueva.Click += (s, e) =>
         {
             using var formulario = new FormNuevaDevolucion();
             if (formulario.ShowDialog(this) == DialogResult.OK)
             {
-               
                 CargarDatos();
                 SeleccionarDevolucion(formulario.IdCreado);
             }
@@ -192,46 +197,24 @@ public class FormPrincipal : Form
             fecha.Checked = false;
         }
 
-        btnFiltrar.Text = "Filtrar";
-        btnFiltrar.Size = new Size(110, 30);
-        btnFiltrar.Margin = new Padding(0, 22, 8, 0);
-        btnFiltrar.FlatStyle = FlatStyle.Flat;
-        btnFiltrar.FlatAppearance.BorderSize = 0;
-        btnFiltrar.BackColor = ColorAzul;
-        btnFiltrar.ForeColor = Color.White;
-        btnFiltrar.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        btnFiltrar.Cursor = Cursors.Hand;
-
-        btnLimpiar.Text = "Limpiar filtros";
-        btnLimpiar.Size = new Size(130, 30);
+        btnLimpiar.Height = 30;
         btnLimpiar.Margin = new Padding(0, 22, 0, 0);
-        btnLimpiar.FlatStyle = FlatStyle.Flat;
-        btnLimpiar.FlatAppearance.BorderColor = Color.FromArgb(200, 205, 200);
-        btnLimpiar.BackColor = Color.White;
-        btnLimpiar.ForeColor = ColorTexto;
-        btnLimpiar.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        btnLimpiar.Cursor = Cursors.Hand;
 
         panel.Controls.Add(CampoFiltro("Buscar", txtBuscar));
         panel.Controls.Add(CampoFiltro("Estado", cmbEstado));
         panel.Controls.Add(CampoFiltro("Fecha desde", dtpDesde));
         panel.Controls.Add(CampoFiltro("Fecha hasta", dtpHasta));
-        panel.Controls.Add(btnFiltrar);
         panel.Controls.Add(btnLimpiar);
 
-
-        btnFiltrar.Click += (s, e) => AplicarFiltros();
+        // Los filtros se aplican al momento, sin botón de "Filtrar"
+        txtBuscar.TextChanged += (s, e) => AplicarFiltros();
+        cmbEstado.SelectedIndexChanged += (s, e) => AplicarFiltros();
+        dtpDesde.ValueChanged += (s, e) => AplicarFiltros();
+        dtpHasta.ValueChanged += (s, e) => AplicarFiltros();
         btnLimpiar.Click += (s, e) => LimpiarFiltros();
-        txtBuscar.KeyDown += (s, e) =>
-        {
-            if (e.KeyCode != Keys.Enter) return;
-            AplicarFiltros();
-            e.SuppressKeyPress = true;
-        };
 
         return panel;
     }
-
 
     private static Control CampoFiltro(string etiqueta, Control control)
     {
@@ -241,7 +224,7 @@ public class FormPrincipal : Form
             Text = etiqueta,
             Dock = DockStyle.Top,
             Height = 22,
-            ForeColor = ColorSuave,
+            ForeColor = Tema.Suave,
             Font = new Font("Segoe UI", 9)
         };
         control.Dock = DockStyle.Top;
@@ -250,13 +233,69 @@ public class FormPrincipal : Form
         return campo;
     }
 
+    // Contador de resultados y acciones sobre la devolución seleccionada
+    private Control CrearBarraAcciones()
+    {
+        var barra = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            BackColor = Color.White,
+            Margin = new Padding(0, 10, 0, 0),
+            Padding = new Padding(15, 0, 10, 0)
+        };
+        barra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        lblContador.Dock = DockStyle.Fill;
+        lblContador.ForeColor = Tema.Suave;
+        lblContador.TextAlign = ContentAlignment.MiddleLeft;
+
+        var botones = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Anchor = AnchorStyles.Right,
+            Margin = new Padding(0)
+        };
+        btnAbrir.Height = btnHistorial.Height = 34;
+        btnAbrir.Margin = new Padding(0);
+        btnHistorial.Margin = new Padding(0, 0, 8, 0);
+        botones.Controls.Add(btnAbrir);
+        botones.Controls.Add(btnHistorial);
+
+        btnAbrir.Click += (s, e) => AbrirDevolucion(grid.CurrentRow?.Index ?? -1);
+        btnHistorial.Click += (s, e) => AbrirHistorial();
+
+        barra.Controls.Add(lblContador, 0, 0);
+        barra.Controls.Add(botones, 1, 0);
+        return barra;
+    }
+
+    private Control CrearZonaTabla()
+    {
+        var zona = new Panel { Dock = DockStyle.Fill };
+
+        // Se muestra en lugar de la tabla cuando no hay nada que enseñar
+        lblVacio.Dock = DockStyle.Fill;
+        lblVacio.BackColor = Color.White;
+        lblVacio.ForeColor = Tema.Suave;
+        lblVacio.TextAlign = ContentAlignment.MiddleCenter;
+        lblVacio.Visible = false;
+
+        zona.Controls.Add(lblVacio);
+        zona.Controls.Add(ConfigurarGrid());
+        return zona;
+    }
+
     private Control ConfigurarGrid()
     {
         grid.Dock = DockStyle.Fill;
         grid.BackgroundColor = Color.White;
         grid.BorderStyle = BorderStyle.None;
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        grid.GridColor = Color.FromArgb(230, 232, 228);
+        grid.GridColor = Tema.Linea;
 
         grid.ReadOnly = true;
         grid.AllowUserToAddRows = false;
@@ -268,9 +307,12 @@ public class FormPrincipal : Form
         grid.RowTemplate.Height = 50;
 
         grid.CellDoubleClick += (s, e) => AbrirDevolucion(e.RowIndex);
+        grid.SelectionChanged += (s, e) => ActualizarBotones();
+        grid.CellPainting += PintarEstado;
 
         // Clic derecho sobre una fila: la selecciona y muestra el menú
         var menu = new ContextMenuStrip();
+        menu.Items.Add("Abrir", null, (s, e) => AbrirDevolucion(grid.CurrentRow?.Index ?? -1));
         menu.Items.Add("Ver historial de cambios", null, (s, e) => AbrirHistorial());
         grid.ContextMenuStrip = menu;
         grid.CellMouseDown += (s, e) =>
@@ -286,17 +328,17 @@ public class FormPrincipal : Form
         grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         grid.ColumnHeadersHeight = 45;
         var cabecera = grid.ColumnHeadersDefaultCellStyle;
-        cabecera.BackColor = Color.FromArgb(243, 244, 241);
+        cabecera.BackColor = Tema.CabeceraTabla;
         cabecera.SelectionBackColor = cabecera.BackColor;
-        cabecera.ForeColor = ColorSuave;
-        cabecera.SelectionForeColor = ColorSuave;
+        cabecera.ForeColor = Tema.Suave;
+        cabecera.SelectionForeColor = Tema.Suave;
         cabecera.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
         cabecera.Padding = new Padding(10, 0, 0, 0);
 
         // Celdas
-        grid.DefaultCellStyle.ForeColor = ColorTexto;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(240, 236, 255);
-        grid.DefaultCellStyle.SelectionForeColor = ColorTexto;
+        grid.DefaultCellStyle.ForeColor = Tema.Texto;
+        grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
+        grid.DefaultCellStyle.SelectionForeColor = Tema.Texto;
         grid.DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
 
         string[] columnas =
@@ -307,11 +349,52 @@ public class FormPrincipal : Form
         foreach (string nombre in columnas)
             grid.Columns.Add(nombre, nombre);
 
-        
-        grid.Columns[0].DefaultCellStyle.ForeColor = ColorAzul;
+        grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
         grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        grid.Columns[ColumnaEstado].FillWeight = 140;
 
         return grid;
+    }
+
+    // Dibuja el estado como una etiqueta redondeada con el color de su fase
+    private void PintarEstado(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex != ColumnaEstado || e.Graphics == null) return;
+        if (grid.Rows[e.RowIndex].Tag is not DevolucionFila devolucion) return;
+
+        e.PaintBackground(e.CellBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+        var (fondo, texto) = Tema.ColorFase(devolucion.Fase);
+        using var fuente = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+
+        var medida = TextRenderer.MeasureText(devolucion.Estado, fuente);
+        var etiqueta = new Rectangle(
+            e.CellBounds.X + 10,
+            e.CellBounds.Y + (e.CellBounds.Height - 26) / 2,
+            Math.Min(medida.Width + 20, e.CellBounds.Width - 15),
+            26);
+
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var ruta = Redondeado(etiqueta, 13))
+        using (var relleno = new SolidBrush(fondo))
+            e.Graphics.FillPath(relleno, ruta);
+
+        TextRenderer.DrawText(e.Graphics, devolucion.Estado, fuente, etiqueta, texto,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+        e.Handled = true;
+    }
+
+    private static GraphicsPath Redondeado(Rectangle r, int radio)
+    {
+        var ruta = new GraphicsPath();
+        int d = radio * 2;
+        ruta.AddArc(r.X, r.Y, d, d, 180, 90);
+        ruta.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        ruta.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        ruta.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        ruta.CloseFigure();
+        return ruta;
     }
 
     // ---------- Datos y filtros ----------
@@ -323,7 +406,6 @@ public class FormPrincipal : Form
         {
             devoluciones = servicio.ObtenerDevoluciones();
 
-          
             if (cmbEstado.Items.Count == 0)
             {
                 cmbEstado.Items.Add("Todos los estados");
@@ -332,7 +414,7 @@ public class FormPrincipal : Form
                 cmbEstado.SelectedIndex = 0;
             }
         }
-        catch (DbException ex)   
+        catch (DbException ex)
         {
             MessageBox.Show(this,
                 "No se pudieron cargar las devoluciones de la base de datos.\n\n" + ex.Message,
@@ -344,7 +426,6 @@ public class FormPrincipal : Form
         foreach (var devolucion in devoluciones)
             AnadirDevolucion(devolucion);
 
-    
         AplicarFiltros();
     }
 
@@ -363,7 +444,6 @@ public class FormPrincipal : Form
         grid.Rows[i].Tag = d;
     }
 
-    
     private void SeleccionarDevolucion(int id)
     {
         var fila = grid.Rows.Cast<DataGridViewRow>()
@@ -371,7 +451,6 @@ public class FormPrincipal : Form
 
         if (fila == null) return;
 
-       
         if (!fila.Visible)
             LimpiarFiltros();
 
@@ -381,16 +460,14 @@ public class FormPrincipal : Form
         grid.FirstDisplayedScrollingRowIndex = fila.Index;
     }
 
-   
     private void AbrirDevolucion(int indiceFila)
     {
         if (indiceFila < 0) return;   // doble clic en la cabecera de la tabla
         if (grid.Rows[indiceFila].Tag is not DevolucionFila devolucion) return;
 
-        
         switch (devolucion.Fase)
         {
-            case 1:   // Solicitud recibida 
+            case 1:   // Solicitud recibida
                 using (var pantalla = new Recogida(devolucion))
                     pantalla.ShowDialog(this);
                 break;
@@ -401,7 +478,7 @@ public class FormPrincipal : Form
                     "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
 
-            default:  
+            default:
                 MessageBox.Show(this, "La pantalla de abono todavía no está disponible.",
                     "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -429,14 +506,6 @@ public class FormPrincipal : Form
         DateTime? desde = dtpDesde.Checked ? dtpDesde.Value.Date : null;
         DateTime? hasta = dtpHasta.Checked ? dtpHasta.Value.Date : null;
 
-        if (desde != null && hasta != null && desde > hasta)
-        {
-            MessageBox.Show(this, "La fecha \"desde\" no puede ser posterior a \"hasta\".",
-                "Fechas incorrectas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-
         grid.CurrentCell = null;
 
         foreach (DataGridViewRow fila in grid.Rows)
@@ -444,7 +513,7 @@ public class FormPrincipal : Form
             string numero = fila.Cells[0].Value?.ToString() ?? "";
             string cli = fila.Cells[1].Value?.ToString() ?? "";
             string albaran = fila.Cells[2].Value?.ToString() ?? "";
-            string est = fila.Cells[7].Value?.ToString() ?? "";
+            string est = fila.Cells[ColumnaEstado].Value?.ToString() ?? "";
 
             bool coincideTexto = texto == ""
                 || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
@@ -459,7 +528,8 @@ public class FormPrincipal : Form
             fila.Visible = coincideTexto && coincideEstado && coincideFecha;
         }
 
-        ActualizarContador();
+        ActualizarContador(desde != null && hasta != null && desde > hasta);
+        ActualizarBotones();
     }
 
     private void LimpiarFiltros()
@@ -471,9 +541,25 @@ public class FormPrincipal : Form
         AplicarFiltros();
     }
 
-    private void ActualizarContador()
+    private void ActualizarContador(bool fechasCruzadas)
     {
         int visibles = grid.Rows.Cast<DataGridViewRow>().Count(f => f.Visible);
-        lblContador.Text = $"{visibles} devoluciones";
+        lblContador.Text = $"{visibles} {(visibles == 1 ? "devolución" : "devoluciones")}";
+
+        lblVacio.Text = fechasCruzadas
+            ? "La fecha \"desde\" es posterior a la fecha \"hasta\"."
+            : grid.Rows.Count == 0
+                ? "Todavía no hay devoluciones. Crea la primera con \"+ Nueva devolución\"."
+                : "No hay devoluciones que coincidan con los filtros.";
+        lblVacio.ForeColor = fechasCruzadas ? Tema.Error : Tema.Suave;
+        lblVacio.Visible = visibles == 0;
+        grid.Visible = visibles > 0;
+    }
+
+    private void ActualizarBotones()
+    {
+        bool haySeleccion = grid.CurrentRow is { Visible: true, Tag: DevolucionFila };
+        btnAbrir.Enabled = haySeleccion;
+        btnHistorial.Enabled = haySeleccion;
     }
 }

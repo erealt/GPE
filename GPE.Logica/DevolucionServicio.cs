@@ -23,10 +23,13 @@ public class DevolucionServicio
 
     public List<Usuario> ObtenerUsuarios() => repositorio.ObtenerUsuarios();
 
-    public List<EntradaHistorial> ObtenerHistorial(int devolucionId) =>
-        repositorio.ObtenerHistorial(devolucionId)
-            .Select(HistorialFormateador.Formatear)
+    public List<EntradaHistorial> ObtenerHistorial(int devolucionId)
+    {
+        var nombres = repositorio.ObtenerNombresPorCampo();
+        return repositorio.ObtenerHistorial(devolucionId)
+            .Select(c => HistorialFormateador.Formatear(c, nombres))
             .ToList();
+    }
 
     // ---------- Operaciones ----------
 

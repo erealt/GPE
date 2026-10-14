@@ -7,9 +7,9 @@ namespace GPE.Escritorio;
 
 public class FormHistorial : Form
 {
-    private static readonly Color ColorFondo = Color.FromArgb(245, 246, 244);
-    private static readonly Color ColorTexto = Color.FromArgb(20, 35, 30);
-    private static readonly Color ColorSuave = Color.FromArgb(110, 120, 115);
+    private static readonly Color ColorFondo = Tema.Fondo;
+    private static readonly Color ColorTexto = Tema.Texto;
+    private static readonly Color ColorSuave = Tema.Suave;
 
     private static readonly CultureInfo Es = new("es-ES");
 
@@ -61,7 +61,7 @@ public class FormHistorial : Form
         grid.BackgroundColor = Color.White;
         grid.BorderStyle = BorderStyle.None;
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        grid.GridColor = Color.FromArgb(230, 232, 228);
+        grid.GridColor = Tema.Linea;
 
         grid.ReadOnly = true;
         grid.AllowUserToAddRows = false;
@@ -74,12 +74,13 @@ public class FormHistorial : Form
         grid.EnableHeadersVisualStyles = false;
         grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         grid.ColumnHeadersHeight = 40;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(243, 244, 241);
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Tema.CabeceraTabla;
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
         grid.ColumnHeadersDefaultCellStyle.ForeColor = ColorSuave;
         grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
 
         grid.DefaultCellStyle.ForeColor = ColorTexto;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(240, 236, 255);
+        grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
         grid.DefaultCellStyle.SelectionForeColor = ColorTexto;
         grid.DefaultCellStyle.Padding = new Padding(6, 6, 6, 6);
         grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
@@ -119,5 +120,7 @@ public class FormHistorial : Form
 
         if (entradas.Count == 0)
             grid.Rows.Add("—", "—", "—", "—", "Todavía no hay cambios registrados.");
+
+        grid.ClearSelection();
     }
 }
