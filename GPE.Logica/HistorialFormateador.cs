@@ -20,7 +20,7 @@ public static class HistorialFormateador
 {
     // Columnas que no aportan nada al leer el historial
     private static readonly HashSet<string> CamposOcultos =
-        new() { "id", "numero", "devolucion_id", "creada_en", "fabrica_id", "estado_id" };
+        new() { "id", "numero", "devolucion_id", "creada_en", "fabrica_id", "estado_id", "motivo_reapertura" };
 
     private static readonly Dictionary<string, string> NombresCampos = new()
     {
@@ -38,6 +38,24 @@ public static class HistorialFormateador
         ["transportista_id"] = "Transportista",
         ["direccion"] = "Dirección",
         ["telefono_contacto"] = "Teléfono de contacto",
+        ["cantidad_apta"] = "Cantidad apta",
+        ["observaciones_revision"] = "Observaciones de la revisión",
+    };
+
+    private static readonly Dictionary<int, string> TitulosPorFase = new()
+    {
+        [2] = "Solicitó la recogida",
+        [3] = "Registró la llegada de la mercancía",
+        [4] = "Finalizó la revisión",
+        [5] = "Registró el abono",
+        [6] = "Cerró la devolución",
+    };
+
+    // Al volver atrás, según la fase de la que se sale
+    private static readonly Dictionary<int, string> TitulosReapertura = new()
+    {
+        [3] = "Deshizo la recepción de la mercancía",
+        [4] = "Reabrió la revisión",
     };
 
     // Filas sin transaccion_id (anteriores a esa columna): se agrupan si son
@@ -112,6 +130,13 @@ public static class HistorialFormateador
                         fase = Fase(estadoAntes, estadoDespues, nombres);
                     }
 
+                    // Vuelta a un paso anterior: solo interesa el motivo
+                    if (fase is { FaseAnterior: int desde } && fase.FaseNueva < desde)
+                    {
+                        detalles.Add($"Motivo: {despues.GetValueOrDefault("motivo_reapertura")}");
+                        break;
+                    }
+
                     // La fecha de recogida de la devolución es copia de la de RECOGIDA: no se repite
                     var cambiosDevolucion = Diferencias(antes, despues)
                         .Where(d => !(tocaRecogida && d.Campo == "fecha_recogida"))
@@ -130,8 +155,10 @@ public static class HistorialFormateador
 
                 case ("DEVOLUCION_PRODUCTO", "UPDATE"):
                     titulos.Add((2, "Modificó los productos"));
-                    detalles.AddRange(Diferencias(antes, despues)
-                        .Select(d => $"{despues.GetValueOrDefault("producto_id")} · {d.Texto}"));
+                    detalles.Add(antes.GetValueOrDefault("cantidad_recibida") == null
+                        ? LineaRevisada(despues)   // primera revisión: un resumen por producto
+                        : $"{despues.GetValueOrDefault("producto_id")} · " +
+                          string.Join("; ", Diferencias(antes, despues).Select(d => d.Texto)));
                     break;
 
                 case ("DEVOLUCION_PRODUCTO", "DELETE"):
@@ -153,7 +180,27 @@ public static class HistorialFormateador
                 case ("RECOGIDA", "DELETE"):
                     if (!borraDevolucion) titulos.Add((1, "Anuló la recogida"));
                     break;
+
+                case ("ADJUNTO", "INSERT"):
+                    titulos.Add((2, EsFoto(despues) ? "Añadió fotos" : "Adjuntó el documento del abono"));
+                    detalles.Add(despues.GetValueOrDefault("nombre_archivo") ?? "");
+                    break;
+
+                case ("ADJUNTO", "DELETE"):
+                    if (borraDevolucion) break;
+                    titulos.Add((2, EsFoto(antes) ? "Quitó fotos" : "Quitó el documento del abono"));
+                    detalles.Add(antes.GetValueOrDefault("nombre_archivo") ?? "");
+                    break;
             }
+        }
+
+        // Si la entrada pasa a otra fase, el título dice qué paso se completó (o se reabrió)
+        if (fase is { FaseAnterior: int faseDesde })
+        {
+            bool haciaAtras = fase.FaseNueva < faseDesde;
+            var titulosFase = haciaAtras ? TitulosReapertura : TitulosPorFase;
+            if (titulosFase.TryGetValue(haciaAtras ? faseDesde : fase.FaseNueva, out var tituloFase))
+                titulos.Add((-1, tituloFase));
         }
 
         string titulo = titulos.Count > 0 ? titulos.MinBy(t => t.Prioridad).Texto : "Modificó la devolución";
@@ -182,7 +229,22 @@ public static class HistorialFormateador
         despues
             .Where(c => !CamposOcultos.Contains(c.Key))
             .Where(c => antes.GetValueOrDefault(c.Key) != c.Value)
-            .Select(c => (c.Key, $"{Nombre(c.Key)}: {antes.GetValueOrDefault(c.Key) ?? "—"} → {c.Value ?? "—"}"));
+            .Select(c => (c.Key, antes.GetValueOrDefault(c.Key) is string anterior
+                ? $"{Nombre(c.Key)}: {anterior} → {c.Value ?? "—"}"
+                : $"{Nombre(c.Key)}: {c.Value}"));   // antes estaba vacío: solo el valor nuevo
+
+    // "Crema de cacao 400 g: 5 recibidas, 4 aptas · 1 bote abollado"
+    private static string LineaRevisada(Dictionary<string, string?> linea)
+    {
+        string texto = $"{linea.GetValueOrDefault("producto_id")}: " +
+                       $"{linea.GetValueOrDefault("cantidad_recibida")} recibidas, " +
+                       $"{linea.GetValueOrDefault("cantidad_apta")} aptas";
+        string? observaciones = linea.GetValueOrDefault("observaciones");
+        return observaciones == null ? texto : $"{texto} · {observaciones}";
+    }
+
+    private static bool EsFoto(Dictionary<string, string?> adjunto) =>
+        adjunto.GetValueOrDefault("tipo") == TipoAdjunto.Foto;
 
     // "Cacao en polvo 500 g × 3 · lote 564"
     private static string LineaProducto(Dictionary<string, string?> linea)

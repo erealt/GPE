@@ -38,6 +38,20 @@ namespace GPE.Escritorio
             System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public int FasesCompletadas { get; set; } = 1;
 
+        // Paso que se está viendo en pantalla: se subraya (0 = ninguno)
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(
+            System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int PasoVisto { get; set; }
+
+        // Se pueden pulsar los pasos del 1 a este (0 = la barra no se puede pulsar)
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(
+            System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int PasoMaximoPulsable { get; set; }
+
+        public event Action<int>? PasoPulsado;
+
 
         public BarraProgresoDevolucion()
         {
@@ -130,7 +144,39 @@ namespace GPE.Escritorio
                     TextFormatFlags.HorizontalCenter |
                     TextFormatFlags.VerticalCenter |
                     TextFormatFlags.WordBreak);
+
+                if (numero == PasoVisto)
+                {
+                    using var subrayado = new SolidBrush(acento);
+                    g.FillRectangle(subrayado, x - 30, 100, 60, 3);
+                }
             }
+        }
+
+        // Paso (1-6) bajo el ratón, o 0 si no hay ninguno que se pueda pulsar
+        private int PasoEn(Point punto)
+        {
+            if (PasoPulsado == null) return 0;
+
+            int margen = 45;
+            int paso = (ClientSize.Width - margen * 2) / 5;
+            int numero = (int)Math.Round((punto.X - margen) / (double)paso) + 1;
+
+            return numero >= 1 && numero <= PasoMaximoPulsable ? numero : 0;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            Cursor = PasoEn(e.Location) > 0 ? Cursors.Hand : Cursors.Default;
+        }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            int numero = PasoEn(e.Location);
+            if (numero > 0 && numero != PasoVisto)
+                PasoPulsado?.Invoke(numero);
         }
     }
 }

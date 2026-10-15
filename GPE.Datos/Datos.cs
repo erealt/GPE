@@ -83,3 +83,27 @@ public record RecogidaGuardada(
     string? TelefonoContacto,
     string? Observaciones,
     DateTime CreadaEn);
+
+// Línea de producto tal como la ve el almacén al revisar
+public record LineaRevision(
+    int Id,
+    string Producto,
+    string? Lote,
+    int Solicitada,
+    int? Recibida,
+    int? Apta,
+    string? Observaciones);
+
+// Lo que el almacén ha anotado de cada línea al finalizar la revisión
+public record LineaRevisada(int Id, int Recibida, int Apta, string? Observaciones);
+
+public static class TipoAdjunto
+{
+    public const string Foto = "FOTO";
+    public const string Abono = "ABONO";
+}
+
+// Datos de un adjunto sin su contenido (para listarlo)
+public record AdjuntoInfo(int Id, string NombreArchivo, int TamanoBytes, DateTime SubidoEn, string Usuario);
+
+public record ArchivoNuevo(string NombreArchivo, byte[] Contenido);

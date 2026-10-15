@@ -15,6 +15,11 @@ public class DevolucionServicio
 
     public List<DevolucionFila> ObtenerDevoluciones() => repositorio.ObtenerDevoluciones();
 
+    public DevolucionFila? ObtenerDevolucion(int devolucionId) => repositorio.ObtenerDevolucion(devolucionId);
+
+    public string? ObtenerObservacionesSolicitud(int devolucionId) =>
+        repositorio.ObtenerObservacionesSolicitud(devolucionId);
+
     public List<string> ObtenerEstados() => repositorio.ObtenerEstados();
 
     public List<Cliente> ObtenerClientes() => repositorio.ObtenerClientes();
@@ -41,10 +46,108 @@ public class DevolucionServicio
         return repositorio.InsertarDevolucion(datos);
     }
 
+    // ---------- Almacén ----------
+
+    private const string MensajeOtroUsuario =
+        "Otro usuario ya ha cambiado el estado de esta devolución. Cierra la pantalla y vuelve a abrirla.";
+
+    public List<LineaRevision> ObtenerLineasRevision(int devolucionId) =>
+        repositorio.ObtenerLineasRevision(devolucionId);
+
+    public string? ObtenerObservacionesRevision(int devolucionId) =>
+        repositorio.ObtenerObservacionesRevision(devolucionId);
+
+    // Solo se puede reabrir el último paso completado (el siguiente aún no ha empezado):
+    // fase 3 → 2 deshace la recepción; fase 4 → 3 reabre la revisión.
+    public void Reabrir(int devolucionId, int faseActual, string motivo)
+    {
+        if (faseActual is not (3 or 4))
+            throw new ReglaNegocioException("Este paso ya no se puede reabrir.");
+
+        motivo = motivo.Trim();
+        if (motivo.Length < 5)
+            throw new ReglaNegocioException("Explica el motivo para reabrir (al menos 5 caracteres).");
+        if (motivo.Length > 500)
+            throw new ReglaNegocioException("El motivo no puede superar los 500 caracteres.");
+
+        if (!repositorio.Reabrir(devolucionId, faseActual, motivo))
+            throw new ReglaNegocioException(MensajeOtroUsuario);
+    }
+
+    public void MarcarRecibida(int devolucionId)
+    {
+        if (!repositorio.MarcarRecibida(devolucionId, DateTime.Today))
+            throw new ReglaNegocioException(MensajeOtroUsuario);
+    }
+
+    // Comprueba que una línea esté completa. Devuelve el error o null si está bien.
+    public static string? ErrorLinea(int? recibida, int? apta, string? observaciones)
+    {
+        if (recibida == null) return "Indica la cantidad recibida.";
+        if (recibida < 0) return "La cantidad recibida no puede ser negativa.";
+        if (apta == null) return "Indica la cantidad apta.";
+        if (apta < 0) return "La cantidad apta no puede ser negativa.";
+        if (apta > recibida) return "La cantidad apta no puede ser mayor que la recibida.";
+        if (apta < recibida && string.IsNullOrWhiteSpace(observaciones))
+            return "Explica en observaciones por qué no todo lo recibido es apto.";
+        return null;
+    }
+
+    public void FinalizarRevision(int devolucionId, List<LineaRevisada> lineas, string? observaciones)
+    {
+        if (lineas.Any(l => ErrorLinea(l.Recibida, l.Apta, l.Observaciones) != null))
+            throw new ReglaNegocioException("Hay líneas de producto incompletas o con errores.");
+
+        if (!repositorio.FinalizarRevision(devolucionId, lineas, observaciones))
+            throw new ReglaNegocioException(MensajeOtroUsuario);
+    }
+
+    // ---------- Adjuntos ----------
+
+    public const int TamanoMaximoAdjunto = 10 * 1024 * 1024;   // 10 MB por archivo
+
+    private static readonly Dictionary<string, string[]> ExtensionesPermitidas = new()
+    {
+        [TipoAdjunto.Foto] = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" },
+        [TipoAdjunto.Abono] = new[] { ".pdf", ".jpg", ".jpeg", ".png" },
+    };
+
+    public static string[] Extensiones(string tipo) => ExtensionesPermitidas[tipo];
+
+    public List<AdjuntoInfo> ObtenerAdjuntos(int devolucionId, string tipo) =>
+        repositorio.ObtenerAdjuntos(devolucionId, tipo);
+
+    public byte[] ObtenerContenidoAdjunto(int adjuntoId) => repositorio.ObtenerContenidoAdjunto(adjuntoId);
+
+    public void EliminarAdjunto(int adjuntoId) => repositorio.EliminarAdjunto(adjuntoId);
+
+    public void AnadirAdjuntos(int devolucionId, string tipo, IEnumerable<string> rutas)
+    {
+        var archivos = new List<ArchivoNuevo>();
+        foreach (string ruta in rutas)
+        {
+            string nombre = Path.GetFileName(ruta);
+
+            if (!ExtensionesPermitidas[tipo].Contains(Path.GetExtension(ruta).ToLowerInvariant()))
+                throw new ReglaNegocioException($"\"{nombre}\" no es un tipo de archivo permitido.");
+
+            if (new FileInfo(ruta).Length > TamanoMaximoAdjunto)
+                throw new ReglaNegocioException($"\"{nombre}\" ocupa más de 10 MB.");
+
+            archivos.Add(new ArchivoNuevo(nombre, File.ReadAllBytes(ruta)));
+        }
+
+        if (archivos.Count > 0)
+            repositorio.InsertarAdjuntos(devolucionId, tipo, archivos);
+    }
+
+    // ---------- Recogida ----------
+
     public void GuardarRecogida(DatosRecogida datos, DateTime fechaSolicitud)
     {
         ValidarRecogida(datos, fechaSolicitud);
-        repositorio.GuardarRecogida(datos);
+        if (!repositorio.GuardarRecogida(datos))
+            throw new ReglaNegocioException("La mercancía ya ha llegado: la recogida ya no se puede modificar.");
     }
 
     private static void ValidarRecogida(DatosRecogida datos, DateTime fechaSolicitud)

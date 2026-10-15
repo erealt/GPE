@@ -5,8 +5,10 @@ namespace GPE.Datos;
 public class DevolucionRepositorio
 {
 
-    private const string CadenaConexion =
-        "Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;";
+    // La variable de entorno GPE_CONEXION permite usar otra base de datos (p. ej. una de pruebas)
+    private static readonly string CadenaConexion =
+        Environment.GetEnvironmentVariable("GPE_CONEXION")
+        ?? "Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;";
 
     // Abre la conexión e indica a SQL Server qué usuario de la aplicación la usa;
     // los triggers de historial lo leen con SESSION_CONTEXT(N'usuario_id').
@@ -28,21 +30,29 @@ public class DevolucionRepositorio
 
     // ---------- Lectura ----------
 
-    public List<DevolucionFila> ObtenerDevoluciones()
-    {
-        const string sql = @"
+    private const string SqlDevoluciones = @"
             SELECT d.id, d.numero, c.nombre, d.albaran, d.motivo,
                    d.fecha_solicitud, d.fecha_recogida, d.fecha_llegada,
                    e.nombre, e.fase
             FROM DEVOLUCION d
             JOIN CLIENTE c ON c.id = d.cliente_id
-            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
-            ORDER BY d.fecha_solicitud DESC, d.id DESC;";
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id";
 
+    public List<DevolucionFila> ObtenerDevoluciones() =>
+        LeerDevoluciones(SqlDevoluciones + " ORDER BY d.fecha_solicitud DESC, d.id DESC;", null);
+
+    // Una devolución con sus datos actuales, o null si ya no existe
+    public DevolucionFila? ObtenerDevolucion(int devolucionId) =>
+        LeerDevoluciones(SqlDevoluciones + " WHERE d.id = @devolucion;", devolucionId).FirstOrDefault();
+
+    private List<DevolucionFila> LeerDevoluciones(string sql, int? devolucionId)
+    {
         var lista = new List<DevolucionFila>();
 
         using var conexion = AbrirConexion();
         using var comando = new SqlCommand(sql, conexion);
+        if (devolucionId != null)
+            comando.Parameters.AddWithValue("@devolucion", devolucionId);
 
         using var lector = comando.ExecuteReader();
         while (lector.Read())
@@ -289,9 +299,223 @@ public class DevolucionRepositorio
         return idDevolucion;
     }
 
+    // ---------- Almacén ----------
+
+    // Pasa la devolución de "Recogida solicitada" (fase 2) a "Mercancía recibida" (fase 3).
+    // Devuelve false si ya no estaba en la fase 2 (otro usuario la cambió antes).
+    public bool MarcarRecibida(int devolucionId, DateTime fechaLlegada)
+    {
+        const string sql = @"
+            UPDATE d
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 3),
+                fecha_llegada = @fecha
+            FROM DEVOLUCION d
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
+            WHERE d.id = @devolucion AND e.fase = 2;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+        comando.Parameters.AddWithValue("@fecha", fechaLlegada.Date);
+        return comando.ExecuteNonQuery() == 1;
+    }
+
+    public List<LineaRevision> ObtenerLineasRevision(int devolucionId)
+    {
+        const string sql = @"
+            SELECT dp.id, p.nombre, dp.lote, dp.cantidad_esperada,
+                   dp.cantidad_recibida, dp.cantidad_apta, dp.observaciones
+            FROM DEVOLUCION_PRODUCTO dp
+            JOIN PRODUCTO p ON p.id = dp.producto_id
+            WHERE dp.devolucion_id = @devolucion
+            ORDER BY dp.id;";
+
+        var lineas = new List<LineaRevision>();
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            lineas.Add(new LineaRevision(
+                Id: lector.GetInt32(0),
+                Producto: lector.GetString(1),
+                Lote: lector.IsDBNull(2) ? null : lector.GetString(2),
+                Solicitada: lector.GetInt32(3),
+                Recibida: lector.IsDBNull(4) ? null : lector.GetInt32(4),
+                Apta: lector.IsDBNull(5) ? null : lector.GetInt32(5),
+                Observaciones: lector.IsDBNull(6) ? null : lector.GetString(6)));
+        }
+
+        return lineas;
+    }
+
+    public string? ObtenerObservacionesSolicitud(int devolucionId)
+    {
+        const string sql = "SELECT observaciones FROM DEVOLUCION WHERE id = @devolucion;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+        return comando.ExecuteScalar() as string;
+    }
+
+    // Vuelve de la fase actual a la anterior guardando el motivo (sale en el historial).
+    // Al volver de la 3 a la 2 se borra la fecha de llegada; lo rellenado en la
+    // revisión se conserva. Devuelve false si la devolución ya no estaba en esa fase.
+    public bool Reabrir(int devolucionId, int faseActual, string motivo)
+    {
+        const string sql = @"
+            UPDATE d
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @fase - 1),
+                motivo_reapertura = @motivo,
+                fecha_llegada = CASE WHEN @fase = 3 THEN NULL ELSE d.fecha_llegada END
+            FROM DEVOLUCION d
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
+            WHERE d.id = @devolucion AND e.fase = @fase;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+        comando.Parameters.AddWithValue("@fase", faseActual);
+        comando.Parameters.AddWithValue("@motivo", motivo);
+        return comando.ExecuteNonQuery() == 1;
+    }
+
+    public string? ObtenerObservacionesRevision(int devolucionId)
+    {
+        const string sql = "SELECT observaciones_revision FROM DEVOLUCION WHERE id = @devolucion;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+        return comando.ExecuteScalar() as string;
+    }
+
+    // Guarda las cantidades de cada línea y pasa la devolución de la fase 3 a la 4,
+    // todo en una transacción. Devuelve false si ya no estaba en la fase 3.
+    public bool FinalizarRevision(int devolucionId, List<LineaRevisada> lineas, string? observaciones)
+    {
+        const string sqlDevolucion = @"
+            UPDATE d
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 4),
+                observaciones_revision = @observaciones
+            FROM DEVOLUCION d
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
+            WHERE d.id = @devolucion AND e.fase = 3;";
+
+        const string sqlLinea = @"
+            UPDATE DEVOLUCION_PRODUCTO
+            SET cantidad_recibida = @recibida, cantidad_apta = @apta, observaciones = @observaciones
+            WHERE id = @linea AND devolucion_id = @devolucion;";
+
+        using var conexion = AbrirConexion();
+        using var transaccion = conexion.BeginTransaction();
+
+        using (var devolucion = new SqlCommand(sqlDevolucion, conexion, transaccion))
+        {
+            devolucion.Parameters.AddWithValue("@devolucion", devolucionId);
+            devolucion.Parameters.AddWithValue("@observaciones", (object?)observaciones ?? DBNull.Value);
+            if (devolucion.ExecuteNonQuery() != 1)
+                return false;   // al salir sin Commit, la transacción se deshace
+        }
+
+        foreach (var linea in lineas)
+        {
+            using var comando = new SqlCommand(sqlLinea, conexion, transaccion);
+            comando.Parameters.AddWithValue("@linea", linea.Id);
+            comando.Parameters.AddWithValue("@devolucion", devolucionId);
+            comando.Parameters.AddWithValue("@recibida", linea.Recibida);
+            comando.Parameters.AddWithValue("@apta", linea.Apta);
+            comando.Parameters.AddWithValue("@observaciones", (object?)linea.Observaciones ?? DBNull.Value);
+            comando.ExecuteNonQuery();
+        }
+
+        transaccion.Commit();
+        return true;
+    }
+
+    // ---------- Adjuntos (fotos y documentos) ----------
+
+    public List<AdjuntoInfo> ObtenerAdjuntos(int devolucionId, string tipo)
+    {
+        // No se lee la columna contenido: solo hace falta al abrir un archivo
+        const string sql = @"
+            SELECT a.id, a.nombre_archivo, a.tamano_bytes, a.subido_en, u.nombre
+            FROM ADJUNTO a
+            JOIN USUARIO u ON u.id = a.usuario_id
+            WHERE a.devolucion_id = @devolucion AND a.tipo = @tipo
+            ORDER BY a.subido_en, a.id;";
+
+        var adjuntos = new List<AdjuntoInfo>();
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+        comando.Parameters.AddWithValue("@tipo", tipo);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            adjuntos.Add(new AdjuntoInfo(
+                lector.GetInt32(0), lector.GetString(1), lector.GetInt32(2),
+                lector.GetDateTime(3), lector.GetString(4)));
+        }
+
+        return adjuntos;
+    }
+
+    public byte[] ObtenerContenidoAdjunto(int adjuntoId)
+    {
+        const string sql = "SELECT contenido FROM ADJUNTO WHERE id = @adjunto;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@adjunto", adjuntoId);
+        return (byte[])comando.ExecuteScalar()!;
+    }
+
+    // Todos los archivos elegidos a la vez se guardan juntos (una sola entrada en el historial)
+    public void InsertarAdjuntos(int devolucionId, string tipo, List<ArchivoNuevo> archivos)
+    {
+        const string sql = @"
+            INSERT INTO ADJUNTO (devolucion_id, tipo, nombre_archivo, tamano_bytes, contenido, usuario_id)
+            VALUES (@devolucion, @tipo, @nombre, @tamano, @contenido, @usuario);";
+
+        using var conexion = AbrirConexion();
+        using var transaccion = conexion.BeginTransaction();
+
+        foreach (var archivo in archivos)
+        {
+            using var comando = new SqlCommand(sql, conexion, transaccion);
+            comando.Parameters.AddWithValue("@devolucion", devolucionId);
+            comando.Parameters.AddWithValue("@tipo", tipo);
+            comando.Parameters.AddWithValue("@nombre", archivo.NombreArchivo);
+            comando.Parameters.AddWithValue("@tamano", archivo.Contenido.Length);
+            comando.Parameters.Add("@contenido", System.Data.SqlDbType.VarBinary, -1).Value = archivo.Contenido;
+            comando.Parameters.AddWithValue("@usuario", Sesion.UsuarioActual!.Id);
+            comando.ExecuteNonQuery();
+        }
+
+        transaccion.Commit();
+    }
+
+    public void EliminarAdjunto(int adjuntoId)
+    {
+        const string sql = "DELETE FROM ADJUNTO WHERE id = @adjunto;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@adjunto", adjuntoId);
+        comando.ExecuteNonQuery();
+    }
+
     // Crea la recogida (o la actualiza si ya existe) y pasa la devolución a
     // "Recogida solicitada" con su fecha de recogida, todo en una transacción.
-    public void GuardarRecogida(DatosRecogida datos)
+    // Devuelve false si la mercancía ya ha llegado (fase 3 o más): entonces la recogida no se puede cambiar
+    public bool GuardarRecogida(DatosRecogida datos)
     {
         const string sqlRecogida = @"
             UPDATE RECOGIDA
@@ -319,6 +543,17 @@ public class DevolucionRepositorio
         using var conexion = AbrirConexion();
         using var transaccion = conexion.BeginTransaction();
 
+        // UPDLOCK: bloquea la devolución hasta el final para que nadie cambie la fase entretanto
+        using (var fase = new SqlCommand(@"
+            SELECT e.fase FROM DEVOLUCION d WITH (UPDLOCK)
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
+            WHERE d.id = @devolucion;", conexion, transaccion))
+        {
+            fase.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            if (fase.ExecuteScalar() is not int faseActual || faseActual > 2)
+                return false;
+        }
+
         using (var recogida = new SqlCommand(sqlRecogida, conexion, transaccion))
         {
             recogida.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
@@ -338,5 +573,6 @@ public class DevolucionRepositorio
         }
 
         transaccion.Commit();
+        return true;
     }
 }

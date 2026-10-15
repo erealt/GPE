@@ -462,28 +462,58 @@ public class FormPrincipal : Form
         if (indiceFila < 0) return;   // doble clic en la cabecera de la tabla
         if (grid.Rows[indiceFila].Tag is not DevolucionFila devolucion) return;
 
-        switch (devolucion.Fase)
+        // Se abre el paso en curso (el siguiente al completado). Si su pantalla aún no
+        // existe, el último paso que sí tiene pantalla, para al menos poder consultarlo.
+        int paso = Math.Min(devolucion.Fase + 1, UltimoPasoConPantalla);
+
+        // Al pulsar otro paso en la barra, la pantalla se cierra y se abre la de ese paso
+        while (true)
         {
-            case 1:   // Solicitud recibida
-                using (var pantalla = new Recogida(devolucion))
-                    pantalla.ShowDialog(this);
+            int? siguiente;
+            using (var pantalla = CrearPantalla(devolucion, paso))
+            {
+                pantalla.ShowDialog(this);
+                siguiente = pantalla.PasoSolicitado;
+            }
+            if (siguiente == null) break;
+
+            try
+            {
+                if (servicio.ObtenerDevolucion(devolucion.Id) is not DevolucionFila actualizada) break;
+                devolucion = actualizada;   // puede haber cambiado de fase en la pantalla anterior
+            }
+            catch (DbException ex)
+            {
+                MessageBox.Show(this, "No se pudo cargar la devolución.\n\n" + ex.Message,
+                    "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 break;
+            }
 
-            case 2:   // Recogida solicitada
-            case 3:   // Mercancía recibida
-                MessageBox.Show(this, "La pantalla de almacén todavía no está disponible.",
+            if (siguiente > UltimoPasoConPantalla)
+            {
+                MessageBox.Show(this, "La pantalla de este paso todavía no está disponible.",
                     "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-
-            default:
-                MessageBox.Show(this, "La pantalla de abono todavía no está disponible.",
-                    "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                paso = Math.Min(paso, Math.Min(devolucion.Fase + 1, UltimoPasoConPantalla));
+                continue;   // se vuelve a abrir el paso en el que se estaba
+            }
+            paso = Math.Min(siguiente.Value, devolucion.Fase + 1);   // nunca más allá del paso en curso
         }
 
         CargarDatos();
         SeleccionarDevolucion(devolucion.Id);
     }
+
+    // Pasos 5 (abono) y 6 (cierre): pantallas pendientes
+    private const int UltimoPasoConPantalla = FormAlmacen.PasoRevision;
+
+    // Pantalla de cada paso de la barra de progreso
+    private static PantallaFase CrearPantalla(DevolucionFila devolucion, int paso) => paso switch
+    {
+        FormSolicitud.PasoSolicitud => new FormSolicitud(devolucion),
+        Recogida.PasoRecogida => new Recogida(devolucion),
+        FormAlmacen.PasoLlegada => new FormAlmacen(devolucion, FormAlmacen.PasoLlegada),
+        _ => new FormAlmacen(devolucion, FormAlmacen.PasoRevision)
+    };
 
     private void AbrirHistorial()
     {

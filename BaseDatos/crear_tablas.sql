@@ -82,6 +82,8 @@ CREATE TABLE DEVOLUCION (
     fecha_solicitud DATE NOT NULL,
     fecha_recogida DATE NULL,
     fecha_llegada DATE NULL,
+    observaciones_revision NVARCHAR(MAX) NULL,   -- observaciones generales del almacén
+    motivo_reapertura NVARCHAR(500) NULL,        -- motivo de la última vez que se volvió a un paso anterior
     CONSTRAINT FK_devolucion_fabrica FOREIGN KEY (fabrica_id) REFERENCES FABRICA(id),
     CONSTRAINT FK_devolucion_cliente FOREIGN KEY (cliente_id) REFERENCES CLIENTE(id),
     CONSTRAINT FK_devolucion_estado  FOREIGN KEY (estado_id)  REFERENCES ESTADO_DEVOLUCION(id)
@@ -95,6 +97,10 @@ CREATE TABLE DEVOLUCION_PRODUCTO (
     lote NVARCHAR(30) NULL,
     cantidad_esperada INT NOT NULL CHECK (cantidad_esperada > 0),
     cantidad_recibida INT NULL CHECK (cantidad_recibida >= 0),  -- la rellena el almacén
+    cantidad_apta INT NULL,             -- de lo recibido, lo que se puede volver a vender
+    observaciones NVARCHAR(500) NULL,   -- por qué no es apto, daños, etc.
+    CONSTRAINT CK_devprod_apta CHECK (cantidad_apta IS NULL
+        OR (cantidad_apta >= 0 AND cantidad_recibida IS NOT NULL AND cantidad_apta <= cantidad_recibida)),
     CONSTRAINT FK_devprod_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
     CONSTRAINT FK_devprod_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
@@ -124,6 +130,24 @@ CREATE TABLE RECOGIDA (
     CONSTRAINT FK_recogida_transportista FOREIGN KEY (transportista_id)
         REFERENCES TRANSPORTISTA(id)
 );
+
+-- Archivos de una devolución: fotos de la revisión y documento del abono
+CREATE TABLE ADJUNTO (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    devolucion_id INT NOT NULL,
+    tipo NVARCHAR(10) NOT NULL,
+    nombre_archivo NVARCHAR(260) NOT NULL,
+    tamano_bytes INT NOT NULL,
+    contenido VARBINARY(MAX) NOT NULL,
+    usuario_id INT NOT NULL,
+    subido_en DATETIME2 NOT NULL CONSTRAINT DF_adjunto_subido DEFAULT SYSDATETIME(),
+    CONSTRAINT CK_adjunto_tipo CHECK (tipo IN ('FOTO', 'ABONO')),
+    CONSTRAINT FK_adjunto_devolucion FOREIGN KEY (devolucion_id)
+        REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
+    CONSTRAINT FK_adjunto_usuario FOREIGN KEY (usuario_id) REFERENCES USUARIO(id)
+);
+
+CREATE INDEX IX_adjunto_devolucion ON ADJUNTO (devolucion_id, tipo);
 GO
 
 /* ============================================================
@@ -251,6 +275,39 @@ BEGIN
              ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
         CASE WHEN i.id IS NULL THEN NULL
              ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+-- A diferencia de los otros, no usa "d.*": así el contenido del archivo
+-- (columna contenido) no se copia al historial.
+CREATE OR ALTER TRIGGER TR_ADJUNTO_HISTORIAL ON ADJUNTO
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT c.devolucion_id, @usuario, 'ADJUNTO', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        COALESCE(i.devolucion_id, d.devolucion_id) AS devolucion_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.id, d.devolucion_id, d.tipo, d.nombre_archivo, d.tamano_bytes
+                   FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.id, i.devolucion_id, i.tipo, i.nombre_archivo, i.tamano_bytes
+                   FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
     ) c
     WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
 END;

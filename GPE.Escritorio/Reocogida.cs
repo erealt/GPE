@@ -7,7 +7,7 @@ namespace GPE.Escritorio
 {
     // Programa (o modifica) la recogida de una devolución. Al guardar,
     // la devolución pasa a "Recogida solicitada".
-    public class Recogida : Form
+    public class Recogida : PantallaFase
     {
         private static readonly CultureInfo Es = new("es-ES");
 
@@ -15,6 +15,11 @@ namespace GPE.Escritorio
         private readonly DevolucionFila devolucion;
         private RecogidaGuardada? existente;
         private bool cargaCorrecta;
+
+        public const int PasoRecogida = 2;
+
+        // Cuando la mercancía ya ha llegado (fase 3 o más) la recogida solo se consulta
+        private bool SoloLectura => devolucion.Fase >= 3;
 
         private readonly ComboBox cmbTransportista = new();
         private readonly Label lblTelefonoTransportista = new();
@@ -38,6 +43,7 @@ namespace GPE.Escritorio
             Font = new Font("Segoe UI", 10);
 
             PrepararControles();
+            if (SoloLectura) BloquearCampos();
             Controls.Add(CrearContenido());
         }
 
@@ -103,128 +109,39 @@ namespace GPE.Escritorio
             // La fecha de creación no se muestra: la pone SQL Server al insertar (DEFAULT SYSDATETIME())
         }
 
+        private void BloquearCampos()
+        {
+            cmbTransportista.Enabled = false;
+            dtpRecogida.Enabled = false;
+            foreach (var texto in new[] { txtDireccion, txtTelefono, txtObservaciones })
+            {
+                texto.ReadOnly = true;
+                texto.BackColor = Color.White;
+            }
+        }
+
         // ---------- Estructura general ----------
 
         private Panel CrearContenido()
         {
-            var scroll = new Panel
-            {
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-                Padding = new Padding(40, 25, 40, 25)
-            };
+            var (scroll, pila) = Componentes.Pagina();
 
-            var pila = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                ColumnCount = 1
-            };
-            pila.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-            pila.Controls.Add(CrearCabecera());
-            pila.Controls.Add(CrearProgreso());
-            pila.Controls.Add(CrearResumen());
+            pila.Controls.Add(Componentes.Cabecera(
+                $"DEVOLUCIONES / {devolucion.Numero} / RECOGIDA",
+                "Gestión de recogida",
+                SoloLectura
+                    ? $"Recogida de la devolución {devolucion.Numero} de {devolucion.Cliente}."
+                    : $"Programa la recogida de la devolución {devolucion.Numero} de {devolucion.Cliente}."));
+            pila.Controls.Add(Progreso(devolucion, PasoRecogida));
+            pila.Controls.Add(Componentes.Resumen(
+                ("CLIENTE", devolucion.Cliente),
+                ("ALBARÁN", devolucion.Albaran ?? "—"),
+                ("MOTIVO", devolucion.Motivo),
+                ("FECHA SOLICITUD", devolucion.FechaSolicitud.ToString("dd MMM yyyy", Es))));
             pila.Controls.Add(CrearTarjetaRecogida());
             pila.Controls.Add(CrearAcciones());
 
-            scroll.Controls.Add(pila);
             return scroll;
-        }
-
-        private Control CrearCabecera()
-        {
-            var panel = new Panel { Dock = DockStyle.Fill, Height = 115, Margin = new Padding(0, 0, 0, 10) };
-
-            var lblSubtitulo = new Label
-            {
-                Text = $"Programa la recogida de la devolución {devolucion.Numero} de {devolucion.Cliente}.",
-                Dock = DockStyle.Top,
-                Height = 28,
-                ForeColor = Tema.Suave
-            };
-            var lblTitulo = new Label
-            {
-                Text = "Gestión de recogida",
-                Dock = DockStyle.Top,
-                Height = 50,
-                Font = new Font("Segoe UI", 22, FontStyle.Bold),
-                ForeColor = Tema.Texto
-            };
-            var lblRuta = new Label
-            {
-                Text = $"DEVOLUCIONES / {devolucion.Numero} / RECOGIDA",
-                Dock = DockStyle.Top,
-                Height = 25,
-                ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
-            };
-
-            // El último añadido queda arriba
-            panel.Controls.Add(lblSubtitulo);
-            panel.Controls.Add(lblTitulo);
-            panel.Controls.Add(lblRuta);
-            return panel;
-        }
-
-        private Control CrearProgreso()
-        {
-            return new BarraProgresoDevolucion
-            {
-                FasesCompletadas = devolucion.Fase,
-                FaseActual = Math.Min(devolucion.Fase + 1, 6),
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 0, 20)
-            };
-        }
-
-        // Datos de la devolución como referencia mientras se rellena la recogida
-        private Control CrearResumen()
-        {
-            var resumen = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                AutoSize = true,
-                ColumnCount = 4,
-                BackColor = Color.White,
-                Padding = new Padding(25, 15, 25, 15),
-                Margin = new Padding(0, 0, 0, 20)
-            };
-            for (int i = 0; i < 4; i++)
-                resumen.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-
-            resumen.Controls.Add(DatoResumen("CLIENTE", devolucion.Cliente));
-            resumen.Controls.Add(DatoResumen("ALBARÁN", devolucion.Albaran ?? "—"));
-            resumen.Controls.Add(DatoResumen("MOTIVO", devolucion.Motivo));
-            resumen.Controls.Add(DatoResumen("FECHA SOLICITUD", devolucion.FechaSolicitud.ToString("dd MMM yyyy", Es)));
-            return resumen;
-        }
-
-        private static Control DatoResumen(string etiqueta, string valor)
-        {
-            var panel = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Margin = new Padding(0, 0, 15, 0)
-            };
-            panel.Controls.Add(new Label
-            {
-                Text = etiqueta,
-                AutoSize = true,
-                ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
-            });
-            panel.Controls.Add(new Label
-            {
-                Text = valor,
-                AutoSize = true,
-                ForeColor = Tema.Texto,
-                Margin = new Padding(0, 4, 0, 0)
-            });
-            return panel;
         }
 
         private Control CrearTarjetaRecogida()
@@ -250,9 +167,11 @@ namespace GPE.Escritorio
             });
             tarjeta.Controls.Add(new Label
             {
-                Text = existente == null
-                    ? "Indica quién recoge la mercancía, dónde y cuándo."
-                    : "Esta devolución ya tiene una recogida programada. Puedes modificarla.",
+                Text = SoloLectura
+                    ? "La mercancía ya ha llegado: la recogida solo se puede consultar."
+                    : existente == null
+                        ? "Indica quién recoge la mercancía, dónde y cuándo."
+                        : "Esta devolución ya tiene una recogida programada. Puedes modificarla hasta que llegue la mercancía.",
                 AutoSize = true,
                 ForeColor = Tema.Suave,
                 Font = new Font("Segoe UI", 9),
@@ -279,6 +198,14 @@ namespace GPE.Escritorio
 
         private Control CrearAcciones()
         {
+            if (SoloLectura)
+            {
+                var btnCerrar = Tema.BotonSecundario("Cerrar", 130);
+                btnCerrar.DialogResult = DialogResult.Cancel;
+                CancelButton = btnCerrar;
+                return Componentes.Acciones(btnCerrar);
+            }
+
             var panel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
