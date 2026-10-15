@@ -45,6 +45,8 @@ public record Usuario(int Id, string Nombre, string Email)
 
 // Fila tal cual se guarda en HISTORIAL_CAMBIOS (los valores van en JSON)
 public record CambioHistorial(
+    int Id,
+    long? TransaccionId,
     DateTime Fecha,
     string Usuario,
     string Tabla,
@@ -59,3 +61,25 @@ public static class Sesion
 {
     public static Usuario? UsuarioActual { get; set; }
 }
+
+public record Transportista(int Id, string Nombre, string? Telefono)
+{
+    public override string ToString() => Nombre;
+}
+
+public record DatosRecogida(
+    int DevolucionId,
+    int TransportistaId,
+    DateTime FechaRecogida,
+    string Direccion,
+    string? TelefonoContacto,
+    string? Observaciones);
+
+public record RecogidaGuardada(
+    int Id,
+    int TransportistaId,
+    DateTime FechaRecogida,
+    string Direccion,
+    string? TelefonoContacto,
+    string? Observaciones,
+    DateTime CreadaEn);

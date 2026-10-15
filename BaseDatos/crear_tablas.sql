@@ -141,6 +141,10 @@ CREATE TABLE HISTORIAL_CAMBIOS (
     registro_id INT NOT NULL,
     accion NVARCHAR(20) NOT NULL,
 
+    -- Los cambios de una misma transacción (un mismo "Guardar") comparten este id;
+    -- la pantalla de historial los agrupa en una sola entrada.
+    transaccion_id BIGINT NULL,
+
     fecha DATETIME2 NOT NULL
         CONSTRAINT DF_historial_fecha DEFAULT SYSDATETIME(),
 
@@ -178,8 +182,8 @@ BEGIN
         THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
 
     INSERT INTO HISTORIAL_CAMBIOS
-        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos)
-    SELECT c.registro_id, @usuario, 'DEVOLUCION', c.registro_id, c.accion, c.anteriores, c.nuevos
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT c.registro_id, @usuario, 'DEVOLUCION', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT
@@ -206,8 +210,8 @@ BEGIN
         THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
 
     INSERT INTO HISTORIAL_CAMBIOS
-        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos)
-    SELECT c.devolucion_id, @usuario, 'DEVOLUCION_PRODUCTO', c.registro_id, c.accion, c.anteriores, c.nuevos
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT c.devolucion_id, @usuario, 'DEVOLUCION_PRODUCTO', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT
@@ -235,8 +239,8 @@ BEGIN
         THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
 
     INSERT INTO HISTORIAL_CAMBIOS
-        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos)
-    SELECT c.devolucion_id, @usuario, 'RECOGIDA', c.registro_id, c.accion, c.anteriores, c.nuevos
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT c.devolucion_id, @usuario, 'RECOGIDA', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT

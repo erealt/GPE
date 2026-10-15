@@ -23,12 +23,14 @@ public class DevolucionServicio
 
     public List<Usuario> ObtenerUsuarios() => repositorio.ObtenerUsuarios();
 
+    public List<Transportista> ObtenerTransportistas() => repositorio.ObtenerTransportistas();
+
+    public RecogidaGuardada? ObtenerRecogida(int devolucionId) => repositorio.ObtenerRecogida(devolucionId);
+
     public List<EntradaHistorial> ObtenerHistorial(int devolucionId)
     {
         var nombres = repositorio.ObtenerNombresPorCampo();
-        return repositorio.ObtenerHistorial(devolucionId)
-            .Select(c => HistorialFormateador.Formatear(c, nombres))
-            .ToList();
+        return HistorialFormateador.Agrupar(repositorio.ObtenerHistorial(devolucionId), nombres);
     }
 
     // ---------- Operaciones ----------
@@ -38,6 +40,33 @@ public class DevolucionServicio
         Validar(datos);
         return repositorio.InsertarDevolucion(datos);
     }
+
+    public void GuardarRecogida(DatosRecogida datos, DateTime fechaSolicitud)
+    {
+        ValidarRecogida(datos, fechaSolicitud);
+        repositorio.GuardarRecogida(datos);
+    }
+
+    private static void ValidarRecogida(DatosRecogida datos, DateTime fechaSolicitud)
+    {
+        if (string.IsNullOrWhiteSpace(datos.Direccion))
+            throw new ReglaNegocioException("La dirección de recogida es obligatoria.");
+
+        if (datos.Direccion.Length > 200)
+            throw new ReglaNegocioException("La dirección no puede superar los 200 caracteres.");
+
+        if (datos.FechaRecogida.Date < fechaSolicitud.Date)
+            throw new ReglaNegocioException("La fecha de recogida no puede ser anterior a la de solicitud.");
+
+        if (datos.TelefonoContacto != null && !TelefonoValido(datos.TelefonoContacto))
+            throw new ReglaNegocioException("El teléfono de contacto no es válido.");
+    }
+
+    // Admite dígitos, espacios, guiones y "+" inicial, con al menos 9 dígitos
+    public static bool TelefonoValido(string telefono) =>
+        telefono.Length <= 30
+        && telefono.Count(char.IsDigit) >= 9
+        && telefono.Select((c, i) => char.IsDigit(c) || c == ' ' || c == '-' || (c == '+' && i == 0)).All(ok => ok);
 
     private static void Validar(DatosNuevaDevolucion datos)
     {

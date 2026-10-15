@@ -23,7 +23,6 @@ public class FormPrincipal : Form
     private readonly DataGridView grid = new();
     private readonly Label lblVacio = new();
     private readonly Button btnNueva = Tema.BotonPrincipal("+  Nueva devolución", 210);
-    private readonly Button btnAbrir = Tema.BotonPrincipal("Abrir", 110);
     private readonly Button btnHistorial = Tema.BotonSecundario("Ver historial", 140);
 
     public FormPrincipal()
@@ -259,13 +258,10 @@ public class FormPrincipal : Form
             Anchor = AnchorStyles.Right,
             Margin = new Padding(0)
         };
-        btnAbrir.Height = btnHistorial.Height = 34;
-        btnAbrir.Margin = new Padding(0);
-        btnHistorial.Margin = new Padding(0, 0, 8, 0);
-        botones.Controls.Add(btnAbrir);
+        btnHistorial.Height = 34;
+        btnHistorial.Margin = new Padding(0);
         botones.Controls.Add(btnHistorial);
 
-        btnAbrir.Click += (s, e) => AbrirDevolucion(grid.CurrentRow?.Index ?? -1);
         btnHistorial.Click += (s, e) => AbrirHistorial();
 
         barra.Controls.Add(lblContador, 0, 0);
@@ -308,11 +304,11 @@ public class FormPrincipal : Form
 
         grid.CellDoubleClick += (s, e) => AbrirDevolucion(e.RowIndex);
         grid.SelectionChanged += (s, e) => ActualizarBotones();
+        grid.CurrentCellChanged += (s, e) => ActualizarBotones();
         grid.CellPainting += PintarEstado;
 
         // Clic derecho sobre una fila: la selecciona y muestra el menú
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Abrir", null, (s, e) => AbrirDevolucion(grid.CurrentRow?.Index ?? -1));
         menu.Items.Add("Ver historial de cambios", null, (s, e) => AbrirHistorial());
         grid.ContextMenuStrip = menu;
         grid.CellMouseDown += (s, e) =>
@@ -320,7 +316,7 @@ public class FormPrincipal : Form
             if (e.Button != MouseButtons.Right || e.RowIndex < 0) return;
             grid.CurrentCell = grid.Rows[e.RowIndex].Cells[Math.Max(e.ColumnIndex, 0)];
         };
-        menu.Opening += (s, e) => e.Cancel = grid.CurrentRow?.Tag is not DevolucionFila;
+        menu.Opening += (s, e) => e.Cancel = DevolucionSeleccionada() == null;
 
         // Cabecera
         grid.EnableHeadersVisualStyles = false;
@@ -458,6 +454,7 @@ public class FormPrincipal : Form
         grid.CurrentCell = fila.Cells[0];
         fila.Selected = true;
         grid.FirstDisplayedScrollingRowIndex = fila.Index;
+        ActualizarBotones();
     }
 
     private void AbrirDevolucion(int indiceFila)
@@ -490,7 +487,7 @@ public class FormPrincipal : Form
 
     private void AbrirHistorial()
     {
-        if (grid.CurrentRow?.Tag is not DevolucionFila devolucion) return;
+        if (DevolucionSeleccionada() is not DevolucionFila devolucion) return;
 
         using var pantalla = new FormHistorial(devolucion);
         pantalla.ShowDialog(this);
@@ -556,10 +553,14 @@ public class FormPrincipal : Form
         grid.Visible = visibles > 0;
     }
 
+    // Se mira la fila seleccionada y no CurrentRow: al seleccionar por código (al volver de
+    // una devolución), SelectionChanged salta antes de que CurrentRow se actualice.
+    private DevolucionFila? DevolucionSeleccionada() =>
+        grid.SelectedRows.Cast<DataGridViewRow>()
+            .FirstOrDefault(f => f.Visible && f.Tag is DevolucionFila)?.Tag as DevolucionFila;
+
     private void ActualizarBotones()
     {
-        bool haySeleccion = grid.CurrentRow is { Visible: true, Tag: DevolucionFila };
-        btnAbrir.Enabled = haySeleccion;
-        btnHistorial.Enabled = haySeleccion;
+        btnHistorial.Enabled = DevolucionSeleccionada() != null;
     }
 }
