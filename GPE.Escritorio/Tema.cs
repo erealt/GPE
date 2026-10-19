@@ -12,6 +12,8 @@ public static class Tema
     public static readonly Color Linea = Color.FromArgb(230, 232, 228);
     public static readonly Color CabeceraTabla = Color.FromArgb(243, 244, 241);
     public static readonly Color Error = Color.FromArgb(190, 30, 45);
+    public static readonly Color AvisoFondo = Color.FromArgb(255, 241, 214);
+    public static readonly Color Aviso = Color.FromArgb(150, 90, 0);
 
    
     private static readonly (Color Fondo, Color Texto)[] ColoresFase =

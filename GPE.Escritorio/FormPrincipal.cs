@@ -25,6 +25,15 @@ public class FormPrincipal : Form
     private readonly Button btnNueva = Tema.BotonPrincipal("+  Nueva devolución", 210);
     private readonly Button btnHistorial = Tema.BotonSecundario("Ver historial", 140);
 
+    // Aviso de abonos pendientes: franja fija en la lista y ventana que se repite
+    private const int MinutosEntreAvisos = 60;
+    private readonly Panel franjaAviso = new();
+    private readonly Label lblAviso = new();
+    private readonly Button btnVerRetrasadas = Tema.BotonSecundario("Ver solo esas", 150);
+    private readonly System.Windows.Forms.Timer temporizadorAviso = new() { Interval = MinutosEntreAvisos * 60_000 };
+    private bool soloRetrasadas;    // filtro activado desde la franja
+    private bool avisoPendiente;    // tocaba avisar mientras había otra ventana abierta
+
     public FormPrincipal()
     {
         Text = "GPE - Devoluciones";
@@ -37,6 +46,12 @@ public class FormPrincipal : Form
         Controls.Add(CrearBarraSuperior());
 
         Load += (s, e) => CargarDatos();
+        Shown += (s, e) => MostrarAvisoAbonos();
+        temporizadorAviso.Tick += (s, e) => MostrarAvisoAbonos();
+        temporizadorAviso.Start();
+        // Al volver a la lista desde otra ventana, se muestra el aviso que se había saltado
+        Activated += (s, e) => { if (avisoPendiente) BeginInvoke(MostrarAvisoAbonos); };
+        FormClosed += (s, e) => temporizadorAviso.Dispose();
     }
 
 
@@ -106,17 +121,19 @@ public class FormPrincipal : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4
+            RowCount = 5
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // franja de aviso: 0 si no se ve
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         layout.Controls.Add(CrearCabecera(), 0, 0);
-        layout.Controls.Add(CrearFiltros(), 0, 1);
-        layout.Controls.Add(CrearBarraAcciones(), 0, 2);
-        layout.Controls.Add(CrearZonaTabla(), 0, 3);
+        layout.Controls.Add(CrearFranjaAviso(), 0, 1);
+        layout.Controls.Add(CrearFiltros(), 0, 2);
+        layout.Controls.Add(CrearBarraAcciones(), 0, 3);
+        layout.Controls.Add(CrearZonaTabla(), 0, 4);
 
         contenido.Controls.Add(layout);
         return contenido;
@@ -169,6 +186,95 @@ public class FormPrincipal : Form
         cabecera.Controls.Add(titulos, 0, 0);
         cabecera.Controls.Add(btnNueva, 1, 0);
         return cabecera;
+    }
+
+    // Franja ámbar sobre los filtros mientras haya devoluciones esperando abono
+    private Control CrearFranjaAviso()
+    {
+        franjaAviso.Dock = DockStyle.Fill;
+        franjaAviso.Height = 50;
+        franjaAviso.BackColor = Tema.AvisoFondo;
+        franjaAviso.Padding = new Padding(15, 0, 10, 0);
+        franjaAviso.Margin = new Padding(0, 0, 0, 10);
+        franjaAviso.Visible = false;
+
+        lblAviso.Dock = DockStyle.Fill;
+        lblAviso.TextAlign = ContentAlignment.MiddleLeft;
+        lblAviso.ForeColor = Tema.Aviso;
+        lblAviso.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        lblAviso.AutoEllipsis = true;
+
+        btnVerRetrasadas.Dock = DockStyle.Right;
+        btnVerRetrasadas.Click += (s, e) =>
+        {
+            soloRetrasadas = !soloRetrasadas;
+            AplicarFiltros();
+        };
+
+        // Margen entre el botón y el borde: un panel con relleno vertical
+        var marcoBoton = new Panel { Dock = DockStyle.Right, Width = btnVerRetrasadas.Width, Padding = new Padding(0, 8, 0, 8) };
+        marcoBoton.Controls.Add(btnVerRetrasadas);
+        btnVerRetrasadas.Dock = DockStyle.Fill;
+
+        franjaAviso.Controls.Add(lblAviso);
+        franjaAviso.Controls.Add(marcoBoton);
+        return franjaAviso;
+    }
+
+    private void ActualizarFranjaAviso(List<DevolucionFila> devoluciones)
+    {
+        var retrasadas = devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList();
+        franjaAviso.Visible = retrasadas.Count > 0;
+        if (retrasadas.Count == 0)
+        {
+            soloRetrasadas = false;
+            return;
+        }
+
+        int maximo = retrasadas.Max(d => DevolucionServicio.DiasSinAbono(d) ?? 0);
+        lblAviso.Text = retrasadas.Count == 1
+            ? $"⚠  {retrasadas[0].Numero} lleva {maximo} días sin abono: el cliente está esperando."
+            : $"⚠  {retrasadas.Count} devoluciones llevan {DevolucionServicio.DiasAvisoAbono} días o más sin abono " +
+              $"(la más antigua, {maximo} días): los clientes están esperando.";
+    }
+
+    // Ventana de aviso, al entrar y cada MinutosEntreAvisos mientras quede alguna pendiente.
+    // Si hay otra ventana abierta (p. ej. una devolución), se espera a que se cierre.
+    private void MostrarAvisoAbonos()
+    {
+        if (Application.OpenForms.Count > 1)
+        {
+            avisoPendiente = true;
+            return;
+        }
+        avisoPendiente = false;
+
+        List<DevolucionFila> devoluciones;
+        try
+        {
+            devoluciones = servicio.ObtenerDevoluciones();
+        }
+        catch (DbException)
+        {
+            return;   // ya se volverá a intentar en el siguiente aviso
+        }
+        ActualizarFranjaAviso(devoluciones);   // los días cuentan aunque nadie recargue la lista
+
+        var retrasadas = devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList();
+        if (retrasadas.Count == 0) return;
+
+        int? elegida;
+        using (var aviso = new FormAvisoAbonos(retrasadas))
+        {
+            aviso.ShowDialog(this);
+            elegida = aviso.DevolucionElegida;
+        }
+        if (elegida == null) return;
+
+        CargarDatos();   // por si ha cambiado algo desde la última carga
+        SeleccionarDevolucion(elegida.Value);
+        if (DevolucionSeleccionada() is DevolucionFila devolucion && devolucion.Id == elegida)
+            AbrirDevolucion(grid.SelectedRows[0].Index);
     }
 
     private Control CrearFiltros()
@@ -346,6 +452,7 @@ public class FormPrincipal : Form
         grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
         grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         grid.Columns[ColumnaEstado].FillWeight = 140;
+        grid.Columns[6].FillWeight = 150;   // fecha de llegada: puede llevar "⚠ N días"
 
         return grid;
     }
@@ -420,6 +527,7 @@ public class FormPrincipal : Form
         foreach (var devolucion in devoluciones)
             AnadirDevolucion(devolucion);
 
+        ActualizarFranjaAviso(devoluciones);
         AplicarFiltros();
     }
 
@@ -436,6 +544,17 @@ public class FormPrincipal : Form
             d.Estado);
 
         grid.Rows[i].Tag = d;
+
+        // Lleva demasiados días sin abono: se marca la fecha de llegada
+        if (DevolucionServicio.AbonoRetrasado(d))
+        {
+            var llegada = grid.Rows[i].Cells[6];
+            llegada.Value = $"{FormatoFecha(d.FechaLlegada)} · {DevolucionServicio.DiasSinAbono(d)} días";
+            llegada.Style.ForeColor = Tema.Aviso;
+            llegada.Style.BackColor = Tema.AvisoFondo;
+            llegada.Style.SelectionForeColor = Tema.Aviso;
+            llegada.ToolTipText = "El cliente está esperando el abono";
+        }
     }
 
     private void SeleccionarDevolucion(int id)
@@ -540,8 +659,13 @@ public class FormPrincipal : Form
                 || ((desde == null || d.FechaSolicitud >= desde)
                     && (hasta == null || d.FechaSolicitud <= hasta));
 
-            fila.Visible = coincideTexto && coincideEstado && coincideFecha;
+            bool coincideRetraso = !soloRetrasadas
+                || (fila.Tag is DevolucionFila r && DevolucionServicio.AbonoRetrasado(r));
+
+            fila.Visible = coincideTexto && coincideEstado && coincideFecha && coincideRetraso;
         }
+
+        btnVerRetrasadas.Text = soloRetrasadas ? "Ver todas" : "Ver solo esas";
 
         ActualizarContador(desde != null && hasta != null && desde > hasta);
         ActualizarBotones();
@@ -553,6 +677,7 @@ public class FormPrincipal : Form
         cmbEstado.SelectedIndex = 0;
         dtpDesde.Checked = false;
         dtpHasta.Checked = false;
+        soloRetrasadas = false;
         AplicarFiltros();
     }
 

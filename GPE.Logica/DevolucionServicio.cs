@@ -105,6 +105,19 @@ public class DevolucionServicio
 
     // ---------- Abono y cierre ----------
 
+    // Pasados estos días desde la llegada de la mercancía sin abonar, se avisa al usuario
+    public const int DiasAvisoAbono = 3;
+
+    // Días desde que llegó la mercancía, o null si no está esperando abono
+    // (aún no ha llegado o ya está cerrada)
+    public static int? DiasSinAbono(DevolucionFila devolucion) =>
+        devolucion.Fase is 3 or 4 && devolucion.FechaLlegada is DateTime llegada
+            ? (DateTime.Today - llegada.Date).Days
+            : null;
+
+    public static bool AbonoRetrasado(DevolucionFila devolucion) =>
+        DiasSinAbono(devolucion) >= DiasAvisoAbono;
+
     public AbonoGuardado? ObtenerAbono(int devolucionId) => repositorio.ObtenerAbono(devolucionId);
 
     // Solo es un aviso: un mismo abono podría cubrir varias devoluciones

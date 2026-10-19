@@ -5,12 +5,7 @@ using System.Globalization;
 
 namespace GPE.Escritorio;
 
-// Pantalla del almacén. Muestra uno de dos pasos de la barra de progreso:
-//  - Paso 3, llegada: en la fase 2 solo el botón "Marcar como recibida";
-//    después, la fecha de llegada (y "Deshacer recepción" mientras siga en la fase 3).
-//  - Paso 4, revisión: en la fase 3 se rellena (cantidades, observaciones, fotos) y
-//    "Finalizar revisión" pasa a la fase 4; después se ve en solo lectura
-//    (y "Reabrir revisión" mientras siga en la fase 4).
+
 public class FormAlmacen : PantallaFase
 {
     public const int PasoLlegada = 3, PasoRevision = 4;
@@ -209,7 +204,6 @@ public class FormAlmacen : PantallaFase
         }
         catch (DbException)
         {
-            // Si falla la lectura se sigue con los datos que había; FormPrincipal recarga al cerrar
         }
         paso = nuevoPaso;
         Construir();
