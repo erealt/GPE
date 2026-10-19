@@ -364,14 +364,18 @@ public class DevolucionRepositorio
 
     // Vuelve de la fase actual a la anterior guardando el motivo (sale en el historial).
     // Al volver de la 3 a la 2 se borra la fecha de llegada; lo rellenado en la
-    // revisión se conserva. Devuelve false si la devolución ya no estaba en esa fase.
+    // revisión se conserva. Desde el cierre (6) se vuelve a la 4, porque abono y cierre
+    // se registran juntos: los datos del abono se conservan para corregirlos.
+    // Devuelve false si la devolución ya no estaba en esa fase.
     public bool Reabrir(int devolucionId, int faseActual, string motivo)
     {
         const string sql = @"
             UPDATE d
-            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @fase - 1),
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION
+                             WHERE fase = CASE WHEN @fase = 6 THEN 4 ELSE @fase - 1 END),
                 motivo_reapertura = @motivo,
-                fecha_llegada = CASE WHEN @fase = 3 THEN NULL ELSE d.fecha_llegada END
+                fecha_llegada = CASE WHEN @fase = 3 THEN NULL ELSE d.fecha_llegada END,
+                fecha_cierre = CASE WHEN @fase = 6 THEN NULL ELSE d.fecha_cierre END
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion AND e.fase = @fase;";
@@ -435,6 +439,64 @@ public class DevolucionRepositorio
 
         transaccion.Commit();
         return true;
+    }
+
+    // ---------- Abono y cierre ----------
+
+    // Null si todavía no se ha registrado ningún abono
+    public AbonoGuardado? ObtenerAbono(int devolucionId)
+    {
+        const string sql = @"
+            SELECT resultado_abono, numero_abono, fecha_abono, importe_abono,
+                   observaciones_abono, fecha_cierre
+            FROM DEVOLUCION
+            WHERE id = @devolucion AND resultado_abono IS NOT NULL;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+
+        using var lector = comando.ExecuteReader();
+        if (!lector.Read()) return null;
+
+        return new AbonoGuardado(
+            Resultado: lector.GetString(0),
+            Numero: lector.IsDBNull(1) ? null : lector.GetString(1),
+            Fecha: lector.GetDateTime(2),
+            Importe: lector.IsDBNull(3) ? null : lector.GetDecimal(3),
+            Observaciones: lector.IsDBNull(4) ? null : lector.GetString(4),
+            FechaCierre: lector.IsDBNull(5) ? null : lector.GetDateTime(5));
+    }
+
+    // Guarda el abono y cierra la devolución (fase 4 → 6) en un solo UPDATE.
+    // Devuelve false si ya no estaba en la fase 4.
+    public bool RegistrarAbono(DatosAbono datos, DateTime fechaCierre)
+    {
+        const string sql = @"
+            UPDATE d
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 6),
+                resultado_abono = @resultado,
+                numero_abono = @numero,
+                fecha_abono = @fecha,
+                importe_abono = @importe,
+                observaciones_abono = @observaciones,
+                fecha_cierre = @cierre
+            FROM DEVOLUCION d
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
+            WHERE d.id = @devolucion AND e.fase = 4;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+        comando.Parameters.AddWithValue("@resultado", datos.Resultado);
+        comando.Parameters.AddWithValue("@numero", (object?)datos.Numero ?? DBNull.Value);
+        comando.Parameters.AddWithValue("@fecha", datos.Fecha.Date);
+        comando.Parameters.Add("@importe", System.Data.SqlDbType.Decimal).Value = (object?)datos.Importe ?? DBNull.Value;
+        comando.Parameters["@importe"].Precision = 10;
+        comando.Parameters["@importe"].Scale = 2;
+        comando.Parameters.AddWithValue("@observaciones", (object?)datos.Observaciones ?? DBNull.Value);
+        comando.Parameters.AddWithValue("@cierre", fechaCierre.Date);
+        return comando.ExecuteNonQuery() == 1;
     }
 
     // ---------- Adjuntos (fotos y documentos) ----------

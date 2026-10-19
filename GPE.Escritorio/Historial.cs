@@ -5,8 +5,6 @@ using System.Globalization;
 
 namespace GPE.Escritorio;
 
-// Línea de tiempo con lo que ha hecho cada usuario en una devolución.
-// Cada tarjeta es un "Guardar": lo que se rellenó y, si lo hubo, el cambio de fase.
 public class FormHistorial : Form
 {
     private static readonly CultureInfo Es = new("es-ES");
@@ -130,7 +128,6 @@ public class FormHistorial : Form
             Margin = new Padding(0)
         };
 
-        // Título y, debajo, quién y cuándo
         cuerpo.Controls.Add(new Label
         {
             Text = entrada.Titulo,
@@ -168,7 +165,6 @@ public class FormHistorial : Form
         return tarjeta;
     }
 
-    // "Solicitud recibida  →  Recogida solicitada" con los colores de cada fase
     private static Control CrearCambioFase(CambioFase fase)
     {
         var fila = new FlowLayoutPanel
@@ -209,7 +205,7 @@ public class FormHistorial : Form
         }
     }
 
-    // Los detalles largos se parten en varias líneas según el ancho de la ventana
+
     private void AjustarAnchoTextos()
     {
         int ancho = Math.Max(200, scroll.ClientSize.Width - 70);

@@ -20,7 +20,7 @@ public class PantallaFase : Form
         return barra;
     }
 
-    private void IrAPaso(int paso)
+    protected void IrAPaso(int paso)
     {
         PasoSolicitado = paso;
         Close();   // en una ventana modal el cierre se completa después, al volver al bucle de mensajes

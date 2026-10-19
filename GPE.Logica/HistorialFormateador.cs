@@ -4,10 +4,9 @@ using GPE.Datos;
 
 namespace GPE.Logica;
 
-// Paso de una fase a otra dentro de una entrada (Anterior es null al crear la devolución)
+
 public record CambioFase(string? Anterior, int? FaseAnterior, string Nueva, int FaseNueva);
 
-// Una acción del usuario: todo lo que se guardó con un mismo "Guardar"
 public record EntradaHistorial(
     DateTime Fecha,
     string Usuario,
@@ -15,10 +14,8 @@ public record EntradaHistorial(
     List<string> Detalles,
     CambioFase? Fase);
 
-// Convierte las filas de HISTORIAL_CAMBIOS (una por tabla y registro) en entradas legibles.
 public static class HistorialFormateador
 {
-    // Columnas que no aportan nada al leer el historial
     private static readonly HashSet<string> CamposOcultos =
         new() { "id", "numero", "devolucion_id", "creada_en", "fabrica_id", "estado_id", "motivo_reapertura" };
 
@@ -40,6 +37,19 @@ public static class HistorialFormateador
         ["telefono_contacto"] = "Teléfono de contacto",
         ["cantidad_apta"] = "Cantidad apta",
         ["observaciones_revision"] = "Observaciones de la revisión",
+        ["resultado_abono"] = "Resultado del abono",
+        ["numero_abono"] = "Nº de abono",
+        ["fecha_abono"] = "Fecha del abono",
+        ["importe_abono"] = "Importe del abono",
+        ["observaciones_abono"] = "Observaciones del abono",
+        ["fecha_cierre"] = "Fecha de cierre",
+    };
+
+    private static readonly Dictionary<string, string> NombresResultadoAbono = new()
+    {
+        [ResultadoAbono.Total] = "Abono total",
+        [ResultadoAbono.Parcial] = "Abono parcial",
+        [ResultadoAbono.Ninguno] = "Sin abono",
     };
 
     private static readonly Dictionary<int, string> TitulosPorFase = new()
@@ -48,21 +58,20 @@ public static class HistorialFormateador
         [3] = "Registró la llegada de la mercancía",
         [4] = "Finalizó la revisión",
         [5] = "Registró el abono",
-        [6] = "Cerró la devolución",
+        [6] = "Registró el abono y cerró la devolución",
     };
 
-    // Al volver atrás, según la fase de la que se sale
+
     private static readonly Dictionary<int, string> TitulosReapertura = new()
     {
         [3] = "Deshizo la recepción de la mercancía",
         [4] = "Reabrió la revisión",
+        [6] = "Reabrió el abono",
     };
 
-    // Filas sin transaccion_id (anteriores a esa columna): se agrupan si son
-    // del mismo usuario y están separadas como mucho por este tiempo.
+
     private static readonly TimeSpan MargenSinTransaccion = TimeSpan.FromSeconds(2);
 
-    // cambios: en orden cronológico. Devuelve las entradas de la más reciente a la más antigua.
     public static List<EntradaHistorial> Agrupar(
         List<CambioHistorial> cambios, Dictionary<string, Dictionary<int, string>> nombres)
     {
@@ -137,7 +146,7 @@ public static class HistorialFormateador
                         break;
                     }
 
-                    // La fecha de recogida de la devolución es copia de la de RECOGIDA: no se repite
+                
                     var cambiosDevolucion = Diferencias(antes, despues)
                         .Where(d => !(tocaRecogida && d.Campo == "fecha_recogida"))
                         .ToList();
@@ -194,7 +203,6 @@ public static class HistorialFormateador
             }
         }
 
-        // Si la entrada pasa a otra fase, el título dice qué paso se completó (o se reabrió)
         if (fase is { FaseAnterior: int faseDesde })
         {
             bool haciaAtras = fase.FaseNueva < faseDesde;
@@ -206,8 +214,6 @@ public static class HistorialFormateador
         string titulo = titulos.Count > 0 ? titulos.MinBy(t => t.Prioridad).Texto : "Modificó la devolución";
         return new EntradaHistorial(grupo[0].Fecha, grupo[0].Usuario, titulo, detalles, fase);
     }
-
-    // ---------- Textos ----------
 
     private static CambioFase Fase(int? estadoAntes, int estadoDespues,
         Dictionary<string, Dictionary<int, string>> nombres)
@@ -233,7 +239,7 @@ public static class HistorialFormateador
                 ? $"{Nombre(c.Key)}: {anterior} → {c.Value ?? "—"}"
                 : $"{Nombre(c.Key)}: {c.Value}"));   // antes estaba vacío: solo el valor nuevo
 
-    // "Crema de cacao 400 g: 5 recibidas, 4 aptas · 1 bote abollado"
+   
     private static string LineaRevisada(Dictionary<string, string?> linea)
     {
         string texto = $"{linea.GetValueOrDefault("producto_id")}: " +
@@ -257,16 +263,14 @@ public static class HistorialFormateador
     private static string Nombre(string campo) =>
         NombresCampos.GetValueOrDefault(campo) ?? campo.Replace('_', ' ');
 
-    // ---------- Lectura del JSON ----------
 
-    // Las fechas llegan del JSON como "2026-10-14"; se muestran como 14/10/2026
     private static string FormatoTexto(string texto) =>
         texto.Length == 10 && DateTime.TryParseExact(texto, "yyyy-MM-dd",
             CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha)
             ? fecha.ToString("dd/MM/yyyy")
             : texto;
 
-    // Valores listos para mostrar: los ids con nombre conocido se sustituyen por su nombre
+
     private static Dictionary<string, string?> Leer(
         string? json, Dictionary<string, Dictionary<int, string>> nombres)
     {
@@ -286,6 +290,17 @@ public static class HistorialFormateador
                 continue;
             }
 
+            if (propiedad.Name == "importe_abono" && valor.ValueKind == JsonValueKind.Number)
+            {
+                valores[propiedad.Name] = valor.GetDecimal().ToString("C", new CultureInfo("es-ES"));
+                continue;
+            }
+            if (propiedad.Name == "resultado_abono" && valor.ValueKind == JsonValueKind.String)
+            {
+                valores[propiedad.Name] = NombresResultadoAbono.GetValueOrDefault(valor.GetString()!) ?? valor.GetString();
+                continue;
+            }
+
             valores[propiedad.Name] = valor.ValueKind switch
             {
                 JsonValueKind.Null => null,
@@ -296,7 +311,6 @@ public static class HistorialFormateador
         return valores;
     }
 
-    // Columnas *_id con su valor numérico original (para detectar el cambio de fase)
     private static Dictionary<string, int> LeerIds(string? json)
     {
         var ids = new Dictionary<string, int>();

@@ -84,6 +84,15 @@ CREATE TABLE DEVOLUCION (
     fecha_llegada DATE NULL,
     observaciones_revision NVARCHAR(MAX) NULL,   -- observaciones generales del almacén
     motivo_reapertura NVARCHAR(500) NULL,        -- motivo de la última vez que se volvió a un paso anterior
+    -- Abono y cierre (se rellenan juntos al registrar el abono)
+    resultado_abono NVARCHAR(10) NULL,           -- TOTAL, PARCIAL o NINGUNO
+    numero_abono NVARCHAR(30) NULL,              -- nº del abono / factura rectificativa
+    fecha_abono DATE NULL,
+    importe_abono DECIMAL(10,2) NULL,
+    observaciones_abono NVARCHAR(MAX) NULL,
+    fecha_cierre DATE NULL,
+    CONSTRAINT CK_devolucion_resultado_abono CHECK (resultado_abono IN ('TOTAL', 'PARCIAL', 'NINGUNO')),
+    CONSTRAINT CK_devolucion_importe_abono CHECK (importe_abono >= 0),
     CONSTRAINT FK_devolucion_fabrica FOREIGN KEY (fabrica_id) REFERENCES FABRICA(id),
     CONSTRAINT FK_devolucion_cliente FOREIGN KEY (cliente_id) REFERENCES CLIENTE(id),
     CONSTRAINT FK_devolucion_estado  FOREIGN KEY (estado_id)  REFERENCES ESTADO_DEVOLUCION(id)

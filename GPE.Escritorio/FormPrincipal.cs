@@ -39,7 +39,6 @@ public class FormPrincipal : Form
         Load += (s, e) => CargarDatos();
     }
 
-    // ---------- Construcción de la interfaz ----------
 
     private Panel CrearBarraSuperior()
     {
@@ -89,7 +88,6 @@ public class FormPrincipal : Form
             Text = Sesion.UsuarioActual?.Nombre ?? ""
         };
 
-        // Con Dock = Right, el último añadido queda más a la derecha
         barra.Controls.Add(lblFecha);
         barra.Controls.Add(lblNombre);
         barra.Controls.Add(lblUsuario);
@@ -462,9 +460,8 @@ public class FormPrincipal : Form
         if (indiceFila < 0) return;   // doble clic en la cabecera de la tabla
         if (grid.Rows[indiceFila].Tag is not DevolucionFila devolucion) return;
 
-        // Se abre el paso en curso (el siguiente al completado). Si su pantalla aún no
-        // existe, el último paso que sí tiene pantalla, para al menos poder consultarlo.
-        int paso = Math.Min(devolucion.Fase + 1, UltimoPasoConPantalla);
+        // Se abre el paso en curso (el siguiente al completado); si está cerrada, el cierre
+        int paso = Math.Min(devolucion.Fase + 1, FormAbono.PasoCierre);
 
         // Al pulsar otro paso en la barra, la pantalla se cierra y se abre la de ese paso
         while (true)
@@ -489,30 +486,21 @@ public class FormPrincipal : Form
                 break;
             }
 
-            if (siguiente > UltimoPasoConPantalla)
-            {
-                MessageBox.Show(this, "La pantalla de este paso todavía no está disponible.",
-                    "En construcción", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                paso = Math.Min(paso, Math.Min(devolucion.Fase + 1, UltimoPasoConPantalla));
-                continue;   // se vuelve a abrir el paso en el que se estaba
-            }
-            paso = Math.Min(siguiente.Value, devolucion.Fase + 1);   // nunca más allá del paso en curso
+            paso = Math.Min(siguiente.Value, Math.Min(devolucion.Fase + 1, FormAbono.PasoCierre));   // nunca más allá del paso en curso
         }
 
         CargarDatos();
         SeleccionarDevolucion(devolucion.Id);
     }
 
-    // Pasos 5 (abono) y 6 (cierre): pantallas pendientes
-    private const int UltimoPasoConPantalla = FormAlmacen.PasoRevision;
-
-    // Pantalla de cada paso de la barra de progreso
+    // Pantalla de cada paso de la barra de progreso (abono y cierre comparten pantalla)
     private static PantallaFase CrearPantalla(DevolucionFila devolucion, int paso) => paso switch
     {
         FormSolicitud.PasoSolicitud => new FormSolicitud(devolucion),
         Recogida.PasoRecogida => new Recogida(devolucion),
         FormAlmacen.PasoLlegada => new FormAlmacen(devolucion, FormAlmacen.PasoLlegada),
-        _ => new FormAlmacen(devolucion, FormAlmacen.PasoRevision)
+        FormAlmacen.PasoRevision => new FormAlmacen(devolucion, FormAlmacen.PasoRevision),
+        _ => new FormAbono(devolucion, paso)
     };
 
     private void AbrirHistorial()

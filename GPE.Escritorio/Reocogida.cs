@@ -5,8 +5,6 @@ using System.Globalization;
 
 namespace GPE.Escritorio
 {
-    // Programa (o modifica) la recogida de una devolución. Al guardar,
-    // la devolución pasa a "Recogida solicitada".
     public class Recogida : PantallaFase
     {
         private static readonly CultureInfo Es = new("es-ES");
@@ -18,7 +16,6 @@ namespace GPE.Escritorio
 
         public const int PasoRecogida = 2;
 
-        // Cuando la mercancía ya ha llegado (fase 3 o más) la recogida solo se consulta
         private bool SoloLectura => devolucion.Fase >= 3;
 
         private readonly ComboBox cmbTransportista = new();
@@ -47,9 +44,7 @@ namespace GPE.Escritorio
             Controls.Add(CrearContenido());
         }
 
-        // ---------- Preparación de controles ----------
-
-        private void PrepararControles()
+             private void PrepararControles()
         {
             cmbTransportista.DropDownStyle = ComboBoxStyle.DropDownList;
             cmbTransportista.SelectedIndexChanged += (s, e) =>
@@ -106,7 +101,6 @@ namespace GPE.Escritorio
             {
                 dtpRecogida.Value = DateTime.Today < dtpRecogida.MinDate ? dtpRecogida.MinDate : DateTime.Today;
             }
-            // La fecha de creación no se muestra: la pone SQL Server al insertar (DEFAULT SYSDATETIME())
         }
 
         private void BloquearCampos()
@@ -120,7 +114,6 @@ namespace GPE.Escritorio
             }
         }
 
-        // ---------- Estructura general ----------
 
         private Panel CrearContenido()
         {
@@ -233,8 +226,6 @@ namespace GPE.Escritorio
             return panel;
         }
 
-        // ---------- Guardado ----------
-
         private void Guardar()
         {
             // 1. Validaciones: se marcan todos los campos con error a la vez
@@ -266,7 +257,6 @@ namespace GPE.Escritorio
                 return;
             }
 
-            // 2. Guardar en la base de datos
             var datos = new DatosRecogida(
                 devolucion.Id,
                 ((Transportista)cmbTransportista.SelectedItem!).Id,
@@ -295,7 +285,6 @@ namespace GPE.Escritorio
             DialogResult = DialogResult.OK;
         }
 
-        // ---------- Campos y mensajes de error ----------
 
         private Control Campo(string etiqueta, Control control, Control? ayuda = null)
         {

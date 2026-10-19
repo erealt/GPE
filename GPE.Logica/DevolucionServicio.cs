@@ -58,10 +58,11 @@ public class DevolucionServicio
         repositorio.ObtenerObservacionesRevision(devolucionId);
 
     // Solo se puede reabrir el último paso completado (el siguiente aún no ha empezado):
-    // fase 3 → 2 deshace la recepción; fase 4 → 3 reabre la revisión.
+    // fase 3 → 2 deshace la recepción; fase 4 → 3 reabre la revisión;
+    // fase 6 → 4 reabre el abono (abono y cierre se registran a la vez).
     public void Reabrir(int devolucionId, int faseActual, string motivo)
     {
-        if (faseActual is not (3 or 4))
+        if (faseActual is not (3 or 4 or 6))
             throw new ReglaNegocioException("Este paso ya no se puede reabrir.");
 
         motivo = motivo.Trim();
@@ -100,6 +101,52 @@ public class DevolucionServicio
 
         if (!repositorio.FinalizarRevision(devolucionId, lineas, observaciones))
             throw new ReglaNegocioException(MensajeOtroUsuario);
+    }
+
+    // ---------- Abono y cierre ----------
+
+    public AbonoGuardado? ObtenerAbono(int devolucionId) => repositorio.ObtenerAbono(devolucionId);
+
+    public void RegistrarAbono(DatosAbono datos, DateTime? fechaLlegada)
+    {
+        ValidarAbono(datos, fechaLlegada);
+
+        if (datos.Resultado != ResultadoAbono.Ninguno
+            && repositorio.ObtenerAdjuntos(datos.DevolucionId, TipoAdjunto.Abono).Count == 0)
+            throw new ReglaNegocioException("Adjunta el documento del abono.");
+
+        if (!repositorio.RegistrarAbono(datos, DateTime.Today))
+            throw new ReglaNegocioException(MensajeOtroUsuario);
+    }
+
+    private static void ValidarAbono(DatosAbono datos, DateTime? fechaLlegada)
+    {
+        if (datos.Resultado is not (ResultadoAbono.Total or ResultadoAbono.Parcial or ResultadoAbono.Ninguno))
+            throw new ReglaNegocioException("Indica si se abona todo, una parte o nada.");
+
+        if (datos.Resultado != ResultadoAbono.Ninguno)
+        {
+            if (string.IsNullOrWhiteSpace(datos.Numero))
+                throw new ReglaNegocioException("Indica el número del abono.");
+            if (datos.Numero.Length > 30)
+                throw new ReglaNegocioException("El número del abono no puede superar los 30 caracteres.");
+            if (datos.Importe is not > 0)
+                throw new ReglaNegocioException("El importe del abono debe ser mayor que 0.");
+        }
+        else if (datos.Numero != null || datos.Importe != null)
+        {
+            throw new ReglaNegocioException("Si no hay abono no se indica número ni importe.");
+        }
+
+        if (datos.Resultado != ResultadoAbono.Total && string.IsNullOrWhiteSpace(datos.Observaciones))
+            throw new ReglaNegocioException(datos.Resultado == ResultadoAbono.Parcial
+                ? "Explica en observaciones por qué el abono es parcial."
+                : "Explica en observaciones por qué no se abona.");
+
+        if (datos.Fecha.Date > DateTime.Today)
+            throw new ReglaNegocioException("La fecha del abono no puede ser posterior a hoy.");
+        if (fechaLlegada != null && datos.Fecha.Date < fechaLlegada.Value.Date)
+            throw new ReglaNegocioException("La fecha del abono no puede ser anterior a la llegada de la mercancía.");
     }
 
     // ---------- Adjuntos ----------

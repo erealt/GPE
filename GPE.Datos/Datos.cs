@@ -107,3 +107,28 @@ public static class TipoAdjunto
 public record AdjuntoInfo(int Id, string NombreArchivo, int TamanoBytes, DateTime SubidoEn, string Usuario);
 
 public record ArchivoNuevo(string NombreArchivo, byte[] Contenido);
+
+public static class ResultadoAbono
+{
+    public const string Total = "TOTAL";
+    public const string Parcial = "PARCIAL";
+    public const string Ninguno = "NINGUNO";
+}
+
+// Lo que se indica al registrar el abono (numero e importe son null si no hay abono)
+public record DatosAbono(
+    int DevolucionId,
+    string Resultado,
+    string? Numero,
+    DateTime Fecha,
+    decimal? Importe,
+    string? Observaciones);
+
+// Abono ya registrado; FechaCierre es null si se reabrió
+public record AbonoGuardado(
+    string Resultado,
+    string? Numero,
+    DateTime Fecha,
+    decimal? Importe,
+    string? Observaciones,
+    DateTime? FechaCierre);
