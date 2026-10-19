@@ -107,6 +107,10 @@ public class DevolucionServicio
 
     public AbonoGuardado? ObtenerAbono(int devolucionId) => repositorio.ObtenerAbono(devolucionId);
 
+    // Solo es un aviso: un mismo abono podría cubrir varias devoluciones
+    public string? DevolucionConNumeroAbono(string numeroAbono, int devolucionId) =>
+        repositorio.DevolucionConNumeroAbono(numeroAbono.Trim(), devolucionId);
+
     public void RegistrarAbono(DatosAbono datos, DateTime? fechaLlegada)
     {
         ValidarAbono(datos, fechaLlegada);

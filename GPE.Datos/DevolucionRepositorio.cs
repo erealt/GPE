@@ -468,6 +468,21 @@ public class DevolucionRepositorio
             FechaCierre: lector.IsDBNull(5) ? null : lector.GetDateTime(5));
     }
 
+    // Número (DEV-...) de otra devolución que ya usa ese nº de abono, o null si no lo usa ninguna
+    public string? DevolucionConNumeroAbono(string numeroAbono, int devolucionExcluida)
+    {
+        const string sql = @"
+            SELECT TOP 1 numero FROM DEVOLUCION
+            WHERE numero_abono = @abono AND id <> @devolucion
+            ORDER BY id;";
+
+        using var conexion = AbrirConexion();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@abono", numeroAbono);
+        comando.Parameters.AddWithValue("@devolucion", devolucionExcluida);
+        return comando.ExecuteScalar() as string;
+    }
+
     // Guarda el abono y cierra la devolución (fase 4 → 6) en un solo UPDATE.
     // Devuelve false si ya no estaba en la fase 4.
     public bool RegistrarAbono(DatosAbono datos, DateTime fechaCierre)

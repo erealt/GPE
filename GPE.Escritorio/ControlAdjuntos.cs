@@ -24,6 +24,9 @@ public class ControlAdjuntos : UserControl
 
     public int Cantidad => lista.Items.Count;
 
+    // Se lanza cada vez que se recarga la lista (al abrir, añadir o quitar archivos)
+    public event EventHandler? ArchivosCambiados;
+
     // En solo lectura solo se pueden ver los archivos, no añadir ni quitar
     [System.ComponentModel.Browsable(false)]
     [System.ComponentModel.DesignerSerializationVisibility(
@@ -103,6 +106,7 @@ public class ControlAdjuntos : UserControl
             Error("No se pudieron cargar los archivos.", ex);
         }
         ActualizarBotones();
+        ArchivosCambiados?.Invoke(this, EventArgs.Empty);
     }
 
     private void Anadir()
