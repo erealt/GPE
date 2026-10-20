@@ -1,5 +1,20 @@
 ﻿namespace GPE.Datos;
 
+// Fases del proceso (columna ESTADO_DEVOLUCION.fase). Abono y cierre se registran
+// a la vez, así que se pasa de la 4 a la 6: la 5 solo aparece en la barra de progreso.
+public static class Fase
+{
+    public const int SolicitudRecibida = 1;
+    public const int RecogidaSolicitada = 2;
+    public const int MercanciaRecibida = 3;
+    public const int RevisadaAlmacen = 4;
+    public const int AbonoRealizado = 5;
+    public const int Cierre = 6;
+
+    // El paso en curso es el siguiente al último completado; si está cerrada, el cierre
+    public static int PasoEnCurso(int fase) => Math.Min(fase + 1, Cierre);
+}
+
 public record DevolucionFila(
     int Id,
     string Numero,

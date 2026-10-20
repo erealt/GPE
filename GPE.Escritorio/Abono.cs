@@ -1,18 +1,14 @@
 using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
 public class FormAbono : PantallaFase
 {
-    public const int PasoAbono = 5, PasoCierre = 6;
+    public const int PasoAbono = Fase.AbonoRealizado, PasoCierre = Fase.Cierre;
 
-    private static readonly CultureInfo Es = new("es-ES");
 
-    private static readonly Color FondoSoloLectura = Color.FromArgb(247, 248, 246);
-    private static readonly Color FondoDiferencia = Color.FromArgb(255, 241, 214);
 
     private readonly DevolucionServicio servicio = new();
     private DevolucionFila devolucion;
@@ -28,11 +24,11 @@ public class FormAbono : PantallaFase
     private NumericUpDown numImporte = new();
     private TextBox txtObservaciones = new();
     private ControlAdjuntos documento = null!;
-    private readonly Dictionary<Control, Label> errores = new();
+    private CamposFormulario campos = new();
 
     private bool hayCambios;   // para avisar al cerrar sin registrar
 
-    private bool Editable => devolucion.Fase == 4;
+    private bool Editable => devolucion.Fase == Fase.RevisadaAlmacen;
 
     public FormAbono(DevolucionFila devolucion, int paso)
     {
@@ -57,7 +53,7 @@ public class FormAbono : PantallaFase
         SuspendLayout();
         Controls.Clear();
         CancelButton = null;
-        errores.Clear();
+        campos = new CamposFormulario();
         hayCambios = false;
 
         try
@@ -73,7 +69,7 @@ public class FormAbono : PantallaFase
 
         var (scroll, pila) = Componentes.Pagina();
 
-        bool cerrada = devolucion.Fase >= 6;
+        bool cerrada = devolucion.Fase >= Fase.Cierre;
         pila.Controls.Add(Componentes.Cabecera(
             $"DEVOLUCIONES / {devolucion.Numero} / ABONO",
             cerrada ? "Devolución cerrada" : "Abono y cierre",
@@ -87,12 +83,12 @@ public class FormAbono : PantallaFase
             ("CLIENTE", devolucion.Cliente),
             ("ALBARÁN", devolucion.Albaran ?? "—"),
             ("MOTIVO", devolucion.Motivo),
-            ("FECHA LLEGADA", Fecha(devolucion.FechaLlegada))
+            ("FECHA LLEGADA", Componentes.Fecha(devolucion.FechaLlegada))
         };
-        if (cerrada) resumen.Add(("FECHA CIERRE", Fecha(abono?.FechaCierre)));
+        if (cerrada) resumen.Add(("FECHA CIERRE", Componentes.Fecha(abono?.FechaCierre)));
         pila.Controls.Add(Componentes.Resumen(resumen.ToArray()));
 
-        if (devolucion.Fase < 4)
+        if (devolucion.Fase < Fase.RevisadaAlmacen)
         {
             pila.Controls.Add(Componentes.Tarjeta("La revisión del almacén no ha terminado",
                 "El abono se registra cuando el almacén finaliza la revisión de la mercancía."));
@@ -108,22 +104,6 @@ public class FormAbono : PantallaFase
 
         Controls.Add(scroll);
         ResumeLayout();
-    }
-
-    private Button BotonCerrar()
-    {
-        var boton = Tema.BotonSecundario("Cerrar", 130);
-        boton.DialogResult = DialogResult.Cancel;
-        CancelButton = boton;
-        return boton;
-    }
-
-    private static Button BotonReabrir(string texto, int ancho, Action accion)
-    {
-        var boton = Tema.BotonSecundario(texto, ancho);
-        boton.ForeColor = Tema.Error;
-        boton.Click += (s, e) => accion();
-        return boton;
     }
 
     // ---------- Resumen de la revisión ----------
@@ -181,34 +161,8 @@ public class FormAbono : PantallaFase
 
     private DataGridView CrearTablaRevision()
     {
-        var grid = new DataGridView
-        {
-            Dock = DockStyle.Top,
-            BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.None,
-            CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
-            GridColor = Tema.Linea,
-            ScrollBars = ScrollBars.None,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AllowUserToResizeRows = false,
-            RowHeadersVisible = false,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            EnableHeadersVisualStyles = false,
-            ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
-            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-            ColumnHeadersHeight = 40
-        };
-        grid.RowTemplate.Height = 36;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Tema.CabeceraTabla;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = Tema.Suave;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-        grid.DefaultCellStyle.ForeColor = Tema.Texto;
-        grid.DefaultCellStyle.SelectionBackColor = Color.White;
-        grid.DefaultCellStyle.SelectionForeColor = Tema.Texto;
-        grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        var grid = new DataGridView { Dock = DockStyle.Top, ReadOnly = true };
+        Componentes.EstiloTabla(grid, altoFila: 36);
 
         foreach (var (titulo, peso, numero) in new[]
                  {
@@ -236,19 +190,18 @@ public class FormAbono : PantallaFase
 
             // Diferencias en ámbar, como en la revisión del almacén
             if (linea.Recibida != linea.Solicitada)
-                grid.Rows[i].Cells[3].Style.BackColor = FondoDiferencia;
+                grid.Rows[i].Cells[3].Style.BackColor = Tema.FondoDiferencia;
             if (noApta > 0)
-                grid.Rows[i].Cells[5].Style.BackColor = FondoDiferencia;
+                grid.Rows[i].Cells[5].Style.BackColor = Tema.FondoDiferencia;
         }
 
         int total = grid.Rows.Add("Total", "",
             lineas.Sum(l => l.Solicitada), lineas.Sum(l => l.Recibida ?? 0),
             lineas.Sum(l => l.Apta ?? 0), lineas.Sum(l => (l.Recibida ?? 0) - (l.Apta ?? 0)), "");
-        grid.Rows[total].DefaultCellStyle.BackColor = FondoSoloLectura;
+        grid.Rows[total].DefaultCellStyle.BackColor = Tema.FondoSoloLectura;
         grid.Rows[total].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
 
-        // Sin scroll propio: la tabla mide lo que sus filas
-        grid.Height = grid.ColumnHeadersHeight + grid.Rows.Count * grid.RowTemplate.Height + 2;
+        Componentes.AjustarAltoTabla(grid);
         grid.ClearSelection();
         return grid;
     }
@@ -295,24 +248,22 @@ public class FormAbono : PantallaFase
             SoloLectura = !Editable
         };
 
-        var rejilla = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
-        rejilla.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        rejilla.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var rejilla = Componentes.Rejilla(2);
 
-        var campoResultado = Campo("Resultado", panelResultado);
+        var campoResultado = campos.Campo("Resultado", panelResultado);
         rejilla.Controls.Add(campoResultado);
         rejilla.SetColumnSpan(campoResultado, 2);
 
-        rejilla.Controls.Add(Campo("Nº de abono", txtNumero));
-        rejilla.Controls.Add(Campo("Fecha del abono", dtpFecha));
-        rejilla.Controls.Add(Campo("Importe (€)", numImporte));
+        rejilla.Controls.Add(campos.Campo("Nº de abono", txtNumero));
+        rejilla.Controls.Add(campos.Campo("Fecha del abono", dtpFecha));
+        rejilla.Controls.Add(campos.Campo("Importe (€)", numImporte));
         rejilla.Controls.Add(new Panel { Height = 1 });
 
-        var campoObservaciones = Campo("Observaciones", txtObservaciones);
+        var campoObservaciones = campos.Campo("Observaciones", txtObservaciones);
         rejilla.Controls.Add(campoObservaciones);
         rejilla.SetColumnSpan(campoObservaciones, 2);
 
-        var campoDocumento = Campo("Documento del abono (PDF o imagen)", documento);
+        var campoDocumento = campos.Campo("Documento del abono (PDF o imagen)", documento);
         rejilla.Controls.Add(campoDocumento);
         rejilla.SetColumnSpan(campoDocumento, 2);
 
@@ -327,7 +278,7 @@ public class FormAbono : PantallaFase
         {
             if (!opcion.Checked) return;
             ActualizarCampos();
-            errores[panelResultado].Visible = false;
+            campos.OcultarError(panelResultado);
             hayCambios = true;
         };
         return opcion;
@@ -480,13 +431,12 @@ public class FormAbono : PantallaFase
     private void RegistrarAbono()
     {
         // 1. Validaciones: se marcan todos los campos con error a la vez
-        foreach (var etiqueta in errores.Values) etiqueta.Visible = false;
+        campos.LimpiarErrores();
         Control? primerError = null;
 
         void Error(Control campo, string mensaje)
         {
-            errores[campo].Text = mensaje;
-            errores[campo].Visible = true;
+            campos.MarcarError(campo, mensaje);
             primerError ??= campo;
         }
 
@@ -519,13 +469,32 @@ public class FormAbono : PantallaFase
 
         // 2. Confirmación
         string pregunta = hayAbono
-            ? $"Se registrará el abono {numero} de {importe.ToString("C", Es)} " +
-              $"con fecha {dtpFecha.Value.ToString("dd/MM/yyyy", Es)}"
+            ? $"Se registrará el abono {numero} de {importe.ToString("C", Componentes.Es)} " +
+              $"con fecha {dtpFecha.Value.ToString("dd/MM/yyyy", Componentes.Es)}"
             : "Se registrará que esta devolución no tiene abono";
+
+        // Un nº de abono repetido suele ser un error al copiarlo, pero un mismo abono
+        // puede cubrir varias devoluciones: solo se avisa, no se impide
+        string avisoRepetido = "";
+        if (hayAbono)
+        {
+            try
+            {
+                if (servicio.DevolucionConNumeroAbono(numero, devolucion.Id) is string otra)
+                    avisoRepetido = $"⚠  El abono {numero} ya está registrado en la devolución {otra}. " +
+                                    "Compruébalo, salvo que el mismo abono cubra las dos.\n\n";
+            }
+            catch (DbException)
+            {
+                // Es solo un aviso: si no se puede comprobar, se sigue sin él
+            }
+        }
+
         if (MessageBox.Show(this,
-                pregunta + " y la devolución quedará cerrada.\n" +
+                avisoRepetido + pregunta + " y la devolución quedará cerrada.\n" +
                 "Si hay algún error podrás reabrir el abono.\n\n¿Registrar y cerrar?",
-                "Registrar abono y cerrar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                "Registrar abono y cerrar", MessageBoxButtons.YesNo,
+                avisoRepetido == "" ? MessageBoxIcon.Question : MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
         // 3. Guardar
@@ -571,48 +540,4 @@ public class FormAbono : PantallaFase
             DialogResult = DialogResult.None;
         }
     }
-
-    // ---------- Campos ----------
-
-    private Control Campo(string etiqueta, Control control)
-    {
-        var panel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            ColumnCount = 1,
-            Margin = new Padding(0, 0, 15, 15)
-        };
-        panel.Controls.Add(new Label
-        {
-            Text = etiqueta,
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 4)
-        });
-
-        control.Dock = DockStyle.Top;
-        panel.Controls.Add(control);
-
-        // Al corregir el campo desaparece su error
-        var error = new Label
-        {
-            AutoSize = true,
-            ForeColor = Tema.Error,
-            Font = new Font("Segoe UI", 9),
-            Margin = new Padding(0, 4, 0, 0),
-            Visible = false
-        };
-        errores[control] = error;
-        panel.Controls.Add(error);
-
-        if (control is NumericUpDown numero)
-            numero.ValueChanged += (s, e) => error.Visible = false;
-        else if (control is TextBox)
-            control.TextChanged += (s, e) => error.Visible = false;
-
-        return panel;
-    }
-
-    private static string Fecha(DateTime? fecha) => fecha?.ToString("dd MMM yyyy", Es) ?? "—";
 }

@@ -1,6 +1,5 @@
 using GPE.Datos;
 using GPE.Logica;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
@@ -8,7 +7,6 @@ namespace GPE.Escritorio;
 // FormPrincipal lo muestra al entrar y lo repite cada cierto tiempo mientras quede alguna.
 public class FormAvisoAbonos : Form
 {
-    private static readonly CultureInfo Es = new("es-ES");
 
     private readonly ListView lista = new();
     private readonly Button btnAbrir = Tema.BotonPrincipal("Abrir devolución", 180);
@@ -71,9 +69,9 @@ public class FormAvisoAbonos : Form
             {
                 d.Numero,
                 d.Cliente,
-                d.FechaLlegada?.ToString("dd/MM/yyyy", Es) ?? "",
+                d.FechaLlegada?.ToString("dd/MM/yyyy", Componentes.Es) ?? "",
                 $"{dias} días",
-                d.Fase == 3 ? "Revisión del almacén" : "Registrar el abono"
+                d.Fase == Fase.MercanciaRecibida ? "Revisión del almacén" : "Registrar el abono"
             }) { Tag = d });
         }
         lista.SelectedIndexChanged += (s, e) => btnAbrir.Enabled = lista.SelectedItems.Count > 0;

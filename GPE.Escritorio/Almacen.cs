@@ -1,24 +1,19 @@
 using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
 
 public class FormAlmacen : PantallaFase
 {
-    public const int PasoLlegada = 3, PasoRevision = 4;
+    public const int PasoLlegada = Fase.MercanciaRecibida, PasoRevision = Fase.RevisadaAlmacen;
 
-    private static readonly CultureInfo Es = new("es-ES");
 
     // Columnas de la tabla de revisión
     private const int ColProducto = 0, ColLote = 1, ColSolicitada = 2,
                       ColRecibida = 3, ColApta = 4, ColObservaciones = 5;
 
-    private static readonly Color FondoSoloLectura = Color.FromArgb(247, 248, 246);
-    private static readonly Color FondoDiferencia = Color.FromArgb(255, 241, 214);
-    private static readonly Color FondoError = Color.FromArgb(253, 228, 230);
 
     private readonly DevolucionServicio servicio = new();
     private DevolucionFila devolucion;
@@ -70,12 +65,12 @@ public class FormAlmacen : PantallaFase
             ("CLIENTE", devolucion.Cliente),
             ("ALBARÁN", devolucion.Albaran ?? "—"),
             ("MOTIVO", devolucion.Motivo),
-            ("FECHA RECOGIDA", Fecha(devolucion.FechaRecogida)),
-            ("FECHA LLEGADA", devolucion.FechaLlegada == null ? "Pendiente" : Fecha(devolucion.FechaLlegada))));
+            ("FECHA RECOGIDA", Componentes.Fecha(devolucion.FechaRecogida)),
+            ("FECHA LLEGADA", devolucion.FechaLlegada == null ? "Pendiente" : Componentes.Fecha(devolucion.FechaLlegada))));
 
         if (paso == PasoLlegada)
         {
-            if (devolucion.Fase < 3)
+            if (devolucion.Fase < Fase.MercanciaRecibida)
             {
                 pila.Controls.Add(CrearTarjetaPendiente());
                 pila.Controls.Add(Componentes.Acciones(BotonCerrar()));
@@ -83,11 +78,11 @@ public class FormAlmacen : PantallaFase
             else
             {
                 pila.Controls.Add(Componentes.Tarjeta("Mercancía recibida",
-                    $"La mercancía llegó al almacén el {Fecha(devolucion.FechaLlegada)}."));
+                    $"La mercancía llegó al almacén el {Componentes.Fecha(devolucion.FechaLlegada)}."));
 
                 // Solo mientras no se haya finalizado la revisión
                 var botones = new List<Button> { BotonCerrar() };
-                if (devolucion.Fase == 3)
+                if (devolucion.Fase == Fase.MercanciaRecibida)
                     botones.Insert(0, BotonReabrir("Deshacer recepción", 190, () => Reabrir(
                         "Deshacer recepción",
                         "La devolución volverá a \"Recogida solicitada\" y se borrará la fecha de llegada. " +
@@ -98,7 +93,7 @@ public class FormAlmacen : PantallaFase
         }
         else
         {
-            bool editable = devolucion.Fase == 3;
+            bool editable = devolucion.Fase == Fase.MercanciaRecibida;
 
             pila.Controls.Add(CrearTarjetaProductos(editable));
             pila.Controls.Add(CrearTarjetaObservaciones(editable));
@@ -109,22 +104,6 @@ public class FormAlmacen : PantallaFase
 
         Controls.Add(scroll);
         ResumeLayout();
-    }
-
-    private Button BotonCerrar()
-    {
-        var boton = Tema.BotonSecundario("Cerrar", 130);
-        boton.DialogResult = DialogResult.Cancel;
-        CancelButton = boton;
-        return boton;
-    }
-
-    private static Button BotonReabrir(string texto, int ancho, Action accion)
-    {
-        var boton = Tema.BotonSecundario(texto, ancho);
-        boton.ForeColor = Tema.Error;
-        boton.Click += (s, e) => accion();
-        return boton;
     }
 
     // ---------- Paso 3: llegada ----------
@@ -231,37 +210,13 @@ public class FormAlmacen : PantallaFase
 
     private void ConfigurarGrid(bool editable)
     {
+        Componentes.EstiloTabla(grid);
         grid.Dock = DockStyle.Top;
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.None;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        grid.GridColor = Tema.Linea;
-        grid.ScrollBars = ScrollBars.None;   // la página entera ya tiene scroll
-
         grid.ReadOnly = !editable;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToDeleteRows = false;
-        grid.AllowUserToResizeRows = false;
-        grid.RowHeadersVisible = false;
         grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
         grid.EditMode = DataGridViewEditMode.EditOnEnter;
-        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        grid.RowTemplate.Height = 40;
         grid.ShowCellErrors = true;
-
-        grid.EnableHeadersVisualStyles = false;
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        grid.ColumnHeadersHeight = 40;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Tema.CabeceraTabla;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = Tema.Suave;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-
-        grid.DefaultCellStyle.ForeColor = Tema.Texto;
-        grid.DefaultCellStyle.SelectionBackColor = editable ? Tema.AcentoSuave : Color.White;
-        grid.DefaultCellStyle.SelectionForeColor = Tema.Texto;
-        grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+        if (editable) grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
 
         AnadirColumna("PRODUCTO", 28, soloLectura: true);
         AnadirColumna("LOTE", 12, soloLectura: true);
@@ -297,7 +252,7 @@ public class FormAlmacen : PantallaFase
         };
         if (soloLectura)
         {
-            columna.DefaultCellStyle.BackColor = FondoSoloLectura;
+            columna.DefaultCellStyle.BackColor = Tema.FondoSoloLectura;
             columna.DefaultCellStyle.ForeColor = Tema.Suave;
         }
         grid.Columns.Add(columna);
@@ -352,7 +307,7 @@ public class FormAlmacen : PantallaFase
     private Control CrearAccionesConsulta()
     {
         var botones = new List<Button> { BotonCerrar() };
-        if (devolucion.Fase == 4)
+        if (devolucion.Fase == Fase.RevisadaAlmacen)
             botones.Insert(0, BotonReabrir("Reabrir revisión", 180, () => Reabrir(
                 "Reabrir revisión",
                 "La devolución volverá a \"Mercancía recibida\" para poder corregir la revisión. " +
@@ -384,8 +339,7 @@ public class FormAlmacen : PantallaFase
                 "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        // Sin scroll propio: la tabla mide lo que sus filas
-        grid.Height = grid.ColumnHeadersHeight + grid.Rows.Count * grid.RowTemplate.Height + 2;
+        Componentes.AjustarAltoTabla(grid);
 
         // Al editar, el cursor empieza en la primera cantidad a rellenar
         if (editable && grid.Rows.Count > 0)
@@ -417,7 +371,7 @@ public class FormAlmacen : PantallaFase
         if (grid.Rows[e.RowIndex].Cells[ColRecibida].ErrorText != "") return;
 
         int? recibida = Numero(e.Value);
-        e.CellStyle.BackColor = recibida != null && recibida != linea.Solicitada ? FondoDiferencia : Color.White;
+        e.CellStyle.BackColor = recibida != null && recibida != linea.Solicitada ? Tema.FondoDiferencia : Color.White;
     }
 
     private static int? Numero(object? valor) =>
@@ -447,7 +401,7 @@ public class FormAlmacen : PantallaFase
 
             var celda = fila.Cells[columna];
             celda.ErrorText = error;
-            celda.Style.BackColor = FondoError;
+            celda.Style.BackColor = Tema.FondoError;
             conError++;
         }
         return conError;
@@ -527,5 +481,4 @@ public class FormAlmacen : PantallaFase
         }
     }
 
-    private static string Fecha(DateTime? fecha) => fecha?.ToString("dd MMM yyyy", Es) ?? "—";
 }

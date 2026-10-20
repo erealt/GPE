@@ -14,7 +14,7 @@ public class PantallaFase : Form
     {
         var barra = (BarraProgresoDevolucion)Componentes.Progreso(devolucion.Fase);
         barra.PasoVisto = pasoVisto;
-        barra.PasoMaximoPulsable = Math.Min(devolucion.Fase + 1, 6);
+        barra.PasoMaximoPulsable = Fase.PasoEnCurso(devolucion.Fase);
         barra.PasoPulsado += IrAPaso;
         new ToolTip().SetToolTip(barra, "Pulsa un paso para ver lo que se hizo en él");
         return barra;
@@ -31,6 +31,24 @@ public class PantallaFase : Form
     {
         base.OnFormClosing(e);   // aquí se ejecutan los manejadores de FormClosing de la pantalla
         if (e.Cancel) PasoSolicitado = null;
+    }
+
+    // Botón "Cerrar" de las pantallas de consulta; también responde a Esc
+    protected Button BotonCerrar()
+    {
+        var boton = Tema.BotonSecundario("Cerrar", 130);
+        boton.DialogResult = DialogResult.Cancel;
+        CancelButton = boton;
+        return boton;
+    }
+
+    // Botón en rojo para volver a un paso anterior (deshacer recepción, reabrir...)
+    protected static Button BotonReabrir(string texto, int ancho, Action accion)
+    {
+        var boton = Tema.BotonSecundario(texto, ancho);
+        boton.ForeColor = Tema.Error;
+        boton.Click += (s, e) => accion();
+        return boton;
     }
 
     // Pide el motivo para volver a un paso anterior. Devuelve null si se cancela.

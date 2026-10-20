@@ -1,16 +1,14 @@
 using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
 // Paso 1 de la barra: los datos con los que se creó la devolución (solo consulta)
 public class FormSolicitud : PantallaFase
 {
-    public const int PasoSolicitud = 1;
+    public const int PasoSolicitud = Fase.SolicitudRecibida;
 
-    private static readonly CultureInfo Es = new("es-ES");
 
     private readonly DevolucionServicio servicio = new();
     private readonly DevolucionFila devolucion;
@@ -40,7 +38,7 @@ public class FormSolicitud : PantallaFase
             ("CLIENTE", devolucion.Cliente),
             ("ALBARÁN", devolucion.Albaran ?? "—"),
             ("MOTIVO", devolucion.Motivo),
-            ("FECHA SOLICITUD", devolucion.FechaSolicitud.ToString("dd MMM yyyy", Es))));
+            ("FECHA SOLICITUD", Componentes.Fecha(devolucion.FechaSolicitud))));
 
         var tarjetaProductos = Componentes.Tarjeta("Productos esperados", "Lo que el cliente indicó que iba a devolver.");
         ConfigurarGrid();
@@ -53,10 +51,7 @@ public class FormSolicitud : PantallaFase
         tarjetaObservaciones.Controls.Add(lblObservaciones);
         pila.Controls.Add(tarjetaObservaciones);
 
-        var btnCerrar = Tema.BotonSecundario("Cerrar", 130);
-        btnCerrar.DialogResult = DialogResult.Cancel;
-        CancelButton = btnCerrar;
-        pila.Controls.Add(Componentes.Acciones(btnCerrar));
+        pila.Controls.Add(Componentes.Acciones(BotonCerrar()));
 
         Controls.Add(scroll);
         Cargar();
@@ -64,32 +59,9 @@ public class FormSolicitud : PantallaFase
 
     private void ConfigurarGrid()
     {
+        Componentes.EstiloTabla(grid);
         grid.Dock = DockStyle.Top;
         grid.ReadOnly = true;
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.None;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        grid.GridColor = Tema.Linea;
-        grid.ScrollBars = ScrollBars.None;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToResizeRows = false;
-        grid.RowHeadersVisible = false;
-        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        grid.RowTemplate.Height = 40;
-
-        grid.EnableHeadersVisualStyles = false;
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        grid.ColumnHeadersHeight = 40;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Tema.CabeceraTabla;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = Tema.Suave;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-
-        grid.DefaultCellStyle.ForeColor = Tema.Texto;
-        grid.DefaultCellStyle.SelectionBackColor = Color.White;
-        grid.DefaultCellStyle.SelectionForeColor = Tema.Texto;
-        grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
 
         grid.Columns.Add("PRODUCTO", "PRODUCTO");
         grid.Columns.Add("LOTE", "LOTE");
@@ -117,7 +89,7 @@ public class FormSolicitud : PantallaFase
                 "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        grid.Height = grid.ColumnHeadersHeight + grid.Rows.Count * grid.RowTemplate.Height + 2;
+        Componentes.AjustarAltoTabla(grid);
         grid.ClearSelection();
     }
 }

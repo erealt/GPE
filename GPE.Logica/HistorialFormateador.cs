@@ -54,19 +54,19 @@ public static class HistorialFormateador
 
     private static readonly Dictionary<int, string> TitulosPorFase = new()
     {
-        [2] = "Solicitó la recogida",
-        [3] = "Registró la llegada de la mercancía",
-        [4] = "Finalizó la revisión",
-        [5] = "Registró el abono",
-        [6] = "Registró el abono y cerró la devolución",
+        [Fase.RecogidaSolicitada] = "Solicitó la recogida",
+        [Fase.MercanciaRecibida] = "Registró la llegada de la mercancía",
+        [Fase.RevisadaAlmacen] = "Finalizó la revisión",
+        [Fase.AbonoRealizado] = "Registró el abono",
+        [Fase.Cierre] = "Registró el abono y cerró la devolución",
     };
 
 
     private static readonly Dictionary<int, string> TitulosReapertura = new()
     {
-        [3] = "Deshizo la recepción de la mercancía",
-        [4] = "Reabrió la revisión",
-        [6] = "Reabrió el abono",
+        [Fase.MercanciaRecibida] = "Deshizo la recepción de la mercancía",
+        [Fase.RevisadaAlmacen] = "Reabrió la revisión",
+        [Fase.Cierre] = "Reabrió el abono",
     };
 
 
@@ -124,7 +124,7 @@ public static class HistorialFormateador
                     titulos.Add((0, "Creó la devolución"));
                     detalles.AddRange(Resumen(despues));
                     if (idsDespues.TryGetValue("estado_id", out int estadoInicial))
-                        fase = Fase(null, estadoInicial, nombres);
+                        fase = CrearCambioFase(null, estadoInicial, nombres);
                     break;
 
                 case ("DEVOLUCION", "DELETE"):
@@ -136,7 +136,7 @@ public static class HistorialFormateador
                         && idsDespues.TryGetValue("estado_id", out int estadoDespues)
                         && estadoAntes != estadoDespues)
                     {
-                        fase = Fase(estadoAntes, estadoDespues, nombres);
+                        fase = CrearCambioFase(estadoAntes, estadoDespues, nombres);
                     }
 
                     // Vuelta a un paso anterior: solo interesa el motivo
@@ -215,14 +215,14 @@ public static class HistorialFormateador
         return new EntradaHistorial(grupo[0].Fecha, grupo[0].Usuario, titulo, detalles, fase);
     }
 
-    private static CambioFase Fase(int? estadoAntes, int estadoDespues,
+    private static CambioFase CrearCambioFase(int? estadoAntes, int estadoDespues,
         Dictionary<string, Dictionary<int, string>> nombres)
     {
         string? Nombre(int? id) => id is int i ? nombres.GetValueOrDefault("estado_id")?.GetValueOrDefault(i) ?? $"Estado {i}" : null;
         int? Numero(int? id) =>
             id is int i && int.TryParse(nombres.GetValueOrDefault("estado_fase")?.GetValueOrDefault(i), out int f) ? f : null;
 
-        return new CambioFase(Nombre(estadoAntes), Numero(estadoAntes), Nombre(estadoDespues)!, Numero(estadoDespues) ?? 1);
+        return new CambioFase(Nombre(estadoAntes), Numero(estadoAntes), Nombre(estadoDespues)!, Numero(estadoDespues) ?? Fase.SolicitudRecibida);
     }
 
     private static IEnumerable<string> Resumen(Dictionary<string, string?> valores) =>

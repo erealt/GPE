@@ -62,7 +62,7 @@ public class DevolucionServicio
     // fase 6 → 4 reabre el abono (abono y cierre se registran a la vez).
     public void Reabrir(int devolucionId, int faseActual, string motivo)
     {
-        if (faseActual is not (3 or 4 or 6))
+        if (faseActual is not (Fase.MercanciaRecibida or Fase.RevisadaAlmacen or Fase.Cierre))
             throw new ReglaNegocioException("Este paso ya no se puede reabrir.");
 
         motivo = motivo.Trim();
@@ -111,7 +111,7 @@ public class DevolucionServicio
     // Días desde que llegó la mercancía, o null si no está esperando abono
     // (aún no ha llegado o ya está cerrada)
     public static int? DiasSinAbono(DevolucionFila devolucion) =>
-        devolucion.Fase is 3 or 4 && devolucion.FechaLlegada is DateTime llegada
+        devolucion.Fase is Fase.MercanciaRecibida or Fase.RevisadaAlmacen && devolucion.FechaLlegada is DateTime llegada
             ? (DateTime.Today - llegada.Date).Days
             : null;
 
@@ -239,6 +239,15 @@ public class DevolucionServicio
     {
         if (string.IsNullOrWhiteSpace(datos.Motivo))
             throw new ReglaNegocioException("El motivo de la devolución es obligatorio.");
+
+        if (datos.Motivo.Length > 50)
+            throw new ReglaNegocioException("El motivo no puede superar los 50 caracteres.");
+
+        if (datos.Albaran?.Length > 30)
+            throw new ReglaNegocioException("El albarán no puede superar los 30 caracteres.");
+
+        if (datos.Lineas.Any(l => l.Lote?.Length > 30))
+            throw new ReglaNegocioException("El lote no puede superar los 30 caracteres.");
 
         if (datos.Lineas.Count == 0)
             throw new ReglaNegocioException("Añade al menos un producto a la devolución.");

@@ -15,7 +15,11 @@ public static class Tema
     public static readonly Color AvisoFondo = Color.FromArgb(255, 241, 214);
     public static readonly Color Aviso = Color.FromArgb(150, 90, 0);
 
-   
+    // Celdas de las tablas: columna que no se edita, valor distinto del esperado, valor con error
+    public static readonly Color FondoSoloLectura = Color.FromArgb(247, 248, 246);
+    public static readonly Color FondoDiferencia = AvisoFondo;
+    public static readonly Color FondoError = Color.FromArgb(253, 228, 230);
+
     private static readonly (Color Fondo, Color Texto)[] ColoresFase =
     {
         (Color.FromArgb(228, 238, 255), Color.FromArgb(30, 80, 170)),   // Solicitud recibida

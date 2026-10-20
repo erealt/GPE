@@ -1,13 +1,11 @@
 using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
 public class FormHistorial : Form
 {
-    private static readonly CultureInfo Es = new("es-ES");
 
     private readonly DevolucionServicio servicio = new();
     private readonly DevolucionFila devolucion;
@@ -137,7 +135,7 @@ public class FormHistorial : Form
         });
         cuerpo.Controls.Add(new Label
         {
-            Text = $"{entrada.Usuario} · {entrada.Fecha.ToString("d 'de' MMMM 'de' yyyy, HH:mm", Es)}",
+            Text = $"{entrada.Usuario} · {entrada.Fecha.ToString("d 'de' MMMM 'de' yyyy, HH:mm", Componentes.Es)}",
             AutoSize = true,
             ForeColor = Tema.Suave,
             Font = new Font("Segoe UI", 9),

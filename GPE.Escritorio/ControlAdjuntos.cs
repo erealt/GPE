@@ -2,7 +2,6 @@ using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
 using System.Diagnostics;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
@@ -11,7 +10,6 @@ namespace GPE.Escritorio;
 // Los cambios se guardan en la base de datos al momento, sin esperar a otro botón.
 public class ControlAdjuntos : UserControl
 {
-    private static readonly CultureInfo Es = new("es-ES");
 
     private readonly DevolucionServicio servicio = new();
     private readonly int devolucionId;
@@ -96,7 +94,7 @@ public class ControlAdjuntos : UserControl
                     adjunto.NombreArchivo,
                     FormatoTamano(adjunto.TamanoBytes),
                     adjunto.Usuario,
-                    adjunto.SubidoEn.ToString("dd/MM/yyyy HH:mm", Es)
+                    adjunto.SubidoEn.ToString("dd/MM/yyyy HH:mm", Componentes.Es)
                 }) { Tag = adjunto };
                 lista.Items.Add(item);
             }
@@ -137,7 +135,6 @@ public class ControlAdjuntos : UserControl
         Cargar();
     }
 
-    // Se copia el archivo a la carpeta temporal y se abre con el programa de Windows
     private static readonly string[] ExtensionesImagen = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
 
     private static bool EsImagen(AdjuntoInfo adjunto) =>
@@ -160,6 +157,7 @@ public class ControlAdjuntos : UserControl
             return;
         }
 
+        // Se copia el archivo a la carpeta temporal y se abre con el programa de Windows
         try
         {
             string carpeta = Path.Combine(Path.GetTempPath(), "GPE");

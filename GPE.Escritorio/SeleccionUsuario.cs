@@ -8,15 +8,11 @@ namespace GPE.Escritorio;
 // para que el historial de cambios sepa a quién atribuir cada modificación.
 public class FormSeleccionUsuario : Form
 {
-    private static readonly Color ColorFondo = Tema.Fondo;
-    private static readonly Color ColorAzul = Tema.Acento;
-    private static readonly Color ColorTexto = Tema.Texto;
-    private static readonly Color ColorSuave = Tema.Suave;
 
     private readonly DevolucionServicio servicio = new();
 
     private readonly ComboBox cmbUsuario = new();
-    private readonly Button btnEntrar = new();
+    private readonly Button btnEntrar = Tema.BotonPrincipal("Entrar", 120);
 
     public FormSeleccionUsuario()
     {
@@ -26,14 +22,14 @@ public class FormSeleccionUsuario : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = ColorFondo;
+        BackColor = Tema.Fondo;
         Font = new Font("Segoe UI", 10);
 
         var lblTitulo = new Label
         {
             Text = "¿Quién eres?",
             Font = new Font("Segoe UI", 18, FontStyle.Bold),
-            ForeColor = ColorTexto,
+            ForeColor = Tema.Texto,
             Location = new Point(30, 20),
             AutoSize = true
         };
@@ -41,7 +37,7 @@ public class FormSeleccionUsuario : Form
         var lblSubtitulo = new Label
         {
             Text = "Tus cambios quedarán registrados en el historial.",
-            ForeColor = ColorSuave,
+            ForeColor = Tema.Suave,
             Location = new Point(32, 65),
             AutoSize = true
         };
@@ -50,15 +46,7 @@ public class FormSeleccionUsuario : Form
         cmbUsuario.Location = new Point(32, 105);
         cmbUsuario.Width = 356;
 
-        btnEntrar.Text = "Entrar";
-        btnEntrar.Size = new Size(120, 40);
         btnEntrar.Location = new Point(268, 160);
-        btnEntrar.FlatStyle = FlatStyle.Flat;
-        btnEntrar.FlatAppearance.BorderSize = 0;
-        btnEntrar.BackColor = ColorAzul;
-        btnEntrar.ForeColor = Color.White;
-        btnEntrar.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        btnEntrar.Cursor = Cursors.Hand;
         btnEntrar.Click += (s, e) => Entrar();
 
         AcceptButton = btnEntrar;

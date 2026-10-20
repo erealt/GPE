@@ -6,10 +6,6 @@ namespace GPE.Escritorio;
 
 public class FormNuevaDevolucion : Form
 {
-    private static readonly Color ColorFondo = Tema.Fondo;
-    private static readonly Color ColorTexto = Tema.Texto;
-    private static readonly Color ColorSuave = Tema.Suave;
-
     private const int FabricaProvisional = 1;
 
     private readonly DevolucionServicio servicio = new();
@@ -34,8 +30,8 @@ public class FormNuevaDevolucion : Form
         TextBox Lote);
 
     // Mensajes de error que aparecen debajo de cada campo
-    private readonly Dictionary<Control, Label> errores = new();
-    private readonly Label lblErrorProductos = CrearEtiquetaError();
+    private readonly CamposFormulario campos = new();
+    private readonly Label lblErrorProductos = CamposFormulario.EtiquetaError();
 
     private readonly Label lblResumenProductos = new();
     private readonly TableLayoutPanel contenedorFilas = new();
@@ -47,7 +43,7 @@ public class FormNuevaDevolucion : Form
         Size = new Size(1200, 750);
         MinimumSize = new Size(1150, 600);
         StartPosition = FormStartPosition.CenterParent;
-        BackColor = ColorFondo;
+        BackColor = Tema.Fondo;
         Font = new Font("Segoe UI", 10);
 
         PrepararControles();
@@ -84,6 +80,7 @@ public class FormNuevaDevolucion : Form
         dtpSolicitud.MaxDate = DateTime.Today;   // no se admiten solicitudes futuras
 
         txtAlbaran.PlaceholderText = "Ej. ALB-45872";
+        txtAlbaran.MaxLength = 30;   // DEVOLUCION.albaran es NVARCHAR(30)
         txtObservaciones.PlaceholderText = "Añade cualquier información relevante sobre la solicitud...";
         txtObservaciones.Multiline = true;
         txtObservaciones.Height = 80;
@@ -94,79 +91,32 @@ public class FormNuevaDevolucion : Form
 
     private Panel CrearContenido()
     {
-        var scroll = new Panel
-        {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            Padding = new Padding(40, 25, 40, 25)
-        };
+        var (scroll, pila) = Componentes.Pagina();
 
-        var pila = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 1
-        };
-        pila.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        pila.Controls.Add(CrearCabecera());
+        pila.Controls.Add(Componentes.Cabecera(
+            "DEVOLUCIONES / NUEVA",
+            "Nueva devolución",
+            "Completa los datos para iniciar el proceso de devolución."));
         pila.Controls.Add(CrearTarjetaDatos());
         pila.Controls.Add(CrearTarjetaProductos());
         pila.Controls.Add(CrearAcciones());
 
-        scroll.Controls.Add(pila);
         return scroll;
-    }
-
-    private Control CrearCabecera()
-    {
-        var panel = new Panel { Dock = DockStyle.Fill, Height = 120, Margin = new Padding(0, 0, 0, 10) };
-
-        var lblSubtitulo = new Label
-        {
-            Text = "Completa los datos para iniciar el proceso de devolución.",
-            Dock = DockStyle.Top,
-            Height = 28,
-            ForeColor = ColorSuave
-        };
-        var lblTitulo = new Label
-        {
-            Text = "Nueva devolución",
-            Dock = DockStyle.Top,
-            Height = 50,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
-            ForeColor = ColorTexto
-        };
-        var lblRuta = new Label
-        {
-            Text = "DEVOLUCIONES / NUEVA",
-            Dock = DockStyle.Top,
-            Height = 25,
-            ForeColor = ColorSuave,
-            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
-        };
-
-        // El último añadido queda arriba
-        panel.Controls.Add(lblSubtitulo);
-        panel.Controls.Add(lblTitulo);
-        panel.Controls.Add(lblRuta);
-        return panel;
     }
 
     // ---------- Tarjeta 1: datos ----------
 
     private Control CrearTarjetaDatos()
     {
-        var tarjeta = CrearTarjeta("1", "Datos de la devolución", "Información general de la solicitud del cliente");
+        var tarjeta = Componentes.Tarjeta("1   Datos de la devolución", "Información general de la solicitud del cliente");
 
-        var rejilla = Rejilla(2);
-        rejilla.Controls.Add(Campo("Cliente", cmbCliente));
-        rejilla.Controls.Add(Campo("Fecha de solicitud", dtpSolicitud));
-        rejilla.Controls.Add(Campo("Motivo de devolución", cmbMotivo));
-        rejilla.Controls.Add(Campo("Albarán relacionado", txtAlbaran));
+        var rejilla = Componentes.Rejilla(2);
+        rejilla.Controls.Add(campos.Campo("Cliente", cmbCliente));
+        rejilla.Controls.Add(campos.Campo("Fecha de solicitud", dtpSolicitud));
+        rejilla.Controls.Add(campos.Campo("Motivo de devolución", cmbMotivo));
+        rejilla.Controls.Add(campos.Campo("Albarán relacionado", txtAlbaran));
 
-        var campoObservaciones = Campo("Observaciones", txtObservaciones);
+        var campoObservaciones = campos.Campo("Observaciones", txtObservaciones);
         rejilla.Controls.Add(campoObservaciones);
         rejilla.SetColumnSpan(campoObservaciones, 2);
 
@@ -181,7 +131,7 @@ public class FormNuevaDevolucion : Form
         var btnAnadir = Tema.BotonSecundario("+  Añadir producto", 190);
         btnAnadir.Click += (s, e) => AnadirFilaProducto();
 
-        var tarjeta = CrearTarjeta("2", "Productos esperados", "", btnAnadir, lblResumenProductos);
+        var tarjeta = Componentes.Tarjeta("2   Productos esperados", "", btnAnadir, lblResumenProductos);
 
         contenedorFilas.Dock = DockStyle.Fill;
         contenedorFilas.AutoSize = true;
@@ -200,32 +150,15 @@ public class FormNuevaDevolucion : Form
 
     private Control CrearAcciones()
     {
-        var panel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            Margin = new Padding(0, 0, 0, 20)
-        };
-
         var btnGuardar = Tema.BotonPrincipal("Guardar devolución", 190);
-        btnGuardar.Height = 45;
-        btnGuardar.Margin = new Padding(0);
         btnGuardar.Enabled = cargaCorrecta;
         btnGuardar.Click += (s, e) => Guardar();
 
         var btnCancelar = Tema.BotonSecundario("Cancelar", 130);
-        btnCancelar.Height = 45;
-        btnCancelar.Margin = new Padding(0, 0, 10, 0);
         btnCancelar.DialogResult = DialogResult.Cancel;
+        CancelButton = btnCancelar;   // Esc cierra sin guardar
 
-        CancelButton = btnCancelar;   
-
-        panel.Controls.Add(btnGuardar);
-        panel.Controls.Add(btnCancelar);
-
-        return panel;
+        return Componentes.Acciones(btnGuardar, btnCancelar);
     }
 
     // ---------- Guardado ----------
@@ -238,13 +171,13 @@ public class FormNuevaDevolucion : Form
 
         if (cmbCliente.SelectedItem is not Cliente)
         {
-            MarcarError(cmbCliente, "Selecciona un cliente.");
+            campos.MarcarError(cmbCliente, "Selecciona un cliente.");
             primerError ??= cmbCliente;
         }
 
         if (cmbMotivo.SelectedItem is not string)
         {
-            MarcarError(cmbMotivo, "Selecciona el motivo de la devolución.");
+            campos.MarcarError(cmbMotivo, "Selecciona el motivo de la devolución.");
             primerError ??= cmbMotivo;
         }
 
@@ -309,22 +242,6 @@ public class FormNuevaDevolucion : Form
 
     // ---------- Mensajes de error ----------
 
-    private static Label CrearEtiquetaError() => new()
-    {
-        AutoSize = true,
-        ForeColor = Tema.Error,
-        Font = new Font("Segoe UI", 9),
-        Margin = new Padding(0, 4, 0, 0),
-        Visible = false
-    };
-
-    private void MarcarError(Control campo, string mensaje)
-    {
-        var etiqueta = errores[campo];
-        etiqueta.Text = mensaje;
-        etiqueta.Visible = true;
-    }
-
     private void MostrarErrorProductos(string mensaje)
     {
         lblErrorProductos.Text = mensaje;
@@ -333,8 +250,7 @@ public class FormNuevaDevolucion : Form
 
     private void LimpiarErrores()
     {
-        foreach (var etiqueta in errores.Values)
-            etiqueta.Visible = false;
+        campos.LimpiarErrores();
         lblErrorProductos.Visible = false;
     }
 
@@ -363,7 +279,7 @@ public class FormNuevaDevolucion : Form
                 Dock = DockStyle.Fill,
                 Height = 40,
                 TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = ColorSuave,
+                ForeColor = Tema.Suave,
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
             }, i, 0);
         }
@@ -381,7 +297,7 @@ public class FormNuevaDevolucion : Form
         var txtReferencia = new TextBox { ReadOnly = true, PlaceholderText = "REF-0000" };
         // Mínimo 1: la base de datos no admite cantidades de 0
         var numCantidad = new NumericUpDown { Minimum = 1, Maximum = 100000 };
-        var txtLote = new TextBox { PlaceholderText = "Lote" };
+        var txtLote = new TextBox { PlaceholderText = "Lote", MaxLength = 30 };   // DEVOLUCION_PRODUCTO.lote es NVARCHAR(30)
 
         var btnQuitar = new Button
         {
@@ -432,95 +348,5 @@ public class FormNuevaDevolucion : Form
         lblResumenProductos.Text = conProducto.Count == 0
             ? "Aún no hay productos"
             : $"{conProducto.Count} {(conProducto.Count == 1 ? "producto" : "productos")} · {unidades} unidades";
-    }
-
-    private TableLayoutPanel CrearTarjeta(string numero, string titulo, string subtitulo,
-        Control? accion = null, Label? etiquetaSubtitulo = null)
-    {
-        var tarjeta = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 1,
-            BackColor = Color.White,
-            Padding = new Padding(25),
-            Margin = new Padding(0, 0, 0, 20)
-        };
-        tarjeta.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var cabecera = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 15)
-        };
-        cabecera.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        cabecera.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-        var textos = new Panel { Dock = DockStyle.Fill, Height = 55 };
-
-        var lblSubtitulo = etiquetaSubtitulo ?? new Label();
-        lblSubtitulo.Text = subtitulo;
-        lblSubtitulo.Dock = DockStyle.Top;
-        lblSubtitulo.Height = 22;
-        lblSubtitulo.ForeColor = ColorSuave;
-        lblSubtitulo.Font = new Font("Segoe UI", 9);
-
-        var lblTitulo = new Label
-        {
-            Text = numero == "" ? titulo : $"{numero}   {titulo}",
-            Dock = DockStyle.Top,
-            Height = 30,
-            Font = new Font("Segoe UI", 13, numero == "" ? FontStyle.Bold : FontStyle.Regular),
-            ForeColor = ColorTexto
-        };
-        textos.Controls.Add(lblSubtitulo);
-        textos.Controls.Add(lblTitulo);   
-
-        cabecera.Controls.Add(textos, 0, 0);
-        if (accion != null) cabecera.Controls.Add(accion, 1, 0);
-
-        tarjeta.Controls.Add(cabecera);
-        return tarjeta;
-    }
-
-    private static TableLayoutPanel Rejilla(int columnas)
-    {
-        var rejilla = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = columnas };
-        for (int i = 0; i < columnas; i++)
-            rejilla.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / columnas));
-        return rejilla;
-    }
-
-    private Control Campo(string etiqueta, Control control)
-    {
-        var panel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            ColumnCount = 1,
-            Margin = new Padding(0, 0, 15, 15)
-        };
-        panel.Controls.Add(new Label
-        {
-            Text = etiqueta,
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 4)
-        });
-
-        control.Dock = DockStyle.Top;
-        panel.Controls.Add(control);
-
-        // Al corregir el campo desaparece su error
-        var error = CrearEtiquetaError();
-        errores[control] = error;
-        panel.Controls.Add(error);
-        if (control is ComboBox combo)
-            combo.SelectedIndexChanged += (s, e) => error.Visible = false;
-
-        return panel;
     }
 }

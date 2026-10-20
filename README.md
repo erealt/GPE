@@ -20,6 +20,8 @@ Este documento explica cómo está organizado el código y cómo están hechas l
      | 5 | Abono realizado |
      | 6 | Cierre |
 
+   - Las tablas `ROL`, `USUARIO_ROL` y `LOTE` todavía no las usa la aplicación: están preparadas para cuando haya login con permisos por rol y fábrica, y para elegir el lote de una lista (hoy el lote es texto libre).
+
 2. **Conexión**: por defecto se usa `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos (por ejemplo una de pruebas) se define la variable de entorno `GPE_CONEXION` con otra cadena de conexión.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (pantalla provisional hasta que haya login); ese usuario es el que queda registrado en el historial.
 
@@ -54,7 +56,7 @@ Ejemplo del recorrido de una acción, "Finalizar revisión":
 
 ## 3. El proceso: las seis fases
 
-Cada devolución tiene un `estado_id` que apunta a `ESTADO_DEVOLUCION`, y cada estado tiene un número de **fase** del 1 al 6. Ese número es el que manda en toda la aplicación: qué pantalla se abre, qué se puede editar y cómo se pinta la barra de progreso.
+Cada devolución tiene un `estado_id` que apunta a `ESTADO_DEVOLUCION`, y cada estado tiene un número de **fase** del 1 al 6. Ese número es el que manda en toda la aplicación: qué pantalla se abre, qué se puede editar y cómo se pinta la barra de progreso. En el código no se escriben los números sino las constantes de la clase `Fase` ([`Datos.cs`](GPE.Datos/Datos.cs)): `Fase.MercanciaRecibida`, `Fase.Cierre`...
 
 ```mermaid
 flowchart LR
@@ -118,6 +120,7 @@ Todas las pantallas de paso heredan de [`PantallaFase`](GPE.Escritorio/PantallaF
 - **`Progreso(devolucion, pasoVisto)`**: la barra de progreso. Se pueden pulsar los pasos completados y el actual; al pulsar uno, la pantalla se cierra guardando el paso en `PasoSolicitado` y `FormPrincipal` abre el que toca.
 - **`PedirMotivo(titulo, explicacion)`**: el diálogo de "¿por qué vuelves atrás?" de las reaperturas (mínimo 5 caracteres).
 - **`IrAPaso(paso)`**: para saltar a otro paso desde código (lo usa *Reabrir revisión* en la pantalla de abono).
+- **`BotonCerrar()`** y **`BotonReabrir(...)`**: los botones de pie de página que comparten todas las pantallas de paso.
 - Si el usuario cancela el cierre (por ejemplo, "tienes cambios sin guardar → No"), se olvida el paso pedido.
 
 ### 4.3 Piezas de interfaz reutilizables
@@ -126,12 +129,16 @@ Para que todas las pantallas se vean igual, no se colocan controles a mano con c
 
 | Pieza | Para qué |
 |---|---|
-| [`Tema`](GPE.Escritorio/Tema.cs) | Colores, el color de cada fase, `BotonPrincipal` (morado) y `BotonSecundario` (blanco). |
+| [`Tema`](GPE.Escritorio/Tema.cs) | Colores (también los de las celdas: solo lectura, diferencia, error), el color de cada fase, `BotonPrincipal` (morado) y `BotonSecundario` (blanco). |
 | [`Componentes.Pagina()`](GPE.Escritorio/Componentes.cs) | Panel con scroll y una columna (`pila`) donde se van añadiendo las secciones de arriba abajo. |
 | `Componentes.Cabecera` | Ruta (`DEVOLUCIONES / DEV-2026-001 / ALMACÉN`), título y subtítulo. |
 | `Componentes.Resumen` | Fila de datos de referencia: cliente, albarán, motivo, fechas... |
-| `Componentes.Tarjeta` | Recuadro blanco con título y subtítulo; el contenido se añade después. |
+| `Componentes.Tarjeta` | Recuadro blanco con título y subtítulo; el contenido se añade después. Opcionalmente, un botón a la derecha del título. |
+| `Componentes.Rejilla` | Columnas del mismo ancho para colocar los campos de un formulario. |
+| `Componentes.EstiloTabla` / `AjustarAltoTabla` | Aspecto común de las tablas; y que una tabla mida lo que sus filas, sin scroll propio. |
+| `Componentes.Fecha` / `Componentes.Es` | Fechas como `20 oct 2026` y la cultura española para fechas e importes. |
 | `Componentes.Acciones` | Fila de botones alineados a la derecha. |
+| [`CamposFormulario`](GPE.Escritorio/CamposFormulario.cs) | `Campo(etiqueta, control)` con el mensaje de error debajo; `MarcarError` y `LimpiarErrores` al validar. |
 | [`BarraProgresoDevolucion`](GPE.Escritorio/BarraProgresoDevolucion.cs) | La barra de los seis pasos, dibujada a mano. |
 | [`ControlAdjuntos`](GPE.Escritorio/ControlAdjuntos.cs) | Lista de archivos con *Añadir / Ver / Quitar*. Sirve para las fotos (`FOTO`) y para el documento del abono (`ABONO`). Guarda al momento. |
 | [`FormVisorImagen`](GPE.Escritorio/VisorImagen.cs) | Visor de fotos dentro de la app (← → para pasar, corrige la orientación de las fotos del móvil). |
@@ -154,7 +161,7 @@ Controls.Add(scroll);
 
 **`Construir()` y `Recargar()`.** Las pantallas que cambian de modo sin cerrarse (almacén y abono) construyen todo su contenido en un método `Construir()`. Tras marcar como recibida o reabrir un paso, se vuelve a leer la devolución y se llama a `Construir()` otra vez.
 
-**Validación con el error debajo de cada campo.** Al pulsar Guardar se comprueban todos los campos a la vez; cada uno con error muestra su mensaje en rojo justo debajo, y el foco va al primero. El mensaje desaparece en cuanto se corrige el campo. (Helper `Campo(...)` en `FormNuevaDevolucion`, `Recogida` y `FormAbono`.)
+**Validación con el error debajo de cada campo.** Al pulsar Guardar se comprueban todos los campos a la vez; cada uno con error muestra su mensaje en rojo justo debajo, y el foco va al primero. El mensaje desaparece en cuanto se corrige el campo. (Lo hace `CamposFormulario`, que usan `FormNuevaDevolucion`, `Recogida` y `FormAbono`.)
 
 **Doble validación.** La pantalla valida para dar mensajes claros campo a campo, y `DevolucionServicio` vuelve a validar las mismas reglas, porque es la capa que realmente protege los datos. La base de datos tiene además sus `CHECK` (por ejemplo, apta ≤ recibida).
 
@@ -191,6 +198,7 @@ Una sola clase para dos pasos:
   - Parcial o sin abono: hay que explicar el motivo en observaciones.
   - La fecha va de la llegada de la mercancía a hoy.
   - Si todo llegó y está apto, se propone *Abono total*.
+  - Si el nº de abono ya está en otra devolución, la confirmación lo avisa (no lo impide: un mismo abono puede cubrir varias).
 - *Registrar abono y cerrar* pasa de la fase 4 a la 6. Una vez cerrada, la pantalla es de consulta y ofrece *Reabrir abono* (vuelve a la fase 4 conservando los datos para corregirlos).
 
 ### Historial (`FormHistorial`)
@@ -220,12 +228,12 @@ El historial **no lo escribe la aplicación**, lo escriben triggers de SQL Serve
 1. Columna en `crear_tablas.sql` (y un script `ALTER TABLE` para las bases de datos ya creadas).
 2. Leerlo y guardarlo en `DevolucionRepositorio`, con su `record` en `Datos.cs`.
 3. Validarlo en `DevolucionServicio`.
-4. Añadir el control en la tarjeta de la pantalla con `Campo(...)`.
+4. Añadir el control en la tarjeta de la pantalla con `campos.Campo(...)` (`CamposFormulario`).
 5. Darle un nombre legible en `NombresCampos` de `HistorialFormateador` (el historial ya lo registra solo).
 
 **Una pantalla nueva de paso**
-1. Clase que herede de `PantallaFase`, con una constante `PasoXxx`.
+1. Clase que herede de `PantallaFase`, con una constante `PasoXxx` igual a su `Fase`.
 2. Construirla con `Componentes.Pagina()` y el resto de piezas del apartado 4.3.
-3. Decidir con `devolucion.Fase` si es editable o de consulta.
+3. Decidir con `devolucion.Fase` (comparando con las constantes de `Fase`) si es editable o de consulta.
 4. Cambio de fase en el repositorio con `UPDATE ... WHERE fase = <esperada>` y devolver `false` si no se actualizó nada.
 5. Añadirla en `FormPrincipal.CrearPantalla` y su título en `TitulosPorFase` del historial.

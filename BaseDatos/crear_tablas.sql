@@ -11,6 +11,9 @@ CREATE TABLE FABRICA (
     nombre NVARCHAR(100) NOT NULL UNIQUE
 );
  
+-- ROL, USUARIO_ROL y LOTE todavía no los usa la aplicación: están preparadas para
+-- cuando haya login con permisos por rol y fábrica, y para elegir el lote de una
+-- lista en vez de escribirlo (hoy DEVOLUCION_PRODUCTO.lote es texto libre).
 CREATE TABLE ROL (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(50) NOT NULL UNIQUE
@@ -70,9 +73,12 @@ CREATE TABLE ESTADO_DEVOLUCION (
 -- Cabecera de la devolución
 CREATE TABLE DEVOLUCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    -- Columna calculada: DEV-2026-001, DEV-2026-002...
+    -- Columna calculada: DEV-2026-001, DEV-2026-002... A partir de la 1000 se usan
+    -- todas las cifras (DEV-2026-1000) para que no se repitan números.
     numero AS ('DEV-' + CAST(YEAR(fecha_solicitud) AS NVARCHAR(4)) + '-'
-               + RIGHT('000' + CAST(id AS NVARCHAR(10)), 3)) PERSISTED,
+               + CASE WHEN id < 1000 THEN RIGHT('000' + CAST(id AS NVARCHAR(10)), 3)
+                      ELSE CAST(id AS NVARCHAR(10)) END) PERSISTED
+               CONSTRAINT UQ_devolucion_numero UNIQUE,
     fabrica_id INT NOT NULL,
     cliente_id INT NOT NULL,
     estado_id INT NOT NULL,

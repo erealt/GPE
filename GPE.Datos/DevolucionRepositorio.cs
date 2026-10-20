@@ -255,7 +255,7 @@ public class DevolucionRepositorio
             INSERT INTO DEVOLUCION
                 (fabrica_id, cliente_id, estado_id, albaran, motivo, observaciones, fecha_solicitud)
             VALUES
-                (@fabrica, @cliente, (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 1),
+                (@fabrica, @cliente, (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @fase),
                  @albaran, @motivo, @observaciones, @fecha);
 
             -- No se puede usar OUTPUT INSERTED.id porque DEVOLUCION tiene trigger.
@@ -277,6 +277,7 @@ public class DevolucionRepositorio
         {
             cabecera.Parameters.AddWithValue("@fabrica", datos.FabricaId);
             cabecera.Parameters.AddWithValue("@cliente", datos.ClienteId);
+            cabecera.Parameters.AddWithValue("@fase", Fase.SolicitudRecibida);
             cabecera.Parameters.AddWithValue("@albaran", (object?)datos.Albaran ?? DBNull.Value);
             cabecera.Parameters.AddWithValue("@motivo", datos.Motivo);
             cabecera.Parameters.AddWithValue("@observaciones", (object?)datos.Observaciones ?? DBNull.Value);
@@ -307,16 +308,18 @@ public class DevolucionRepositorio
     {
         const string sql = @"
             UPDATE d
-            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 3),
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @faseNueva),
                 fecha_llegada = @fecha
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
-            WHERE d.id = @devolucion AND e.fase = 2;";
+            WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
         using var conexion = AbrirConexion();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         comando.Parameters.AddWithValue("@fecha", fechaLlegada.Date);
+        comando.Parameters.AddWithValue("@faseActual", Fase.RecogidaSolicitada);
+        comando.Parameters.AddWithValue("@faseNueva", Fase.MercanciaRecibida);
         return comando.ExecuteNonQuery() == 1;
     }
 
@@ -371,11 +374,10 @@ public class DevolucionRepositorio
     {
         const string sql = @"
             UPDATE d
-            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION
-                             WHERE fase = CASE WHEN @fase = 6 THEN 4 ELSE @fase - 1 END),
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @faseNueva),
                 motivo_reapertura = @motivo,
-                fecha_llegada = CASE WHEN @fase = 3 THEN NULL ELSE d.fecha_llegada END,
-                fecha_cierre = CASE WHEN @fase = 6 THEN NULL ELSE d.fecha_cierre END
+                fecha_llegada = CASE WHEN @borrarLlegada = 1 THEN NULL ELSE d.fecha_llegada END,
+                fecha_cierre = CASE WHEN @borrarCierre = 1 THEN NULL ELSE d.fecha_cierre END
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion AND e.fase = @fase;";
@@ -384,6 +386,10 @@ public class DevolucionRepositorio
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         comando.Parameters.AddWithValue("@fase", faseActual);
+        comando.Parameters.AddWithValue("@faseNueva",
+            faseActual == Fase.Cierre ? Fase.RevisadaAlmacen : faseActual - 1);
+        comando.Parameters.AddWithValue("@borrarLlegada", faseActual == Fase.MercanciaRecibida);
+        comando.Parameters.AddWithValue("@borrarCierre", faseActual == Fase.Cierre);
         comando.Parameters.AddWithValue("@motivo", motivo);
         return comando.ExecuteNonQuery() == 1;
     }
@@ -404,11 +410,11 @@ public class DevolucionRepositorio
     {
         const string sqlDevolucion = @"
             UPDATE d
-            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 4),
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @faseNueva),
                 observaciones_revision = @observaciones
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
-            WHERE d.id = @devolucion AND e.fase = 3;";
+            WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
         const string sqlLinea = @"
             UPDATE DEVOLUCION_PRODUCTO
@@ -422,6 +428,8 @@ public class DevolucionRepositorio
         {
             devolucion.Parameters.AddWithValue("@devolucion", devolucionId);
             devolucion.Parameters.AddWithValue("@observaciones", (object?)observaciones ?? DBNull.Value);
+            devolucion.Parameters.AddWithValue("@faseActual", Fase.MercanciaRecibida);
+            devolucion.Parameters.AddWithValue("@faseNueva", Fase.RevisadaAlmacen);
             if (devolucion.ExecuteNonQuery() != 1)
                 return false;   // al salir sin Commit, la transacción se deshace
         }
@@ -489,7 +497,7 @@ public class DevolucionRepositorio
     {
         const string sql = @"
             UPDATE d
-            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 6),
+            SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @faseNueva),
                 resultado_abono = @resultado,
                 numero_abono = @numero,
                 fecha_abono = @fecha,
@@ -498,11 +506,13 @@ public class DevolucionRepositorio
                 fecha_cierre = @cierre
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
-            WHERE d.id = @devolucion AND e.fase = 4;";
+            WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
         using var conexion = AbrirConexion();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+        comando.Parameters.AddWithValue("@faseActual", Fase.RevisadaAlmacen);
+        comando.Parameters.AddWithValue("@faseNueva", Fase.Cierre);
         comando.Parameters.AddWithValue("@resultado", datos.Resultado);
         comando.Parameters.AddWithValue("@numero", (object?)datos.Numero ?? DBNull.Value);
         comando.Parameters.AddWithValue("@fecha", datos.Fecha.Date);
@@ -591,7 +601,7 @@ public class DevolucionRepositorio
 
     // Crea la recogida (o la actualiza si ya existe) y pasa la devolución a
     // "Recogida solicitada" con su fecha de recogida, todo en una transacción.
-    // Devuelve false si la mercancía ya ha llegado (fase 3 o más): entonces la recogida no se puede cambiar
+    // Devuelve false si la mercancía ya ha llegado: entonces la recogida no se puede cambiar
     public bool GuardarRecogida(DatosRecogida datos)
     {
         const string sqlRecogida = @"
@@ -606,12 +616,12 @@ public class DevolucionRepositorio
                 VALUES
                     (@devolucion, @transportista, @fecha, @direccion, @telefono, @observaciones);";
 
-        // Solo avanza el estado si sigue en la fase 1; si ya está más adelante no se toca
+        // Solo avanza el estado si sigue en "Solicitud recibida"; si ya está más adelante no se toca
         const string sqlDevolucion = @"
             UPDATE d
             SET fecha_recogida = @fecha,
-                estado_id = CASE WHEN e.fase = 1
-                                 THEN (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = 2)
+                estado_id = CASE WHEN e.fase = @faseActual
+                                 THEN (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @faseNueva)
                                  ELSE d.estado_id END
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
@@ -627,7 +637,7 @@ public class DevolucionRepositorio
             WHERE d.id = @devolucion;", conexion, transaccion))
         {
             fase.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
-            if (fase.ExecuteScalar() is not int faseActual || faseActual > 2)
+            if (fase.ExecuteScalar() is not int faseActual || faseActual > Fase.RecogidaSolicitada)
                 return false;
         }
 
@@ -646,6 +656,8 @@ public class DevolucionRepositorio
         {
             devolucion.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
             devolucion.Parameters.AddWithValue("@fecha", datos.FechaRecogida.Date);
+            devolucion.Parameters.AddWithValue("@faseActual", Fase.SolicitudRecibida);
+            devolucion.Parameters.AddWithValue("@faseNueva", Fase.RecogidaSolicitada);
             devolucion.ExecuteNonQuery();
         }
 

@@ -2,13 +2,11 @@ using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
 using System.Drawing.Drawing2D;
-using System.Globalization;
 
 namespace GPE.Escritorio;
 
 public class FormPrincipal : Form
 {
-    private static readonly CultureInfo Es = new("es-ES");
 
     private const int ColumnaEstado = 7;
 
@@ -71,7 +69,7 @@ public class FormPrincipal : Form
             Width = 220,
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = Tema.Suave,
-            Text = DateTime.Now.ToString("d 'de' MMMM 'de' yyyy", Es)
+            Text = DateTime.Now.ToString("d 'de' MMMM 'de' yyyy", Componentes.Es)
         };
 
         // Iniciales dentro de un círculo (se dibujan a mano en Paint)
@@ -188,7 +186,6 @@ public class FormPrincipal : Form
         return cabecera;
     }
 
-    // Franja ámbar sobre los filtros mientras haya devoluciones esperando abono
     private Control CrearFranjaAviso()
     {
         franjaAviso.Dock = DockStyle.Fill;
@@ -211,7 +208,6 @@ public class FormPrincipal : Form
             AplicarFiltros();
         };
 
-        // Margen entre el botón y el borde: un panel con relleno vertical
         var marcoBoton = new Panel { Dock = DockStyle.Right, Width = btnVerRetrasadas.Width, Padding = new Padding(0, 8, 0, 8) };
         marcoBoton.Controls.Add(btnVerRetrasadas);
         btnVerRetrasadas.Dock = DockStyle.Fill;
@@ -239,7 +235,6 @@ public class FormPrincipal : Form
     }
 
     // Ventana de aviso, al entrar y cada MinutosEntreAvisos mientras quede alguna pendiente.
-    // Si hay otra ventana abierta (p. ej. una devolución), se espera a que se cierre.
     private void MostrarAvisoAbonos()
     {
         if (Application.OpenForms.Count > 1)
@@ -256,7 +251,7 @@ public class FormPrincipal : Form
         }
         catch (DbException)
         {
-            return;   // ya se volverá a intentar en el siguiente aviso
+            return;   
         }
         ActualizarFranjaAviso(devoluciones);   // los días cuentan aunque nadie recargue la lista
 
@@ -391,20 +386,11 @@ public class FormPrincipal : Form
 
     private Control ConfigurarGrid()
     {
+        Componentes.EstiloTabla(grid, altoFila: 50);
         grid.Dock = DockStyle.Fill;
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.None;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        grid.GridColor = Tema.Linea;
-
         grid.ReadOnly = true;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToResizeRows = false;
-        grid.RowHeadersVisible = false;
         grid.MultiSelect = false;
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        grid.RowTemplate.Height = 50;
 
         grid.CellDoubleClick += (s, e) => AbrirDevolucion(e.RowIndex);
         grid.SelectionChanged += (s, e) => ActualizarBotones();
@@ -422,23 +408,10 @@ public class FormPrincipal : Form
         };
         menu.Opening += (s, e) => e.Cancel = DevolucionSeleccionada() == null;
 
-        // Cabecera
-        grid.EnableHeadersVisualStyles = false;
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        // Algo más espaciada que las tablas de las pantallas de paso, y la fila elegida en morado
         grid.ColumnHeadersHeight = 45;
-        var cabecera = grid.ColumnHeadersDefaultCellStyle;
-        cabecera.BackColor = Tema.CabeceraTabla;
-        cabecera.SelectionBackColor = cabecera.BackColor;
-        cabecera.ForeColor = Tema.Suave;
-        cabecera.SelectionForeColor = Tema.Suave;
-        cabecera.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-        cabecera.Padding = new Padding(10, 0, 0, 0);
-
-        // Celdas
-        grid.DefaultCellStyle.ForeColor = Tema.Texto;
+        grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
         grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
-        grid.DefaultCellStyle.SelectionForeColor = Tema.Texto;
         grid.DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
 
         string[] columnas =
@@ -538,9 +511,9 @@ public class FormPrincipal : Form
             d.Cliente,
             d.Albaran ?? "—",
             d.Motivo,
-            FormatoFecha(d.FechaSolicitud),
-            FormatoFecha(d.FechaRecogida),
-            FormatoFecha(d.FechaLlegada),
+            Componentes.Fecha(d.FechaSolicitud),
+            Componentes.Fecha(d.FechaRecogida),
+            Componentes.Fecha(d.FechaLlegada),
             d.Estado);
 
         grid.Rows[i].Tag = d;
@@ -549,7 +522,7 @@ public class FormPrincipal : Form
         if (DevolucionServicio.AbonoRetrasado(d))
         {
             var llegada = grid.Rows[i].Cells[6];
-            llegada.Value = $"{FormatoFecha(d.FechaLlegada)} · {DevolucionServicio.DiasSinAbono(d)} días";
+            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.DiasSinAbono(d)} días";
             llegada.Style.ForeColor = Tema.Aviso;
             llegada.Style.BackColor = Tema.AvisoFondo;
             llegada.Style.SelectionForeColor = Tema.Aviso;
@@ -580,7 +553,7 @@ public class FormPrincipal : Form
         if (grid.Rows[indiceFila].Tag is not DevolucionFila devolucion) return;
 
         // Se abre el paso en curso (el siguiente al completado); si está cerrada, el cierre
-        int paso = Math.Min(devolucion.Fase + 1, FormAbono.PasoCierre);
+        int paso = Fase.PasoEnCurso(devolucion.Fase);
 
         // Al pulsar otro paso en la barra, la pantalla se cierra y se abre la de ese paso
         while (true)
@@ -605,7 +578,7 @@ public class FormPrincipal : Form
                 break;
             }
 
-            paso = Math.Min(siguiente.Value, Math.Min(devolucion.Fase + 1, FormAbono.PasoCierre));   // nunca más allá del paso en curso
+            paso = Math.Min(siguiente.Value, Fase.PasoEnCurso(devolucion.Fase));   // nunca más allá del paso en curso
         }
 
         CargarDatos();
@@ -629,9 +602,6 @@ public class FormPrincipal : Form
         using var pantalla = new FormHistorial(devolucion);
         pantalla.ShowDialog(this);
     }
-
-    private static string FormatoFecha(DateTime? fecha) =>
-        fecha?.ToString("dd MMM yyyy", Es) ?? "—";
 
     private void AplicarFiltros()
     {

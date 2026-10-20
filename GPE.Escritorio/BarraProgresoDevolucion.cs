@@ -3,6 +3,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using GPE.Datos;
 
 namespace GPE.Escritorio
 {
@@ -29,7 +30,7 @@ namespace GPE.Escritorio
             get => faseActual;
             set
             {
-                faseActual = Math.Max(1, Math.Min(6, value));
+                faseActual = Math.Clamp(value, Fase.SolicitudRecibida, Fase.Cierre);
                 Invalidate();
             }
         }
@@ -72,7 +73,7 @@ namespace GPE.Escritorio
             int ancho = ClientSize.Width;
             int centroY = 30;
             int margen = 45;
-            int paso = (ancho - margen * 2) / 5;
+            int paso = (ancho - margen * 2) / (fases.Length - 1);
 
             Color acento = Tema.Acento;
             Color gris = Color.FromArgb(218, 226, 221);
@@ -159,7 +160,7 @@ namespace GPE.Escritorio
             if (PasoPulsado == null) return 0;
 
             int margen = 45;
-            int paso = (ClientSize.Width - margen * 2) / 5;
+            int paso = (ClientSize.Width - margen * 2) / (fases.Length - 1);
             int numero = (int)Math.Round((punto.X - margen) / (double)paso) + 1;
 
             return numero >= 1 && numero <= PasoMaximoPulsable ? numero : 0;
