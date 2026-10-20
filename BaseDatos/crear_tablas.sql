@@ -332,8 +332,7 @@ GO
    4) DeCA (documento de control del transporte)
    ============================================================
    Módulo aparte de las devoluciones. Si la base de datos ya existe,
-   basta con ejecutar esta sección (si tiene la tabla DECA del primer
-   intento, antes deca_quitar_tabla_antigua.sql). */
+   basta con ejecutar esta sección. */
 
 -- Un documento por envío: remitente, destinatario, transporte y mercancía; el peso y
 -- las cajas van por palet en DECA_PALET. Remitente, destinatario y transportista se

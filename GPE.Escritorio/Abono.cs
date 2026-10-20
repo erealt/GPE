@@ -420,7 +420,7 @@ public class FormAbono : PantallaFase
         }
         catch (DbException)
         {
-            // Si falla la lectura se sigue con los datos que había; FormPrincipal recarga al cerrar
+            // Si falla la lectura se sigue con los datos que había; ModuloDevoluciones recarga al cerrar
         }
         paso = nuevoPaso;
         Construir();
