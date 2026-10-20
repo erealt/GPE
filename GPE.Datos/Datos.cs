@@ -147,3 +147,66 @@ public record AbonoGuardado(
     decimal? Importe,
     string? Observaciones,
     DateTime? FechaCierre);
+
+// ---------- DeCA ----------
+
+// Remitente o destinatario de un DeCA (texto libre; se sugieren los ya usados)
+public record ParteEnvio(
+    string Nombre,
+    string Nif,
+    string Direccion,
+    string CodigoPostal,
+    string Poblacion,
+    string? Provincia,
+    string Pais,
+    string? Telefono)
+{
+    public override string ToString() => $"{Nombre} · {Poblacion}";
+}
+
+// Transportista ya usado en otro DeCA, con la última matrícula que llevó
+public record TransportistaDeca(string Nombre, string Nif, string Matricula)
+{
+    public override string ToString() => $"{Nombre} · {Nif}";
+}
+
+public record PaletDeca(decimal PesoKg, int NumCajas);
+
+// Lo que el usuario rellena al crear o modificar un DeCA
+public record DatosDeca(
+    ParteEnvio Remitente,
+    ParteEnvio Destinatario,
+    DateTime FechaCarga,
+    string TransportistaNombre,
+    string TransportistaNif,
+    string Matricula,
+    string Mercancia,
+    string? Observaciones,
+    List<PaletDeca> Palets);
+
+// Fila de la lista de DeCA, con los totales de sus palets
+public record DecaFila(
+    int Id,
+    string Numero,
+    DateTime FechaCarga,
+    string Remitente,
+    string Destinatario,
+    string Transportista,
+    int Palets,
+    int Cajas,
+    decimal PesoKg,
+    bool PdfAlDia);   // false si no se ha generado o se modificó después
+
+// DeCA completo. CodigoPublico da nombre al PDF publicado (y por tanto a la dirección del QR).
+// PdfGeneradoEn es null si nunca se generó o si se modificó después de generarlo.
+public record DecaGuardado(
+    int Id,
+    string Numero,
+    Guid CodigoPublico,
+    DatosDeca Datos,
+    string? ArchivoPdf,
+    DateTime? PdfGeneradoEn,
+    string CreadoPor,
+    DateTime CreadoEn,
+    string? ModificadoPor,
+    DateTime? ModificadoEn);
