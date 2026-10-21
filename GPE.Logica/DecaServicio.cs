@@ -37,7 +37,11 @@ public class DecaServicio
     public void ModificarDeca(int decaId, DatosDeca datos)
     {
         datos = Normalizar(datos);
-        Validar(datos);
+
+        // La fecha solo se comprueba si se ha cambiado: así se puede corregir un DeCA antiguo
+        DateTime? fechaGuardada = repositorio.ObtenerDeca(decaId)?.Datos.FechaCarga;
+        Validar(datos, comprobarFecha: datos.FechaCarga.Date != fechaGuardada?.Date);
+
         if (!repositorio.ActualizarDeca(decaId, datos, UsuarioActual()))
             throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
     }
@@ -143,13 +147,13 @@ public class DecaServicio
     private static string? Opcional(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 
     // Lanza ReglaNegocioException con el primer error que encuentre
-    private static void Validar(DatosDeca d)
+    private static void Validar(DatosDeca d, bool comprobarFecha = true)
     {
         Comprobar(ErroresParte(d.Remitente, "del remitente"));
         Comprobar(ErroresParte(d.Destinatario, "del destinatario"));
 
         Comprobar(
-            ErrorFechaCarga(d.FechaCarga),
+            comprobarFecha ? ErrorFechaCarga(d.FechaCarga) : null,
             ErrorObligatorio(d.TransportistaNombre, "el transportista", 150),
             ErrorNifTransportista(d.TransportistaNif),
             ErrorObligatorio(d.Matricula, "la matrícula", 20),

@@ -1,7 +1,6 @@
 using GPE.Datos;
 using GPE.Logica;
 using System.Data.Common;
-using System.Drawing.Drawing2D;
 
 namespace GPE.Escritorio;
 
@@ -246,10 +245,10 @@ public class ModuloDevoluciones : UserControl
         btnLimpiar.Height = 30;
         btnLimpiar.Margin = new Padding(0, 22, 0, 0);
 
-        panel.Controls.Add(CampoFiltro("Buscar", txtBuscar));
-        panel.Controls.Add(CampoFiltro("Estado", cmbEstado));
-        panel.Controls.Add(CampoFiltro("Fecha desde", dtpDesde));
-        panel.Controls.Add(CampoFiltro("Fecha hasta", dtpHasta));
+        panel.Controls.Add(Componentes.CampoFiltro("Buscar", txtBuscar));
+        panel.Controls.Add(Componentes.CampoFiltro("Estado", cmbEstado));
+        panel.Controls.Add(Componentes.CampoFiltro("Fecha desde", dtpDesde));
+        panel.Controls.Add(Componentes.CampoFiltro("Fecha hasta", dtpHasta));
         panel.Controls.Add(btnLimpiar);
 
         // Los filtros se aplican al momento, sin botón de "Filtrar"
@@ -260,23 +259,6 @@ public class ModuloDevoluciones : UserControl
         btnLimpiar.Click += (s, e) => LimpiarFiltros();
 
         return panel;
-    }
-
-    private static Control CampoFiltro(string etiqueta, Control control)
-    {
-        var campo = new Panel { Size = new Size(control.Width, 58), Margin = new Padding(0, 0, 12, 0) };
-        var lbl = new Label
-        {
-            Text = etiqueta,
-            Dock = DockStyle.Top,
-            Height = 22,
-            ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 9)
-        };
-        control.Dock = DockStyle.Top;
-        campo.Controls.Add(control);
-        campo.Controls.Add(lbl);
-        return campo;
     }
 
     // Contador de resultados y acciones sobre la devolución seleccionada
@@ -385,39 +367,8 @@ public class ModuloDevoluciones : UserControl
         if (e.RowIndex < 0 || e.ColumnIndex != ColumnaEstado || e.Graphics == null) return;
         if (grid.Rows[e.RowIndex].Tag is not DevolucionFila devolucion) return;
 
-        e.PaintBackground(e.CellBounds, (e.State & DataGridViewElementStates.Selected) != 0);
-
         var (fondo, texto) = Tema.ColorFase(devolucion.Fase);
-        using var fuente = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-
-        var medida = TextRenderer.MeasureText(devolucion.Estado, fuente);
-        var etiqueta = new Rectangle(
-            e.CellBounds.X + 10,
-            e.CellBounds.Y + (e.CellBounds.Height - 26) / 2,
-            Math.Min(medida.Width + 20, e.CellBounds.Width - 15),
-            26);
-
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using (var ruta = Redondeado(etiqueta, 13))
-        using (var relleno = new SolidBrush(fondo))
-            e.Graphics.FillPath(relleno, ruta);
-
-        TextRenderer.DrawText(e.Graphics, devolucion.Estado, fuente, etiqueta, texto,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-
-        e.Handled = true;
-    }
-
-    private static GraphicsPath Redondeado(Rectangle r, int radio)
-    {
-        var ruta = new GraphicsPath();
-        int d = radio * 2;
-        ruta.AddArc(r.X, r.Y, d, d, 180, 90);
-        ruta.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        ruta.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-        ruta.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        ruta.CloseFigure();
-        return ruta;
+        Componentes.PintarEtiqueta(e, devolucion.Estado, fondo, texto);
     }
 
     // ---------- Datos y filtros ----------

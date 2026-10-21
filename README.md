@@ -218,6 +218,17 @@ Una sola clase para dos pasos:
 ### Historial (`FormHistorial`)
 Lista cronológica de todo lo que se ha hecho en una devolución, quién y cuándo, con una franja del color de la fase cuando hubo cambio de fase. Ver el apartado 6.
 
+### DeCA · en desarrollo
+Documento de control del transporte. Es un módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DECA` y `DECA_PALET`).
+
+- **Lista (`ModuloDeca`)**: número `DECA-AAAA-NNN`, fecha de carga, remitente, destinatario, transportista, palets, cajas, peso total y el estado del PDF (*Al día* / *Por generar*). Búsqueda por texto y fechas; doble clic o *Abrir* para modificar.
+- **Formulario (`FormDeca`, archivo `Deca.cs`)**: remitente, destinatario, transporte (fecha de carga, transportista, NIF, matrícula), mercancía, una fila por palet (peso y cajas, con los totales en el subtítulo) y observaciones.
+  - Remitente, destinatario y transportista se escriben a mano; el desplegable *Rellenar con uno ya usado* los rellena con los de otros DeCA (no hay catálogo aparte).
+  - Cada palet nuevo copia el peso y las cajas del anterior.
+  - Avisa al cerrar si hay cambios sin guardar.
+- **Validaciones (`DecaServicio`)**: obligatorios, al menos un palet (peso entre 0 y 2.000 kg, cajas > 0), fecha de carga hasta 30 días atrás o adelante (solo si se cambia), CP de 5 cifras en España y el **NIF con su letra de control** ([`Nif`](GPE.Logica/Nif.cs): DNI, NIE, CIF y K/L/M) cuando el país es España. El NIF del transportista se comprueba si tiene forma de NIF español.
+- **PDF y QR**: si se modifica un DeCA que ya tenía PDF, queda *Por generar* pero conserva el nombre del archivo, para que el QR ya impreso siga sirviendo. *(Pendiente: generar el PDF y publicarlo.)*
+
 ---
 
 ## 6. El historial de cambios
