@@ -23,7 +23,7 @@ Este documento explica cómo está organizado el código y cómo están hechas l
    - Las tablas `ROL`, `USUARIO_ROL` y `LOTE` todavía no las usa la aplicación: están preparadas para cuando haya login con permisos por rol y fábrica, y para elegir el lote de una lista (hoy el lote es texto libre).
 
 2. **Conexión**: por defecto se usa `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos (por ejemplo una de pruebas) se define la variable de entorno `GPE_CONEXION` con otra cadena de conexión.
-3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (pantalla provisional hasta que haya login); ese usuario es el que queda registrado en el historial.
+3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (pantalla provisional hasta que haya login); ese usuario es el que queda registrado en el historial. Después se abre la ventana principal, con el inicio y el menú lateral de módulos (apartado 4.0).
 
 > Para modificar datos a mano desde SSMS hay que indicar antes el usuario, porque los triggers del historial lo exigen:
 > `EXEC sp_set_session_context @key = N'usuario_id', @value = 1;`
@@ -85,14 +85,27 @@ flowchart LR
 
 ## 4. Cómo están hechas las pantallas
 
-### 4.1 Pantalla principal (`FormPrincipal`)
+### 4.0 Ventana principal y módulos (`FormPrincipal`)
+
+Una sola ventana con un **menú lateral** (*Inicio*, *Devoluciones*...) y la barra superior con el usuario y la fecha. Cada módulo es un `UserControl` que se muestra a la derecha:
+
+| Módulo | Clase | Archivo |
+|---|---|---|
+| Inicio | `ModuloInicio`: saludo y una tarjeta por módulo con un dato del momento (devoluciones en curso, abonos retrasados...) | `ModuloInicio.cs` |
+| Devoluciones | `ModuloDevoluciones`: la lista de devoluciones (apartado 4.1) | `ModuloDevoluciones.cs` |
+
+- Al arrancar se ve el inicio. Cada módulo se crea la primera vez que se elige y no se cierra al cambiar de módulo, así que conserva sus filtros.
+- El de devoluciones se crea desde el principio, porque el **aviso de abonos retrasados** tiene que saltar en cualquier módulo; si se elige una devolución en el aviso, la ventana cambia sola a Devoluciones.
+- **Añadir un módulo**: una entrada más en `FormPrincipal.CrearModulos` (nombre, frase de su tarjeta, dato del momento y el control que se muestra). El menú y la tarjeta del inicio salen solos.
+
+### 4.1 Lista de devoluciones (`ModuloDevoluciones`)
 
 Lista de devoluciones con filtros (texto, estado, fechas), el estado pintado como una etiqueta del color de su fase, y los botones *Nueva devolución* y *Ver historial*.
 
 Al hacer doble clic en una devolución se abre **el paso en curso** (el siguiente al último completado). Desde ahí se puede navegar a otros pasos con la barra de progreso:
 
 ```csharp
-// FormPrincipal.AbrirDevolucion (simplificado)
+// ModuloDevoluciones.AbrirDevolucion (simplificado)
 int paso = Math.Min(devolucion.Fase + 1, FormAbono.PasoCierre);
 while (true)
 {
@@ -117,7 +130,7 @@ while (true)
 
 Todas las pantallas de paso heredan de [`PantallaFase`](GPE.Escritorio/PantallaFase.cs), que aporta:
 
-- **`Progreso(devolucion, pasoVisto)`**: la barra de progreso. Se pueden pulsar los pasos completados y el actual; al pulsar uno, la pantalla se cierra guardando el paso en `PasoSolicitado` y `FormPrincipal` abre el que toca.
+- **`Progreso(devolucion, pasoVisto)`**: la barra de progreso. Se pueden pulsar los pasos completados y el actual; al pulsar uno, la pantalla se cierra guardando el paso en `PasoSolicitado` y `ModuloDevoluciones` abre el que toca.
 - **`PedirMotivo(titulo, explicacion)`**: el diálogo de "¿por qué vuelves atrás?" de las reaperturas (mínimo 5 caracteres).
 - **`IrAPaso(paso)`**: para saltar a otro paso desde código (lo usa *Reabrir revisión* en la pantalla de abono).
 - **`BotonCerrar()`** y **`BotonReabrir(...)`**: los botones de pie de página que comparten todas las pantallas de paso.
@@ -236,4 +249,4 @@ El historial **no lo escribe la aplicación**, lo escriben triggers de SQL Serve
 2. Construirla con `Componentes.Pagina()` y el resto de piezas del apartado 4.3.
 3. Decidir con `devolucion.Fase` (comparando con las constantes de `Fase`) si es editable o de consulta.
 4. Cambio de fase en el repositorio con `UPDATE ... WHERE fase = <esperada>` y devolver `false` si no se actualizó nada.
-5. Añadirla en `FormPrincipal.CrearPantalla` y su título en `TitulosPorFase` del historial.
+5. Añadirla en `ModuloDevoluciones.CrearPantalla` y su título en `TitulosPorFase` del historial.

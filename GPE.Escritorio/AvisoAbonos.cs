@@ -4,7 +4,7 @@ using GPE.Logica;
 namespace GPE.Escritorio;
 
 // Aviso de devoluciones que llegaron hace días y siguen sin abono.
-// FormPrincipal lo muestra al entrar y lo repite cada cierto tiempo mientras quede alguna.
+// ModuloDevoluciones lo muestra al entrar y lo repite cada cierto tiempo mientras quede alguna.
 public class FormAvisoAbonos : Form
 {
 
