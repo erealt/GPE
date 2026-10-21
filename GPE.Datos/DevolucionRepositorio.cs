@@ -5,29 +5,6 @@ namespace GPE.Datos;
 public class DevolucionRepositorio
 {
 
-    // La variable de entorno GPE_CONEXION permite usar otra base de datos (p. ej. una de pruebas)
-    private static readonly string CadenaConexion =
-        Environment.GetEnvironmentVariable("GPE_CONEXION")
-        ?? "Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;";
-
-    // Abre la conexión e indica a SQL Server qué usuario de la aplicación la usa;
-    // los triggers de historial lo leen con SESSION_CONTEXT(N'usuario_id').
-    private static SqlConnection AbrirConexion()
-    {
-        var conexion = new SqlConnection(CadenaConexion);
-        conexion.Open();
-
-        if (Sesion.UsuarioActual != null)
-        {
-            using var comando = new SqlCommand(
-                "EXEC sp_set_session_context @key = N'usuario_id', @value = @usuario;", conexion);
-            comando.Parameters.AddWithValue("@usuario", Sesion.UsuarioActual.Id);
-            comando.ExecuteNonQuery();
-        }
-
-        return conexion;
-    }
-
     // ---------- Lectura ----------
 
     private const string SqlDevoluciones = @"
@@ -49,7 +26,7 @@ public class DevolucionRepositorio
     {
         var lista = new List<DevolucionFila>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         if (devolucionId != null)
             comando.Parameters.AddWithValue("@devolucion", devolucionId);
@@ -79,7 +56,7 @@ public class DevolucionRepositorio
 
         var estados = new List<string>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
 
         using var lector = comando.ExecuteReader();
@@ -95,7 +72,7 @@ public class DevolucionRepositorio
 
         var clientes = new List<Cliente>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
 
         using var lector = comando.ExecuteReader();
@@ -111,7 +88,7 @@ public class DevolucionRepositorio
 
         var productos = new List<Producto>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
 
         using var lector = comando.ExecuteReader();
@@ -127,7 +104,7 @@ public class DevolucionRepositorio
 
         var usuarios = new List<Usuario>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
 
         using var lector = comando.ExecuteReader();
@@ -149,7 +126,7 @@ public class DevolucionRepositorio
 
         var cambios = new List<CambioHistorial>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
 
@@ -177,7 +154,7 @@ public class DevolucionRepositorio
 
         var transportistas = new List<Transportista>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
 
         using var lector = comando.ExecuteReader();
@@ -202,7 +179,7 @@ public class DevolucionRepositorio
             WHERE devolucion_id = @devolucion
             ORDER BY creada_en DESC;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
 
@@ -232,7 +209,7 @@ public class DevolucionRepositorio
 
         var nombres = new Dictionary<string, Dictionary<int, string>>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
 
         using var lector = comando.ExecuteReader();
@@ -266,7 +243,7 @@ public class DevolucionRepositorio
             INSERT INTO DEVOLUCION_PRODUCTO (devolucion_id, producto_id, lote, cantidad_esperada)
             VALUES (@devolucion, @producto, @lote, @cantidad);";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
 
         // Si ocurre una excepción antes del Commit, al salir del método la transacción
         // se deshace sola (Rollback automático al hacer Dispose).
@@ -314,7 +291,7 @@ public class DevolucionRepositorio
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         comando.Parameters.AddWithValue("@fecha", fechaLlegada.Date);
@@ -335,7 +312,7 @@ public class DevolucionRepositorio
 
         var lineas = new List<LineaRevision>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
 
@@ -359,7 +336,7 @@ public class DevolucionRepositorio
     {
         const string sql = "SELECT observaciones FROM DEVOLUCION WHERE id = @devolucion;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         return comando.ExecuteScalar() as string;
@@ -382,7 +359,7 @@ public class DevolucionRepositorio
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion AND e.fase = @fase;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         comando.Parameters.AddWithValue("@fase", faseActual);
@@ -398,7 +375,7 @@ public class DevolucionRepositorio
     {
         const string sql = "SELECT observaciones_revision FROM DEVOLUCION WHERE id = @devolucion;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         return comando.ExecuteScalar() as string;
@@ -421,7 +398,7 @@ public class DevolucionRepositorio
             SET cantidad_recibida = @recibida, cantidad_apta = @apta, observaciones = @observaciones
             WHERE id = @linea AND devolucion_id = @devolucion;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
 
         using (var devolucion = new SqlCommand(sqlDevolucion, conexion, transaccion))
@@ -460,7 +437,7 @@ public class DevolucionRepositorio
             FROM DEVOLUCION
             WHERE id = @devolucion AND resultado_abono IS NOT NULL;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
 
@@ -484,7 +461,7 @@ public class DevolucionRepositorio
             WHERE numero_abono = @abono AND id <> @devolucion
             ORDER BY id;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@abono", numeroAbono);
         comando.Parameters.AddWithValue("@devolucion", devolucionExcluida);
@@ -508,7 +485,7 @@ public class DevolucionRepositorio
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
         comando.Parameters.AddWithValue("@faseActual", Fase.RevisadaAlmacen);
@@ -538,7 +515,7 @@ public class DevolucionRepositorio
 
         var adjuntos = new List<AdjuntoInfo>();
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         comando.Parameters.AddWithValue("@tipo", tipo);
@@ -558,7 +535,7 @@ public class DevolucionRepositorio
     {
         const string sql = "SELECT contenido FROM ADJUNTO WHERE id = @adjunto;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@adjunto", adjuntoId);
         return (byte[])comando.ExecuteScalar()!;
@@ -571,7 +548,7 @@ public class DevolucionRepositorio
             INSERT INTO ADJUNTO (devolucion_id, tipo, nombre_archivo, tamano_bytes, contenido, usuario_id)
             VALUES (@devolucion, @tipo, @nombre, @tamano, @contenido, @usuario);";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
 
         foreach (var archivo in archivos)
@@ -593,7 +570,7 @@ public class DevolucionRepositorio
     {
         const string sql = "DELETE FROM ADJUNTO WHERE id = @adjunto;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@adjunto", adjuntoId);
         comando.ExecuteNonQuery();
@@ -627,7 +604,7 @@ public class DevolucionRepositorio
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion;";
 
-        using var conexion = AbrirConexion();
+        using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
 
         // UPDLOCK: bloquea la devolución hasta el final para que nadie cambie la fase entretanto

@@ -1,4 +1,5 @@
 using GPE.Datos;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 
 namespace GPE.Escritorio;
@@ -229,6 +230,63 @@ public static class Componentes
     {
         grid.ScrollBars = ScrollBars.None;
         grid.Height = grid.ColumnHeadersHeight + grid.Rows.Count * grid.RowTemplate.Height + 2;
+    }
+
+    // Filtro de las listas: etiqueta gris encima del control (el control trae su ancho)
+    public static Control CampoFiltro(string etiqueta, Control control)
+    {
+        var campo = new Panel { Size = new Size(control.Width, 58), Margin = new Padding(0, 0, 12, 0) };
+        var lbl = new Label
+        {
+            Text = etiqueta,
+            Dock = DockStyle.Top,
+            Height = 22,
+            ForeColor = Tema.Suave,
+            Font = new Font("Segoe UI", 9)
+        };
+        control.Dock = DockStyle.Top;
+        campo.Controls.Add(control);
+        campo.Controls.Add(lbl);
+        return campo;
+    }
+
+    // Dibuja el valor de una celda como una etiqueta redondeada de color (el estado de
+    // una devolución, el del PDF de un DeCA...). Se llama desde CellPainting.
+    public static void PintarEtiqueta(DataGridViewCellPaintingEventArgs e, string texto, Color fondo, Color colorTexto)
+    {
+        if (e.Graphics == null) return;
+
+        e.PaintBackground(e.CellBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+        using var fuente = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        var medida = TextRenderer.MeasureText(texto, fuente);
+        var etiqueta = new Rectangle(
+            e.CellBounds.X + 10,
+            e.CellBounds.Y + (e.CellBounds.Height - 26) / 2,
+            Math.Min(medida.Width + 20, e.CellBounds.Width - 15),
+            26);
+
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var ruta = Redondeado(etiqueta, 13))
+        using (var relleno = new SolidBrush(fondo))
+            e.Graphics.FillPath(relleno, ruta);
+
+        TextRenderer.DrawText(e.Graphics, texto, fuente, etiqueta, colorTexto,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+        e.Handled = true;
+    }
+
+    private static GraphicsPath Redondeado(Rectangle r, int radio)
+    {
+        var ruta = new GraphicsPath();
+        int d = radio * 2;
+        ruta.AddArc(r.X, r.Y, d, d, 180, 90);
+        ruta.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        ruta.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        ruta.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        ruta.CloseFigure();
+        return ruta;
     }
 
     // Botones de pie de página alineados a la derecha (el primero queda más a la derecha)

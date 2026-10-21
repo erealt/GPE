@@ -4,7 +4,7 @@ namespace GPE.Escritorio;
 
 // Pantalla de un paso de la devolución (solicitud, recogida, almacén...).
 // Al pulsar otro paso en la barra de progreso se cierra indicando a cuál ir,
-// y FormPrincipal abre la pantalla de ese paso.
+// y ModuloDevoluciones abre la pantalla de ese paso.
 public class PantallaFase : Form
 {
     public int? PasoSolicitado { get; private set; }
