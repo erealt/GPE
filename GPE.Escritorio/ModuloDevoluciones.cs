@@ -346,8 +346,8 @@ public class ModuloDevoluciones : UserControl
 
         string[] columnas =
         {
-            "Nº DEVOLUCIÓN", "CLIENTE", "ALBARÁN", "MOTIVO",
-            "FECHA SOLICITUD", "FECHA RECOGIDA", "FECHA LLEGADA", "ESTADO"
+            "Nº DEVOLUCIÓN", "CLIENTE", "CÓD. CLIENTE", "MOTIVO",
+            "FECHA SOLICITUD", "RECOGIDA PREVISTA", "FECHA LLEGADA", "ESTADO"
         };
         foreach (string nombre in columnas)
             grid.Columns.Add(nombre, nombre);
@@ -409,7 +409,7 @@ public class ModuloDevoluciones : UserControl
         int i = grid.Rows.Add(
             d.Numero,
             d.Cliente,
-            d.Albaran ?? "—",
+            d.CodigoCliente,
             d.Motivo,
             Componentes.Fecha(d.FechaSolicitud),
             Componentes.Fecha(d.FechaRecogida),
@@ -516,13 +516,13 @@ public class ModuloDevoluciones : UserControl
         {
             string numero = fila.Cells[0].Value?.ToString() ?? "";
             string cli = fila.Cells[1].Value?.ToString() ?? "";
-            string albaran = fila.Cells[2].Value?.ToString() ?? "";
+            string codigoCliente = fila.Cells[2].Value?.ToString() ?? "";
             string est = fila.Cells[ColumnaEstado].Value?.ToString() ?? "";
 
             bool coincideTexto = texto == ""
                 || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
                 || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
-                || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
+                || codigoCliente.Contains(texto, StringComparison.OrdinalIgnoreCase);
             bool coincideEstado = estado == "" || est == estado;
 
             bool coincideFecha = fila.Tag is not DevolucionFila d

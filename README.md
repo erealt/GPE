@@ -145,7 +145,7 @@ Para que todas las pantallas se vean igual, no se colocan controles a mano con c
 | [`Tema`](GPE.Escritorio/Tema.cs) | Colores (también los de las celdas: solo lectura, diferencia, error), el color de cada fase, `BotonPrincipal` (morado) y `BotonSecundario` (blanco). |
 | [`Componentes.Pagina()`](GPE.Escritorio/Componentes.cs) | Panel con scroll y una columna (`pila`) donde se van añadiendo las secciones de arriba abajo. |
 | `Componentes.Cabecera` | Ruta (`DEVOLUCIONES / DEV-2026-001 / ALMACÉN`), título y subtítulo. |
-| `Componentes.Resumen` | Fila de datos de referencia: cliente, albarán, motivo, fechas... |
+| `Componentes.Resumen` | Fila de datos de referencia: cliente, código de cliente, motivo, fechas... |
 | `Componentes.Tarjeta` | Recuadro blanco con título y subtítulo; el contenido se añade después. Opcionalmente, un botón a la derecha del título. |
 | `Componentes.Rejilla` | Columnas del mismo ancho para colocar los campos de un formulario. |
 | `Componentes.EstiloTabla` / `AjustarAltoTabla` | Aspecto común de las tablas; y que una tabla mida lo que sus filas, sin scroll propio. |
@@ -153,7 +153,7 @@ Para que todas las pantallas se vean igual, no se colocan controles a mano con c
 | `Componentes.Acciones` | Fila de botones alineados a la derecha. |
 | [`CamposFormulario`](GPE.Escritorio/CamposFormulario.cs) | `Campo(etiqueta, control)` con el mensaje de error debajo; `MarcarError` y `LimpiarErrores` al validar. |
 | [`BarraProgresoDevolucion`](GPE.Escritorio/BarraProgresoDevolucion.cs) | La barra de los seis pasos, dibujada a mano. |
-| [`ControlAdjuntos`](GPE.Escritorio/ControlAdjuntos.cs) | Lista de archivos con *Añadir / Ver / Quitar*. Sirve para las fotos (`FOTO`) y para el documento del abono (`ABONO`). Guarda al momento. |
+| [`ControlAdjuntos`](GPE.Escritorio/ControlAdjuntos.cs) | Lista de archivos con *Añadir / Ver / Quitar*. Sirve para el recibo de la agencia (`RECIBO`), las fotos (`FOTO`) y el documento del abono (`ABONO`). Guarda al momento. |
 | [`FormVisorImagen`](GPE.Escritorio/VisorImagen.cs) | Visor de fotos dentro de la app (← → para pasar, corrige la orientación de las fotos del móvil). |
 
 Así queda cualquier pantalla de paso:
@@ -191,17 +191,17 @@ Controls.Add(scroll);
 ## 5. Cada pantalla en detalle
 
 ### Nueva devolución (`FormNuevaDevolucion`)
-Datos de la cabecera (cliente, motivo, albarán, fecha de solicitud, observaciones) y las líneas de producto con cantidad y lote. Crea la devolución en la fase 1. El número `DEV-AAAA-NNN` lo calcula la base de datos (columna calculada).
+Datos de la cabecera (código de cliente y cliente, que se rellenan el uno al otro; motivo, fecha de solicitud, observaciones) y las líneas de producto con cantidad y lote. Crea la devolución en la fase 1. El número `DEV-AAAA-NNN` lo calcula la base de datos (columna calculada).
 
 ### Paso 1 · Solicitud (`FormSolicitud`)
 Solo consulta: los datos con los que se creó la devolución.
 
 ### Paso 2 · Recogida (`Recogida`)
-Transportista, fecha, dirección, teléfono y observaciones. Se puede modificar hasta que llega la mercancía; después queda en solo lectura. Guardar la recogida pasa la devolución a la fase 2.
+Transportista, fecha de recogida prevista, dirección, teléfono y observaciones. Se muestra también la fecha en que se registró el transportista (`RECOGIDA.creada_en`, la pone la base de datos). Se puede modificar hasta que llega la mercancía; después queda en solo lectura. Guardar la recogida pasa la devolución a la fase 2.
 
 ### Pasos 3 y 4 · Almacén (`FormAlmacen`)
 Una sola clase para dos pasos:
-- **Llegada (paso 3)**: botón *Marcar como recibida* (pone la fecha de llegada y pasa a la fase 3). Mientras no se haya revisado, *Deshacer recepción*.
+- **Llegada (paso 3)**: botón *Marcar como recibida*: pide el recibo de la agencia y, en una sola transacción, lo guarda, pone la fecha de llegada y pasa a la fase 3. Si se deshace la recepción, el recibo se conserva y no se vuelve a pedir. Mientras no se haya revisado, *Deshacer recepción*.
 - **Revisión (paso 4)**: tabla con una línea por producto donde el almacén escribe cantidad **recibida** y **apta** (la que se puede volver a vender). Si recibida ≠ solicitada la celda se pinta en ámbar; si apta < recibida, las observaciones son obligatorias. Más observaciones generales y fotos. *Finalizar revisión* guarda todo y pasa a la fase 4; luego queda *Reabrir revisión*.
 
 ### Pasos 5 y 6 · Abono y cierre (`FormAbono`)

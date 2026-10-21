@@ -81,7 +81,7 @@ public class FormAbono : PantallaFase
         var resumen = new List<(string, string)>
         {
             ("CLIENTE", devolucion.Cliente),
-            ("ALBARÁN", devolucion.Albaran ?? "—"),
+            ("CÓD. CLIENTE", devolucion.CodigoCliente),
             ("MOTIVO", devolucion.Motivo),
             ("FECHA LLEGADA", Componentes.Fecha(devolucion.FechaLlegada))
         };

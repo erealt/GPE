@@ -15,6 +15,13 @@ public class FormSolicitud : PantallaFase
 
     private readonly DataGridView grid = new();
     private readonly Label lblObservaciones = new();
+    private readonly Label lblSinProductos = new()
+    {
+        Text = "No se indicaron productos al crear la solicitud.",
+        AutoSize = true,
+        ForeColor = Tema.Suave,
+        Visible = false
+    };
 
     public FormSolicitud(DevolucionFila devolucion)
     {
@@ -36,13 +43,14 @@ public class FormSolicitud : PantallaFase
         pila.Controls.Add(Progreso(devolucion, PasoSolicitud));
         pila.Controls.Add(Componentes.Resumen(
             ("CLIENTE", devolucion.Cliente),
-            ("ALBARÁN", devolucion.Albaran ?? "—"),
+            ("CÓD. CLIENTE", devolucion.CodigoCliente),
             ("MOTIVO", devolucion.Motivo),
             ("FECHA SOLICITUD", Componentes.Fecha(devolucion.FechaSolicitud))));
 
         var tarjetaProductos = Componentes.Tarjeta("Productos esperados", "Lo que el cliente indicó que iba a devolver.");
         ConfigurarGrid();
         tarjetaProductos.Controls.Add(grid);
+        tarjetaProductos.Controls.Add(lblSinProductos);
         pila.Controls.Add(tarjetaProductos);
 
         var tarjetaObservaciones = Componentes.Tarjeta("Observaciones", "");
@@ -91,5 +99,9 @@ public class FormSolicitud : PantallaFase
 
         Componentes.AjustarAltoTabla(grid);
         grid.ClearSelection();
+
+        // Los productos son opcionales al crear la devolución
+        grid.Visible = grid.Rows.Count > 0;
+        lblSinProductos.Visible = grid.Rows.Count == 0;
     }
 }

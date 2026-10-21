@@ -75,9 +75,15 @@ public class DevolucionServicio
             throw new ReglaNegocioException(MensajeOtroUsuario);
     }
 
-    public void MarcarRecibida(int devolucionId)
+    // Hace falta el recibo de la agencia: el que se adjunta ahora o uno de una
+    // recepción anterior que se deshizo
+    public void MarcarRecibida(int devolucionId, IEnumerable<string> rutasRecibo)
     {
-        if (!repositorio.MarcarRecibida(devolucionId, DateTime.Today))
+        var recibo = LeerArchivos(TipoAdjunto.Recibo, rutasRecibo);
+        if (recibo.Count == 0 && repositorio.ObtenerAdjuntos(devolucionId, TipoAdjunto.Recibo).Count == 0)
+            throw new ReglaNegocioException("Adjunta el recibo de la agencia de transporte.");
+
+        if (!repositorio.MarcarRecibida(devolucionId, DateTime.Today, recibo))
             throw new ReglaNegocioException(MensajeOtroUsuario);
     }
 
@@ -174,6 +180,7 @@ public class DevolucionServicio
     {
         [TipoAdjunto.Foto] = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" },
         [TipoAdjunto.Abono] = new[] { ".pdf", ".jpg", ".jpeg", ".png" },
+        [TipoAdjunto.Recibo] = new[] { ".pdf", ".jpg", ".jpeg", ".png" },
     };
 
     public static string[] Extensiones(string tipo) => ExtensionesPermitidas[tipo];
@@ -186,6 +193,14 @@ public class DevolucionServicio
     public void EliminarAdjunto(int adjuntoId) => repositorio.EliminarAdjunto(adjuntoId);
 
     public void AnadirAdjuntos(int devolucionId, string tipo, IEnumerable<string> rutas)
+    {
+        var archivos = LeerArchivos(tipo, rutas);
+        if (archivos.Count > 0)
+            repositorio.InsertarAdjuntos(devolucionId, tipo, archivos);
+    }
+
+    // Comprueba el tipo y el tamaño de cada archivo y lo lee
+    private static List<ArchivoNuevo> LeerArchivos(string tipo, IEnumerable<string> rutas)
     {
         var archivos = new List<ArchivoNuevo>();
         foreach (string ruta in rutas)
@@ -200,9 +215,7 @@ public class DevolucionServicio
 
             archivos.Add(new ArchivoNuevo(nombre, File.ReadAllBytes(ruta)));
         }
-
-        if (archivos.Count > 0)
-            repositorio.InsertarAdjuntos(devolucionId, tipo, archivos);
+        return archivos;
     }
 
     // ---------- Recogida ----------
@@ -223,7 +236,7 @@ public class DevolucionServicio
             throw new ReglaNegocioException("La dirección no puede superar los 200 caracteres.");
 
         if (datos.FechaRecogida.Date < fechaSolicitud.Date)
-            throw new ReglaNegocioException("La fecha de recogida no puede ser anterior a la de solicitud.");
+            throw new ReglaNegocioException("La fecha de recogida prevista no puede ser anterior a la de solicitud.");
 
         if (datos.TelefonoContacto != null && !TelefonoValido(datos.TelefonoContacto))
             throw new ReglaNegocioException("El teléfono de contacto no es válido.");
@@ -243,15 +256,10 @@ public class DevolucionServicio
         if (datos.Motivo.Length > 50)
             throw new ReglaNegocioException("El motivo no puede superar los 50 caracteres.");
 
-        if (datos.Albaran?.Length > 30)
-            throw new ReglaNegocioException("El albarán no puede superar los 30 caracteres.");
-
         if (datos.Lineas.Any(l => l.Lote?.Length > 30))
             throw new ReglaNegocioException("El lote no puede superar los 30 caracteres.");
 
-        if (datos.Lineas.Count == 0)
-            throw new ReglaNegocioException("Añade al menos un producto a la devolución.");
-
+        // Los productos son opcionales: muchas veces no se sabe qué va a devolver el cliente
         if (datos.Lineas.Any(l => l.Cantidad <= 0))
             throw new ReglaNegocioException("Todas las cantidades deben ser mayores que 0.");
 

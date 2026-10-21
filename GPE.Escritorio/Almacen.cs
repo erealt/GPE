@@ -63,9 +63,9 @@ public class FormAlmacen : PantallaFase
         pila.Controls.Add(Progreso(devolucion, paso));
         pila.Controls.Add(Componentes.Resumen(
             ("CLIENTE", devolucion.Cliente),
-            ("ALBARÁN", devolucion.Albaran ?? "—"),
+            ("CÓD. CLIENTE", devolucion.CodigoCliente),
             ("MOTIVO", devolucion.Motivo),
-            ("FECHA RECOGIDA", Componentes.Fecha(devolucion.FechaRecogida)),
+            ("RECOGIDA PREVISTA", Componentes.Fecha(devolucion.FechaRecogida)),
             ("FECHA LLEGADA", devolucion.FechaLlegada == null ? "Pendiente" : Componentes.Fecha(devolucion.FechaLlegada))));
 
         if (paso == PasoLlegada)
@@ -79,6 +79,7 @@ public class FormAlmacen : PantallaFase
             {
                 pila.Controls.Add(Componentes.Tarjeta("Mercancía recibida",
                     $"La mercancía llegó al almacén el {Componentes.Fecha(devolucion.FechaLlegada)}."));
+                pila.Controls.Add(CrearTarjetaRecibo(editable: devolucion.Fase == Fase.MercanciaRecibida));
 
                 // Solo mientras no se haya finalizado la revisión
                 var botones = new List<Button> { BotonCerrar() };
@@ -111,7 +112,7 @@ public class FormAlmacen : PantallaFase
     private Control CrearTarjetaPendiente()
     {
         var tarjeta = Componentes.Tarjeta("La mercancía todavía no ha llegado",
-            "Cuando llegue al almacén, márcala como recibida para empezar la revisión.");
+            "Cuando llegue al almacén, márcala como recibida y adjunta el recibo de la agencia para empezar la revisión.");
 
         var btnRecibida = Tema.BotonPrincipal("Marcar como recibida", 220);
         btnRecibida.Height = 45;
@@ -123,29 +124,75 @@ public class FormAlmacen : PantallaFase
 
     private void MarcarRecibida()
     {
+        // Si se deshizo una recepción anterior, su recibo se conserva y no se vuelve a pedir
+        bool yaHayRecibo;
+        try
+        {
+            yaHayRecibo = servicio.ObtenerAdjuntos(devolucion.Id, TipoAdjunto.Recibo).Count > 0;
+        }
+        catch (DbException ex)
+        {
+            MessageBox.Show(this, "No se pudo comprobar el recibo de la agencia.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        string[] rutasRecibo = Array.Empty<string>();
+        if (!yaHayRecibo)
+        {
+            var extensiones = DevolucionServicio.Extensiones(TipoAdjunto.Recibo);
+            using var dialogo = new OpenFileDialog
+            {
+                Title = "Adjunta el recibo de la agencia",
+                Multiselect = true,
+                Filter = $"Archivos permitidos|{string.Join(";", extensiones.Select(e => "*" + e))}"
+            };
+            if (dialogo.ShowDialog(this) != DialogResult.OK) return;
+            rutasRecibo = dialogo.FileNames;
+        }
+
+        string recibo = yaHayRecibo
+            ? "Se usará el recibo de la agencia que ya estaba adjunto."
+            : "Recibo de la agencia: " + string.Join(", ", rutasRecibo.Select(Path.GetFileName));
         if (MessageBox.Show(this,
-                $"¿Confirmas que la mercancía de {devolucion.Numero} ha llegado hoy al almacén?",
+                $"¿Confirmas que la mercancía de {devolucion.Numero} ha llegado hoy al almacén?\n\n{recibo}",
                 "Marcar como recibida", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
         try
         {
-            servicio.MarcarRecibida(devolucion.Id);
+            servicio.MarcarRecibida(devolucion.Id, rutasRecibo);
         }
         catch (ReglaNegocioException ex)
         {
             MessageBox.Show(this, ex.Message, "No se pudo marcar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        catch (DbException ex)
+        catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException)
         {
             MessageBox.Show(this, "No se pudo marcar como recibida.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
         // Se continúa directamente con la revisión en la misma pantalla
         Recargar(PasoRevision);
+    }
+
+    // Se puede cambiar el archivo mientras no se haya finalizado la revisión
+    private Control CrearTarjetaRecibo(bool editable)
+    {
+        var tarjeta = Componentes.Tarjeta("Recibo de la agencia", editable
+            ? "Los cambios se guardan al momento. Haz doble clic en un archivo para verlo."
+            : "Haz doble clic en un archivo para verlo.");
+
+        tarjeta.Controls.Add(new ControlAdjuntos(devolucion.Id, TipoAdjunto.Recibo, "Añadir recibo")
+        {
+            Dock = DockStyle.Top,
+            SoloLectura = !editable
+        });
+
+        return tarjeta;
     }
 
     // ---------- Reabrir ----------

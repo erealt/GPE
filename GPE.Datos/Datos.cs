@@ -19,17 +19,17 @@ public record DevolucionFila(
     int Id,
     string Numero,
     string Cliente,
-    string? Albaran,
+    string CodigoCliente,
     string Motivo,
     DateTime FechaSolicitud,
-    DateTime? FechaRecogida,
+    DateTime? FechaRecogida,   // fecha de recogida prevista
     DateTime? FechaLlegada,
     string Estado,
     int Fase);
 
-public record Cliente(int Id, string Nombre)
+public record Cliente(int Id, string Codigo, string Nombre)
 {
-    public override string ToString() => Nombre;
+    public override string ToString() => $"{Codigo} · {Nombre}";
 }
 
 public record Producto(int Id, string Codigo, string Nombre)
@@ -43,7 +43,6 @@ public record DatosNuevaDevolucion(
     int FabricaId,
     int ClienteId,
     string Motivo,
-    string? Albaran,
     string? Observaciones,
     DateTime FechaSolicitud,
     List<LineaNuevaDevolucion> Lineas);
@@ -97,7 +96,7 @@ public record RecogidaGuardada(
     string Direccion,
     string? TelefonoContacto,
     string? Observaciones,
-    DateTime CreadaEn);
+    DateTime CreadaEn);   // cuándo se registró el transportista
 
 // Línea de producto tal como la ve el almacén al revisar
 public record LineaRevision(
@@ -116,6 +115,7 @@ public static class TipoAdjunto
 {
     public const string Foto = "FOTO";
     public const string Abono = "ABONO";
+    public const string Recibo = "RECIBO";   // recibo de la agencia al llegar la mercancía
 }
 
 // Datos de un adjunto sin su contenido (para listarlo)

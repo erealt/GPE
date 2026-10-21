@@ -8,7 +8,7 @@ public class DevolucionRepositorio
     // ---------- Lectura ----------
 
     private const string SqlDevoluciones = @"
-            SELECT d.id, d.numero, c.nombre, d.albaran, d.motivo,
+            SELECT d.id, d.numero, c.nombre, c.codigo, d.motivo,
                    d.fecha_solicitud, d.fecha_recogida, d.fecha_llegada,
                    e.nombre, e.fase
             FROM DEVOLUCION d
@@ -38,7 +38,7 @@ public class DevolucionRepositorio
                 Id: lector.GetInt32(0),
                 Numero: lector.GetString(1),
                 Cliente: lector.GetString(2),
-                Albaran: lector.IsDBNull(3) ? null : lector.GetString(3),
+                CodigoCliente: lector.GetString(3),
                 Motivo: lector.GetString(4),
                 FechaSolicitud: lector.GetDateTime(5),
                 FechaRecogida: lector.IsDBNull(6) ? null : (DateTime?)lector.GetDateTime(6),
@@ -68,7 +68,7 @@ public class DevolucionRepositorio
 
     public List<Cliente> ObtenerClientes()
     {
-        const string sql = "SELECT id, nombre FROM CLIENTE ORDER BY nombre;";
+        const string sql = "SELECT id, codigo, nombre FROM CLIENTE ORDER BY nombre;";
 
         var clientes = new List<Cliente>();
 
@@ -77,7 +77,7 @@ public class DevolucionRepositorio
 
         using var lector = comando.ExecuteReader();
         while (lector.Read())
-            clientes.Add(new Cliente(lector.GetInt32(0), lector.GetString(1)));
+            clientes.Add(new Cliente(lector.GetInt32(0), lector.GetString(1), lector.GetString(2)));
 
         return clientes;
     }
@@ -230,10 +230,10 @@ public class DevolucionRepositorio
     {
         const string sqlCabecera = @"
             INSERT INTO DEVOLUCION
-                (fabrica_id, cliente_id, estado_id, albaran, motivo, observaciones, fecha_solicitud)
+                (fabrica_id, cliente_id, estado_id, motivo, observaciones, fecha_solicitud)
             VALUES
                 (@fabrica, @cliente, (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @fase),
-                 @albaran, @motivo, @observaciones, @fecha);
+                 @motivo, @observaciones, @fecha);
 
             -- No se puede usar OUTPUT INSERTED.id porque DEVOLUCION tiene trigger.
             -- SCOPE_IDENTITY() ignora el id que genera el trigger en HISTORIAL_CAMBIOS.
@@ -255,7 +255,6 @@ public class DevolucionRepositorio
             cabecera.Parameters.AddWithValue("@fabrica", datos.FabricaId);
             cabecera.Parameters.AddWithValue("@cliente", datos.ClienteId);
             cabecera.Parameters.AddWithValue("@fase", Fase.SolicitudRecibida);
-            cabecera.Parameters.AddWithValue("@albaran", (object?)datos.Albaran ?? DBNull.Value);
             cabecera.Parameters.AddWithValue("@motivo", datos.Motivo);
             cabecera.Parameters.AddWithValue("@observaciones", (object?)datos.Observaciones ?? DBNull.Value);
             cabecera.Parameters.AddWithValue("@fecha", datos.FechaSolicitud.Date);
@@ -279,9 +278,10 @@ public class DevolucionRepositorio
 
     // ---------- Almacén ----------
 
-    // Pasa la devolución de "Recogida solicitada" (fase 2) a "Mercancía recibida" (fase 3).
+    // Pasa la devolución de "Recogida solicitada" (fase 2) a "Mercancía recibida" (fase 3)
+    // y guarda el recibo de la agencia, todo en una transacción.
     // Devuelve false si ya no estaba en la fase 2 (otro usuario la cambió antes).
-    public bool MarcarRecibida(int devolucionId, DateTime fechaLlegada)
+    public bool MarcarRecibida(int devolucionId, DateTime fechaLlegada, List<ArchivoNuevo> recibo)
     {
         const string sql = @"
             UPDATE d
@@ -292,12 +292,22 @@ public class DevolucionRepositorio
             WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
         using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        comando.Parameters.AddWithValue("@devolucion", devolucionId);
-        comando.Parameters.AddWithValue("@fecha", fechaLlegada.Date);
-        comando.Parameters.AddWithValue("@faseActual", Fase.RecogidaSolicitada);
-        comando.Parameters.AddWithValue("@faseNueva", Fase.MercanciaRecibida);
-        return comando.ExecuteNonQuery() == 1;
+        using var transaccion = conexion.BeginTransaction();
+
+        using (var comando = new SqlCommand(sql, conexion, transaccion))
+        {
+            comando.Parameters.AddWithValue("@devolucion", devolucionId);
+            comando.Parameters.AddWithValue("@fecha", fechaLlegada.Date);
+            comando.Parameters.AddWithValue("@faseActual", Fase.RecogidaSolicitada);
+            comando.Parameters.AddWithValue("@faseNueva", Fase.MercanciaRecibida);
+            if (comando.ExecuteNonQuery() != 1)
+                return false;   // al salir sin Commit, la transacción se deshace
+        }
+
+        InsertarAdjuntos(conexion, transaccion, devolucionId, TipoAdjunto.Recibo, recibo);
+
+        transaccion.Commit();
+        return true;
     }
 
     public List<LineaRevision> ObtenerLineasRevision(int devolucionId)
@@ -544,12 +554,20 @@ public class DevolucionRepositorio
     // Todos los archivos elegidos a la vez se guardan juntos (una sola entrada en el historial)
     public void InsertarAdjuntos(int devolucionId, string tipo, List<ArchivoNuevo> archivos)
     {
+        using var conexion = Conexion.Abrir();
+        using var transaccion = conexion.BeginTransaction();
+
+        InsertarAdjuntos(conexion, transaccion, devolucionId, tipo, archivos);
+
+        transaccion.Commit();
+    }
+
+    private static void InsertarAdjuntos(SqlConnection conexion, SqlTransaction transaccion,
+        int devolucionId, string tipo, List<ArchivoNuevo> archivos)
+    {
         const string sql = @"
             INSERT INTO ADJUNTO (devolucion_id, tipo, nombre_archivo, tamano_bytes, contenido, usuario_id)
             VALUES (@devolucion, @tipo, @nombre, @tamano, @contenido, @usuario);";
-
-        using var conexion = Conexion.Abrir();
-        using var transaccion = conexion.BeginTransaction();
 
         foreach (var archivo in archivos)
         {
@@ -562,8 +580,6 @@ public class DevolucionRepositorio
             comando.Parameters.AddWithValue("@usuario", Sesion.UsuarioActual!.Id);
             comando.ExecuteNonQuery();
         }
-
-        transaccion.Commit();
     }
 
     public void EliminarAdjunto(int adjuntoId)

@@ -26,7 +26,7 @@ public static class HistorialFormateador
         ["motivo"] = "Motivo",
         ["observaciones"] = "Observaciones",
         ["fecha_solicitud"] = "Fecha de solicitud",
-        ["fecha_recogida"] = "Fecha de recogida",
+        ["fecha_recogida"] = "Fecha de recogida prevista",
         ["fecha_llegada"] = "Fecha de llegada",
         ["producto_id"] = "Producto",
         ["lote"] = "Lote",
@@ -191,13 +191,13 @@ public static class HistorialFormateador
                     break;
 
                 case ("ADJUNTO", "INSERT"):
-                    titulos.Add((2, EsFoto(despues) ? "Añadió fotos" : "Adjuntó el documento del abono"));
+                    titulos.Add((2, TituloAdjunto(despues, "Añadió fotos", "Adjuntó el recibo de la agencia", "Adjuntó el documento del abono")));
                     detalles.Add(despues.GetValueOrDefault("nombre_archivo") ?? "");
                     break;
 
                 case ("ADJUNTO", "DELETE"):
                     if (borraDevolucion) break;
-                    titulos.Add((2, EsFoto(antes) ? "Quitó fotos" : "Quitó el documento del abono"));
+                    titulos.Add((2, TituloAdjunto(antes, "Quitó fotos", "Quitó el recibo de la agencia", "Quitó el documento del abono")));
                     detalles.Add(antes.GetValueOrDefault("nombre_archivo") ?? "");
                     break;
             }
@@ -249,8 +249,13 @@ public static class HistorialFormateador
         return observaciones == null ? texto : $"{texto} · {observaciones}";
     }
 
-    private static bool EsFoto(Dictionary<string, string?> adjunto) =>
-        adjunto.GetValueOrDefault("tipo") == TipoAdjunto.Foto;
+    private static string TituloAdjunto(Dictionary<string, string?> adjunto, string foto, string recibo, string abono) =>
+        adjunto.GetValueOrDefault("tipo") switch
+        {
+            TipoAdjunto.Foto => foto,
+            TipoAdjunto.Recibo => recibo,
+            _ => abono
+        };
 
     // "Cacao en polvo 500 g × 3 · lote 564"
     private static string LineaProducto(Dictionary<string, string?> linea)

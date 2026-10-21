@@ -27,6 +27,7 @@ CREATE TABLE USUARIO (
  
 CREATE TABLE CLIENTE (
     id INT IDENTITY(1,1) PRIMARY KEY,
+    codigo NVARCHAR(20) NOT NULL CONSTRAINT UQ_cliente_codigo UNIQUE,
     nombre NVARCHAR(100) NOT NULL
 );
  
@@ -82,11 +83,10 @@ CREATE TABLE DEVOLUCION (
     fabrica_id INT NOT NULL,
     cliente_id INT NOT NULL,
     estado_id INT NOT NULL,
-    albaran NVARCHAR(30) NULL,
     motivo NVARCHAR(50) NOT NULL,
     observaciones NVARCHAR(MAX) NULL,
     fecha_solicitud DATE NOT NULL,
-    fecha_recogida DATE NULL,
+    fecha_recogida DATE NULL,                    -- fecha de recogida prevista
     fecha_llegada DATE NULL,
     observaciones_revision NVARCHAR(MAX) NULL,   -- observaciones generales del almacén
     motivo_reapertura NVARCHAR(500) NULL,        -- motivo de la última vez que se volvió a un paso anterior
@@ -135,10 +135,11 @@ CREATE TABLE RECOGIDA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
     transportista_id INT NOT NULL,
-    fecha_recogida DATE NOT NULL,
+    fecha_recogida DATE NOT NULL,                -- fecha de recogida prevista
     direccion NVARCHAR(200) NOT NULL,
     telefono_contacto NVARCHAR(30) NULL,
     observaciones NVARCHAR(MAX) NULL,
+    -- Cuándo se registró el transportista (se rellena sola al crear la recogida)
     creada_en DATETIME2 NOT NULL CONSTRAINT DF_recogida_creada DEFAULT SYSDATETIME(),
     CONSTRAINT FK_recogida_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
@@ -146,7 +147,7 @@ CREATE TABLE RECOGIDA (
         REFERENCES TRANSPORTISTA(id)
 );
 
--- Archivos de una devolución: fotos de la revisión y documento del abono
+-- Archivos de una devolución: recibo de la agencia, fotos de la revisión y documento del abono
 CREATE TABLE ADJUNTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
@@ -156,7 +157,7 @@ CREATE TABLE ADJUNTO (
     contenido VARBINARY(MAX) NOT NULL,
     usuario_id INT NOT NULL,
     subido_en DATETIME2 NOT NULL CONSTRAINT DF_adjunto_subido DEFAULT SYSDATETIME(),
-    CONSTRAINT CK_adjunto_tipo CHECK (tipo IN ('FOTO', 'ABONO')),
+    CONSTRAINT CK_adjunto_tipo CHECK (tipo IN ('FOTO', 'ABONO', 'RECIBO')),
     CONSTRAINT FK_adjunto_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
     CONSTRAINT FK_adjunto_usuario FOREIGN KEY (usuario_id) REFERENCES USUARIO(id)
