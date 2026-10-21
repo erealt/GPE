@@ -37,6 +37,10 @@ public record OpcionLista(string Valor, string? Descripcion)
     public override string ToString() => Descripcion == null ? Valor : $"{Valor} · {Descripcion}";
 }
 
+// Serie de numeración: el número es Prefijo + el siguiente de la serie
+// (Prefijo "" para 1, 2, 3...; "AC-2026-" para AC-2026-1, AC-2026-2...)
+public record SerieNumero(string TipoRegistro, string Prefijo);
+
 // Una fila de la hoja INCIDENCIAS. Id = 0 en un registro nuevo.
 // Tipo solo se usa en las NC; McPccBpm, Parametro y Operario solo en las incidencias.
 public record NoConformidad(

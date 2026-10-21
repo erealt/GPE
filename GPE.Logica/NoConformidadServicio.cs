@@ -29,9 +29,47 @@ public class NoConformidadServicio
 
     public List<string> ObtenerProveedores() => repositorio.ObtenerProveedores();
 
-    public string SiguienteNumero() => repositorio.SiguienteNumero().ToString();
+    // ---------- Numeración ----------
 
-    public bool ExisteNumero(string numero, int idExcluido) => repositorio.ExisteNumero(numero, idExcluido);
+    // Secciones de las NC de auditoría, que llevan su propia numeración
+    private const string AuditoriaExterna = "A. EXTERNA";
+    private const string AuditoriaInterna = "A. INTERNA";
+
+    // Serie en la que se numera un registro, como en el Excel:
+    //   incidencias          1, 2, 3...
+    //   NC                   558, 559... (la serie sigue, no empieza cada año)
+    //   NC auditoría externa AC-2026-1, AC-2026-2... (empieza cada año)
+    //   NC auditoría interna AI-20/04/26-1, AI-20/04/26-2... (empieza en cada auditoría)
+    //   acciones de mejora   sin número
+    public static SerieNumero? Serie(NoConformidad nc)
+    {
+        DateTime fecha = nc.FechaDetectado;
+        return nc.TipoRegistro switch
+        {
+            TipoRegistro.Incidencia => new SerieNumero(TipoRegistro.Incidencia, ""),
+            TipoRegistro.NoConformidad => nc.Seccion switch
+            {
+                AuditoriaExterna => new SerieNumero(TipoRegistro.NoConformidad, $"AC-{fecha:yyyy}-"),
+                AuditoriaInterna => new SerieNumero(TipoRegistro.NoConformidad, $"AI-{fecha:dd'/'MM'/'yy}-"),
+                _ => new SerieNumero(TipoRegistro.NoConformidad, "")
+            },
+            _ => null
+        };
+    }
+
+    // Un registro conserva su número mientras siga en la misma serie. Si no tiene
+    // o cambia de serie (de incidencia a NC, a una auditoría...), toca uno nuevo.
+    private static bool Renumerar(NoConformidad? anterior, SerieNumero? serie) =>
+        serie != null && (anterior?.Numero == null || Serie(anterior) != serie);
+
+    // Número que se enseña en la ficha antes de guardar (null: no lleva número).
+    // El definitivo se calcula al guardar, por si otro usuario guarda antes.
+    public string? NumeroPrevisto(NoConformidad nc, NoConformidad? anterior)
+    {
+        var serie = Serie(Normalizar(nc));
+        if (serie == null) return null;
+        return Renumerar(anterior, serie) ? repositorio.SiguienteNumero(serie) : anterior!.Numero;
+    }
 
     // Con fecha fin está cerrada; si no, se mira la fecha prevista. En el Excel una
     // abierta sin fecha prevista salía "fuera de plazo"; aquí se distingue como "sin plazo".
@@ -99,11 +137,6 @@ public class NoConformidadServicio
         if (nc.FechaDetectado.Date > DateTime.Today)
             Error(nameof(nc.FechaDetectado), "La fecha de detección no puede ser futura.");
 
-        if (esNc && nc.Numero == null)
-            Error(nameof(nc.Numero), "Indica el nº de la no conformidad.");
-        else if (nc.Numero?.Length > 30)
-            Error(nameof(nc.Numero), "El nº no puede superar los 30 caracteres.");
-
         if (esNc && nc.Origen == null)
             Error(nameof(nc.Origen), "Elige el origen de la no conformidad.");
         if (nc.Seccion == null)
@@ -137,7 +170,10 @@ public class NoConformidadServicio
 
     // ---------- Guardado ----------
 
+    private const string MensajeBorrado = "Este registro ya no existe: puede que otro usuario lo haya borrado.";
+
     // Crea el registro (Id = 0) o guarda los cambios. Devuelve su id.
+    // El número no lo pone la pantalla: se calcula aquí según su serie.
     public int Guardar(NoConformidad nc)
     {
         nc = Normalizar(nc);
@@ -146,15 +182,22 @@ public class NoConformidadServicio
         if (errores.Count > 0)
             throw new ReglaNegocioException(errores[0].Mensaje);
 
+        var serie = Serie(nc);
+
         if (nc.Id == 0)
         {
             if (Sesion.UsuarioActual is not Usuario usuario)
                 throw new ReglaNegocioException("No hay ningún usuario elegido.");
-            return repositorio.Insertar(nc, usuario.Id);
+            return repositorio.Insertar(nc with { Numero = null }, serie, usuario.Id);
         }
 
-        if (!repositorio.Actualizar(nc))
-            throw new ReglaNegocioException("Este registro ya no existe: puede que otro usuario lo haya borrado.");
+        // Se mira el número guardado, no el que trae la pantalla
+        var anterior = repositorio.ObtenerRegistro(nc.Id)
+            ?? throw new ReglaNegocioException(MensajeBorrado);
+        nc = nc with { Numero = serie == null ? null : anterior.Numero };
+
+        if (!repositorio.Actualizar(nc, Renumerar(anterior, serie) ? serie : null))
+            throw new ReglaNegocioException(MensajeBorrado);
         return nc.Id;
     }
 }

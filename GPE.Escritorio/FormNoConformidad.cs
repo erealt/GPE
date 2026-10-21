@@ -18,15 +18,17 @@ public class FormNoConformidad : Form
     private Dictionary<string, List<OpcionLista>> listas = new();
     private bool cargaCorrecta;
     private bool hayCambios;
-    private string? numeroPropuesto;   // nº de NC que se ha puesto solo (se quita si cambia el tipo)
 
     // Opción vacía de los desplegables que no son obligatorios
     private static readonly OpcionLista SinIndicar = new("—", null);
 
     // Identificación
-    private readonly ComboBox cmbTipoRegistro = new();
+    // Tipo de registro: tres botones de los que solo se puede elegir uno
+    private readonly FlowLayoutPanel selectorTipo = new();
+    private readonly Dictionary<string, RadioButton> botonesTipo = new();
     private readonly DateTimePicker dtpDetectado = new();
     private readonly TextBox txtNumero = new();
+    private readonly Label lblNumero = new();
     private readonly ComboBox cmbOrigen = new();
     private readonly ComboBox cmbSeccion = new();
     private readonly ComboBox cmbTipo = new();
@@ -61,12 +63,6 @@ public class FormNoConformidad : Form
     private Control campoTipo = null!;
     private Control tarjetaIncidencia = null!;
 
-    // El tipo de registro va en un desplegable con su nombre largo
-    private record OpcionTipo(string Codigo)
-    {
-        public override string ToString() => TipoRegistro.Nombre(Codigo);
-    }
-
     public FormNoConformidad(NoConformidad? registro = null)
     {
         original = registro;
@@ -84,12 +80,17 @@ public class FormNoConformidad : Form
         ActualizarSegunTipo();
         ActualizarEstado();
 
+        // Las NC de auditoría se numeran por año o por fecha: el número cambia con ellas
+        cmbSeccion.SelectedIndexChanged += (s, e) => ActualizarNumero();
+        dtpDetectado.ValueChanged += (s, e) => ActualizarNumero();
+
         // A partir de aquí, cualquier cambio cuenta como "sin guardar"
         foreach (var control in Entradas(this))
         {
             switch (control)
             {
                 case ComboBox combo: combo.SelectedIndexChanged += (s, e) => hayCambios = true; break;
+                case RadioButton opcion: opcion.CheckedChanged += (s, e) => hayCambios = true; break;
                 case DateTimePicker fecha: fecha.ValueChanged += (s, e) => hayCambios = true; break;
                 default: control.TextChanged += (s, e) => hayCambios = true; break;
             }
@@ -112,7 +113,6 @@ public class FormNoConformidad : Form
             listas = servicio.ObtenerListas();
             clientes = servicio.ObtenerClientes();
             proveedores = servicio.ObtenerProveedores();
-            if (original == null) numeroPropuesto = servicio.SiguienteNumero();
             cargaCorrecta = true;
         }
         catch (DbException ex)
@@ -122,10 +122,7 @@ public class FormNoConformidad : Form
                 "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        cmbTipoRegistro.DropDownStyle = ComboBoxStyle.DropDownList;
-        foreach (string tipo in TipoRegistro.Todos)
-            cmbTipoRegistro.Items.Add(new OpcionTipo(tipo));
-        cmbTipoRegistro.SelectedIndexChanged += (s, e) => ActualizarSegunTipo();
+        PrepararSelectorTipo();
 
         dtpDetectado.Format = DateTimePickerFormat.Short;
         dtpDetectado.MaxDate = DateTime.Today;
@@ -139,8 +136,13 @@ public class FormNoConformidad : Form
         }
         dtpFin.MaxDate = DateTime.Today;
 
-        txtNumero.MaxLength = 30;   // NO_CONFORMIDAD.numero es NVARCHAR(30)
-        txtNumero.PlaceholderText = "Ej. 558 o AC-2026-1";
+        // El número no se escribe: lo calcula la aplicación (ActualizarNumero)
+        txtNumero.ReadOnly = true;
+        txtNumero.TabStop = false;
+        lblNumero.AutoSize = true;
+        lblNumero.ForeColor = Tema.Suave;
+        lblNumero.Font = new Font("Segoe UI", 8.5f);
+        lblNumero.Margin = new Padding(0, 4, 0, 0);
 
         Sugerencias(txtCliente, clientes);
         Sugerencias(txtProveedor, proveedores);
@@ -154,6 +156,49 @@ public class FormNoConformidad : Form
 
         txtCoste.PlaceholderText = "Ej. 180,50";
         txtHoras.PlaceholderText = "Ej. 1,5";
+    }
+
+    // Botones pegados (No conformidad · Incidencia · Acción de mejora); el elegido, en morado.
+    // Son RadioButton con aspecto de botón: al estar en el mismo panel, solo puede haber uno marcado.
+    private void PrepararSelectorTipo()
+    {
+        selectorTipo.AutoSize = false;
+        selectorTipo.Height = 36;
+        selectorTipo.WrapContents = false;
+        selectorTipo.Margin = new Padding(0);
+
+        foreach (string tipo in TipoRegistro.Todos)
+        {
+            var boton = new RadioButton
+            {
+                Text = TipoRegistro.Nombre(tipo),
+                Appearance = Appearance.Button,
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance = { BorderColor = Tema.Borde, CheckedBackColor = Tema.Acento },
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(165, 34),
+                Margin = new Padding(0, 0, 6, 0),
+                Cursor = Cursors.Hand
+            };
+            boton.CheckedChanged += (s, e) =>
+            {
+                PintarBotonTipo(boton);
+                if (boton.Checked) ActualizarSegunTipo();
+            };
+            PintarBotonTipo(boton);
+
+            botonesTipo[tipo] = boton;
+            selectorTipo.Controls.Add(boton);
+        }
+    }
+
+    private static void PintarBotonTipo(RadioButton boton)
+    {
+        boton.BackColor = boton.Checked ? Tema.Acento : Color.White;
+        boton.ForeColor = boton.Checked ? Color.White : Tema.Texto;
+        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.FlatAppearance.BorderColor = boton.Checked ? Tema.Acento : Tema.Borde;
+        boton.FlatAppearance.MouseOverBackColor = boton.Checked ? Tema.Acento : Tema.AcentoSuave;
     }
 
     private static void Multilinea(TextBox texto, int alto, string ayuda)
@@ -236,15 +281,19 @@ public class FormNoConformidad : Form
     {
         var tarjeta = Componentes.Tarjeta("Identificación", "Qué es, cuándo se detectó y de dónde viene");
 
+        // Los tres botones del tipo no caben en una columna: ocupan dos
         var rejilla = Componentes.Rejilla(3);
-        rejilla.Controls.Add(campos.Campo("Tipo de registro", cmbTipoRegistro), 0, 0);
-        rejilla.Controls.Add(campos.Campo("Fecha detectado", dtpDetectado), 1, 0);
-        rejilla.Controls.Add(campos.Campo("Nº", txtNumero), 2, 0);
-        rejilla.Controls.Add(campos.Campo("Origen", cmbOrigen), 0, 1);
-        rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 1, 1);
-        rejilla.Controls.Add(campoTipo = campos.Campo("Tipo de no conformidad", cmbTipo), 2, 1);
+        var campoTipoRegistro = campos.Campo("Tipo de registro", selectorTipo);
+        rejilla.Controls.Add(campoTipoRegistro, 0, 0);
+        rejilla.SetColumnSpan(campoTipoRegistro, 2);
+        rejilla.Controls.Add(campos.Campo("Nº", txtNumero, lblNumero), 2, 0);
+        rejilla.Controls.Add(campos.Campo("Fecha detectado", dtpDetectado), 0, 1);
+        rejilla.Controls.Add(campos.Campo("Origen", cmbOrigen), 1, 1);
+        rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 2, 1);
         rejilla.Controls.Add(campos.Campo("Cliente", txtCliente), 0, 2);
         rejilla.Controls.Add(campos.Campo("Proveedor", txtProveedor), 1, 2);
+        // Al final, para que al ocultarse (no es NC) no deje un hueco en medio
+        rejilla.Controls.Add(campoTipo = campos.Campo("Tipo de no conformidad", cmbTipo), 2, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -334,11 +383,9 @@ public class FormNoConformidad : Form
     {
         var nc = original;
 
-        cmbTipoRegistro.SelectedItem = cmbTipoRegistro.Items.Cast<OpcionTipo>()
-            .FirstOrDefault(o => o.Codigo == (nc?.TipoRegistro ?? TipoRegistro.Incidencia));
+        botonesTipo[nc?.TipoRegistro ?? TipoRegistro.Incidencia].Checked = true;
         // Un registro antiguo puede tener una fecha que ya no cabe en MaxDate (no pasa, pero por si acaso)
         dtpDetectado.Value = nc == null ? DateTime.Today : Min(nc.FechaDetectado, DateTime.Today);
-        txtNumero.Text = nc?.Numero ?? "";
 
         LlenarLista(cmbOrigen, ListaCalidad.Origen, nc?.Origen);
         LlenarLista(cmbSeccion, ListaCalidad.Seccion, nc?.Seccion);
@@ -379,20 +426,49 @@ public class FormNoConformidad : Form
 
     private static DateTime? LeerFecha(DateTimePicker control) => control.Checked ? control.Value.Date : null;
 
-    private string TipoElegido => (cmbTipoRegistro.SelectedItem as OpcionTipo)?.Codigo ?? TipoRegistro.Incidencia;
+    private string TipoElegido =>
+        botonesTipo.FirstOrDefault(b => b.Value.Checked).Key ?? TipoRegistro.Incidencia;
 
-    // Muestra los campos de este tipo de registro y propone el nº si es una NC nueva
+    // Muestra los campos de este tipo de registro y el número que le toca
     private void ActualizarSegunTipo()
     {
-        bool esNc = TipoElegido == TipoRegistro.NoConformidad;
-        campoTipo.Visible = esNc;
+        campoTipo.Visible = TipoElegido == TipoRegistro.NoConformidad;
         tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
-
-        if (esNc && txtNumero.Text == "" && numeroPropuesto != null)
-            txtNumero.Text = numeroPropuesto;
-        else if (!esNc && txtNumero.Text == numeroPropuesto)
-            txtNumero.Text = "";   // el nº propuesto era solo para la NC
+        ActualizarNumero();
     }
+
+    // El número es automático: depende del tipo, la sección (auditorías) y la fecha
+    private void ActualizarNumero()
+    {
+        var actual = (original ?? Vacio) with
+        {
+            TipoRegistro = TipoElegido,
+            Seccion = Valor(cmbSeccion),
+            FechaDetectado = dtpDetectado.Value.Date
+        };
+
+        string? numero;
+        try
+        {
+            numero = servicio.NumeroPrevisto(actual, original);
+        }
+        catch (DbException)
+        {
+            txtNumero.Text = "";
+            lblNumero.Text = "Se asigna al guardar.";
+            return;
+        }
+
+        txtNumero.Text = numero ?? "Sin número";
+        lblNumero.Text = numero == null ? "Las acciones de mejora no llevan número."
+            : numero == original?.Numero ? "Automático."
+            : "Automático: se asigna al guardar.";
+    }
+
+    // Registro en blanco para calcular el número de uno nuevo
+    private static readonly NoConformidad Vacio = new(
+        0, TipoRegistro.Incidencia, null, DateTime.Today, null, null, null, "",
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     private void ActualizarEstado()
     {
@@ -434,7 +510,7 @@ public class FormNoConformidad : Form
         return new NoConformidad(
             Id: original?.Id ?? 0,
             TipoRegistro: TipoElegido,
-            Numero: txtNumero.Text,
+            Numero: original?.Numero,   // el servicio decide el número al guardar
             FechaDetectado: dtpDetectado.Value.Date,
             Origen: Valor(cmbOrigen),
             Seccion: Valor(cmbSeccion),
@@ -471,9 +547,8 @@ public class FormNoConformidad : Form
         {
             var controles = new Dictionary<string, Control>
             {
-                [nameof(NoConformidad.TipoRegistro)] = cmbTipoRegistro,
+                [nameof(NoConformidad.TipoRegistro)] = selectorTipo,
                 [nameof(NoConformidad.FechaDetectado)] = dtpDetectado,
-                [nameof(NoConformidad.Numero)] = txtNumero,
                 [nameof(NoConformidad.Origen)] = cmbOrigen,
                 [nameof(NoConformidad.Seccion)] = cmbSeccion,
                 [nameof(NoConformidad.Tipo)] = cmbTipo,
@@ -502,22 +577,9 @@ public class FormNoConformidad : Form
 
         var registro = NoConformidadServicio.Normalizar(leido);
 
+        // 2. Guardar en la base de datos (el número lo pone el servicio)
         try
         {
-            // 2. El nº repetido se avisa pero no se impide (en el Excel ya hay alguno repetido)
-            if (registro.Numero != null && servicio.ExisteNumero(registro.Numero, registro.Id))
-            {
-                var respuesta = MessageBox.Show(this,
-                    $"Ya hay otro registro con el nº {registro.Numero}.\n\n¿Guardar igualmente?",
-                    "Nº repetido", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
-                if (respuesta != DialogResult.Yes)
-                {
-                    txtNumero.Focus();
-                    return;
-                }
-            }
-
-            // 3. Guardar en la base de datos
             IdGuardado = servicio.Guardar(registro);
         }
         catch (ReglaNegocioException ex)
@@ -553,7 +615,7 @@ public class FormNoConformidad : Form
     {
         foreach (Control hijo in padre.Controls)
         {
-            if (hijo is TextBox or ComboBox or DateTimePicker)
+            if (hijo is TextBox { ReadOnly: false } or ComboBox or DateTimePicker or RadioButton)
                 yield return hijo;
             foreach (var nieto in Entradas(hijo))
                 yield return nieto;

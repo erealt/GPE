@@ -350,10 +350,12 @@ public class ModuloNoConformidades : UserControl
         grid.Rows.AddRange(visibles.Select(nc => CrearFila(grid, nc)).ToArray());
         grid.ClearSelection();
 
+        // Primero el contador, que vuelve a mostrar la tabla si estaba oculta (lista vacía):
+        // en una tabla oculta no se puede desplazar hasta una fila
+        ActualizarContador(visibles, dtpDesde.Checked && dtpHasta.Checked && dtpDesde.Value.Date > dtpHasta.Value.Date);
+
         if (seleccionar != null)
             Seleccionar(seleccionar.Value);
-
-        ActualizarContador(visibles, dtpDesde.Checked && dtpHasta.Checked && dtpDesde.Value.Date > dtpHasta.Value.Date);
     }
 
     private List<NoConformidad> Filtrados()
@@ -386,7 +388,9 @@ public class ModuloNoConformidades : UserControl
 
         grid.CurrentCell = fila.Cells[0];
         fila.Selected = true;
-        grid.FirstDisplayedScrollingRowIndex = fila.Index;
+        // Sin espacio para filas (ventana minimizada, tabla aún sin medir) no se puede desplazar
+        if (grid.Visible && grid.DisplayRectangle.Height > grid.ColumnHeadersHeight)
+            grid.FirstDisplayedScrollingRowIndex = fila.Index;
     }
 
     private void LimpiarFiltros()

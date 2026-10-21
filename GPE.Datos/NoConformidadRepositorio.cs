@@ -118,32 +118,34 @@ public class NoConformidadRepositorio
         return nombres;
     }
 
-    // Siguiente nº de NC: el mayor de los números que son solo cifras, más uno
-    // (los de auditoría, como "AC-2025-3", no cuentan)
-    public int SiguienteNumero()
+    // Número que tocaría ahora en una serie. Solo para enseñarlo en la ficha: el
+    // definitivo se calcula al guardar, por si otro usuario guarda antes.
+    public string SiguienteNumero(SerieNumero serie)
     {
-        const string sql = "SELECT ISNULL(MAX(TRY_CAST(numero AS INT)), 0) + 1 FROM NO_CONFORMIDAD;";
-
         using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        return (int)comando.ExecuteScalar();
+        return SiguienteNumero(serie, conexion, null);
     }
 
-    // ¿Hay otro registro con este número? (idExcluido: el que se está editando)
-    public bool ExisteNumero(string numero, int idExcluido)
+    // Prefijo + (el mayor número de la serie + 1): 558, AC-2026-3, AI-20/04/26-14...
+    // Los números de otro formato (LC25-06...) no cuentan. Dentro de una transacción,
+    // UPDLOCK y HOLDLOCK hacen esperar a quien quiera numerar a la vez en la misma serie.
+    private static string SiguienteNumero(SerieNumero serie, SqlConnection conexion, SqlTransaction? transaccion)
     {
-        const string sql = "SELECT COUNT(*) FROM NO_CONFORMIDAD WHERE numero = @numero AND id <> @id;";
+        const string sql = @"
+            SELECT ISNULL(MAX(TRY_CAST(SUBSTRING(numero, LEN(@prefijo) + 1, 30) AS INT)), 0) + 1
+            FROM NO_CONFORMIDAD WITH (UPDLOCK, HOLDLOCK)
+            WHERE tipo_registro = @tipo AND numero LIKE @prefijo + '%';";
 
-        using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        comando.Parameters.AddWithValue("@numero", numero);
-        comando.Parameters.AddWithValue("@id", idExcluido);
-        return (int)comando.ExecuteScalar() > 0;
+        using var comando = new SqlCommand(sql, conexion, transaccion);
+        comando.Parameters.AddWithValue("@tipo", serie.TipoRegistro);
+        comando.Parameters.AddWithValue("@prefijo", serie.Prefijo);
+        return serie.Prefijo + (int)comando.ExecuteScalar();
     }
 
     // ---------- Escritura ----------
 
-    public int Insertar(NoConformidad nc, int usuarioId)
+    // Crea el registro numerándolo en su serie (sin serie, sin número). Devuelve el id.
+    public int Insertar(NoConformidad nc, SerieNumero? serie, int usuarioId)
     {
         const string sql = @"
             INSERT INTO NO_CONFORMIDAD
@@ -165,14 +167,26 @@ public class NoConformidadRepositorio
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
         using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        AnadirParametros(comando, nc);
-        comando.Parameters.AddWithValue("@usuario", usuarioId);
-        return (int)comando.ExecuteScalar();
+        using var transaccion = conexion.BeginTransaction();
+
+        if (serie != null)
+            nc = nc with { Numero = SiguienteNumero(serie, conexion, transaccion) };
+
+        int id;
+        using (var comando = new SqlCommand(sql, conexion, transaccion))
+        {
+            AnadirParametros(comando, nc);
+            comando.Parameters.AddWithValue("@usuario", usuarioId);
+            id = (int)comando.ExecuteScalar();
+        }
+
+        transaccion.Commit();
+        return id;
     }
 
-    // false si el registro ya no existe (otro usuario lo ha borrado)
-    public bool Actualizar(NoConformidad nc)
+    // Guarda los cambios. Con serie, se le da un número nuevo de esa serie; sin ella,
+    // se guarda el número que trae. false si el registro ya no existe (otro usuario lo ha borrado).
+    public bool Actualizar(NoConformidad nc, SerieNumero? numerarEn)
     {
         const string sql = @"
             UPDATE NO_CONFORMIDAD SET
@@ -191,10 +205,21 @@ public class NoConformidadRepositorio
             WHERE id = @id;";
 
         using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        AnadirParametros(comando, nc);
-        comando.Parameters.AddWithValue("@id", nc.Id);
-        return comando.ExecuteNonQuery() > 0;
+        using var transaccion = conexion.BeginTransaction();
+
+        if (numerarEn != null)
+            nc = nc with { Numero = SiguienteNumero(numerarEn, conexion, transaccion) };
+
+        int filas;
+        using (var comando = new SqlCommand(sql, conexion, transaccion))
+        {
+            AnadirParametros(comando, nc);
+            comando.Parameters.AddWithValue("@id", nc.Id);
+            filas = comando.ExecuteNonQuery();
+        }
+
+        transaccion.Commit();
+        return filas > 0;
     }
 
     private static void AnadirParametros(SqlCommand comando, NoConformidad nc)

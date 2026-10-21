@@ -27,7 +27,8 @@ CREATE TABLE CALIDAD_LISTA (
 CREATE TABLE NO_CONFORMIDAD (
     id INT IDENTITY(1,1) PRIMARY KEY,
     tipo_registro NVARCHAR(10) NOT NULL,          -- NC, INCIDENCIA o MEJORA
-    -- Texto y sin UNIQUE: en el Excel hay números como "AC-2025-3" y alguno repetido
+    -- Lo pone la aplicación según la serie (558, AC-2026-1, AI-20/04/26-1; incidencias 1, 2...).
+    -- Texto y sin UNIQUE: en el Excel hay otros formatos (LC25-06) y algún número repetido.
     numero NVARCHAR(30) NULL,
     fecha_detectado DATE NOT NULL,
     origen NVARCHAR(150) NULL,
