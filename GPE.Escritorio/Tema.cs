@@ -1,3 +1,6 @@
+using GPE.Datos;
+using GPE.Logica;
+
 namespace GPE.Escritorio;
 
 // Colores y fuentes comunes a todas las pantallas
@@ -32,6 +35,22 @@ public static class Tema
 
     public static (Color Fondo, Color Texto) ColorFase(int fase) =>
         ColoresFase[Math.Clamp(fase, 1, ColoresFase.Length) - 1];
+
+    // Etiquetas de la lista de incidencias y no conformidades
+    public static (Color Fondo, Color Texto) ColorTipoRegistro(string tipo) => tipo switch
+    {
+        TipoRegistro.NoConformidad => (AcentoSuave, Acento),
+        TipoRegistro.Incidencia => (Color.FromArgb(228, 238, 255), Color.FromArgb(30, 80, 170)),
+        _ => (Color.FromArgb(222, 245, 245), Color.FromArgb(0, 110, 115))
+    };
+
+    public static (Color Fondo, Color Texto) ColorEstadoRegistro(string estado) => estado switch
+    {
+        EstadoRegistro.EnPlazo => (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70)),
+        EstadoRegistro.FueraPlazo => (FondoError, Error),
+        EstadoRegistro.SinPlazo => (AvisoFondo, Aviso),
+        _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
+    };
 
     public static Button BotonPrincipal(string texto, int ancho)
     {

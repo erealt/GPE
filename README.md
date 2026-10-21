@@ -22,6 +22,8 @@ Este documento explica cómo está organizado el código y cómo están hechas l
 
    - Las tablas `ROL`, `USUARIO_ROL` y `LOTE` todavía no las usa la aplicación: están preparadas para cuando haya login con permisos por rol y fábrica, y para elegir el lote de una lista (hoy el lote es texto libre).
 
+   - Después, ejecutar [`BaseDatos/no_conformidades.sql`](BaseDatos/no_conformidades.sql) para el módulo de calidad (crea sus tablas y rellena los desplegables con la hoja LISTAS del Excel).
+
 2. **Conexión**: por defecto se usa `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos (por ejemplo una de pruebas) se define la variable de entorno `GPE_CONEXION` con otra cadena de conexión.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (pantalla provisional hasta que haya login); ese usuario es el que queda registrado en el historial. Después se abre la ventana principal, con el inicio y el menú lateral de módulos (apartado 4.0).
 
@@ -93,6 +95,7 @@ Una sola ventana con un **menú lateral** (*Inicio*, *Devoluciones*...) y la bar
 |---|---|---|
 | Inicio | `ModuloInicio`: saludo y una tarjeta por módulo con un dato del momento (devoluciones en curso, abonos retrasados...) | `ModuloInicio.cs` |
 | Devoluciones | `ModuloDevoluciones`: la lista de devoluciones (apartado 4.1) | `ModuloDevoluciones.cs` |
+| No conformidades | `ModuloNoConformidades`: incidencias, no conformidades y acciones de mejora de calidad (apartado 8) | `ModuloNoConformidades.cs` |
 
 - Al arrancar se ve el inicio. Cada módulo se crea la primera vez que se elige y no se cierra al cambiar de módulo, así que conserva sus filtros.
 - El de devoluciones se crea desde el principio, porque el **aviso de abonos retrasados** tiene que saltar en cualquier módulo; si se elige una devolución en el aviso, la ventana cambia sola a Devoluciones.
@@ -250,3 +253,25 @@ El historial **no lo escribe la aplicación**, lo escriben triggers de SQL Serve
 3. Decidir con `devolucion.Fase` (comparando con las constantes de `Fase`) si es editable o de consulta.
 4. Cambio de fase en el repositorio con `UPDATE ... WHERE fase = <esperada>` y devolver `false` si no se actualizó nada.
 5. Añadirla en `ModuloDevoluciones.CrearPantalla` y su título en `TitulosPorFase` del historial.
+
+---
+
+## 8. Incidencias y no conformidades (calidad)
+
+Sustituye al Excel *INCIDENCIAS Y NO CONFORMIDADES - CALIDAD* (MT-RG09). Cada fila de la hoja INCIDENCIAS es un registro de la tabla `NO_CONFORMIDAD`, con las mismas columnas.
+
+| Pieza | Archivo |
+|---|---|
+| Tablas, historial y opciones de los desplegables | [`BaseDatos/no_conformidades.sql`](BaseDatos/no_conformidades.sql) |
+| `record NoConformidad`, `TipoRegistro`, `ListaCalidad` | [`GPE.Datos/DatosCalidad.cs`](GPE.Datos/DatosCalidad.cs) |
+| Consultas | [`GPE.Datos/NoConformidadRepositorio.cs`](GPE.Datos/NoConformidadRepositorio.cs) |
+| Estado, validaciones y guardado | [`GPE.Logica/NoConformidadServicio.cs`](GPE.Logica/NoConformidadServicio.cs) |
+| Lista con filtros | [`GPE.Escritorio/ModuloNoConformidades.cs`](GPE.Escritorio/ModuloNoConformidades.cs) |
+| Ficha (nuevo y editar) | [`GPE.Escritorio/FormNoConformidad.cs`](GPE.Escritorio/FormNoConformidad.cs) |
+
+- **Tipo de registro**: no conformidad (`NC`), incidencia o acción de mejora. Como en el Excel, *Tipo* es solo para las NC y *MC/PCC/BPM*, *Parámetro* y *Operario* solo para las incidencias: la ficha oculta lo que no toca y al guardar se vacía.
+- **Desplegables**: salen de `CALIDAD_LISTA` (la hoja LISTAS). El registro guarda el texto elegido, así que cambiar o desactivar una opción (`activo = 0`) no altera lo ya registrado; si un registro tiene un valor que ya no está en la lista, la ficha lo sigue mostrando.
+- **Nº**: es texto, porque además de números hay códigos de auditoría (`AC-2025-3`). En una NC nueva se propone el siguiente número libre. Un nº repetido se avisa pero no se impide (en el Excel ya hay alguno repetido).
+- **Estado**: no se guarda, se calcula como la fórmula del Excel: con fecha fin, *Cerrada*; si no, *En plazo* hasta la fecha prevista y *Fuera de plazo* después. Una abierta sin fecha prevista sale como *Sin plazo* (en el Excel salía *Fuera de plazo*).
+- **Validaciones**: fecha, sección y problema siempre; en las NC también nº, origen y tipo. Origen R (reclamación) pide el cliente y origen P, el proveedor. Las fechas prevista y fin no pueden ser anteriores a la detección.
+- **Historial**: un trigger apunta cada cambio en `HISTORIAL_CAMBIOS` (`tabla_afectada = 'NO_CONFORMIDAD'`), como en devoluciones. Todavía no hay pantalla para verlo.

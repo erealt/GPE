@@ -67,6 +67,11 @@ public class FormPrincipal : Form
             ModuloInicio.ResumenDevoluciones,
             () => devoluciones) { Contenido = devoluciones });
 
+        lista.Add(new Modulo("No conformidades",
+            "Incidencias, no conformidades y acciones de mejora de calidad.",
+            ModuloInicio.ResumenNoConformidades,
+            () => new ModuloNoConformidades()));
+
         return lista;
     }
 

@@ -131,4 +131,20 @@ public class ModuloInicio : UserControl
             return null;
         }
     }
+
+    public static string? ResumenNoConformidades()
+    {
+        try
+        {
+            var lista = new NoConformidadServicio().ObtenerRegistros();
+            int abiertas = lista.Count(NoConformidadServicio.Abierta);
+            int fuera = lista.Count(nc => NoConformidadServicio.Estado(nc) == EstadoRegistro.FueraPlazo);
+            return $"{abiertas} {(abiertas == 1 ? "abierta" : "abiertas")}"
+                + (fuera > 0 ? $"  ·  ⚠ {fuera} fuera de plazo" : "");
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
 }
