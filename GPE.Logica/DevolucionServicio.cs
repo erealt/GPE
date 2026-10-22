@@ -117,6 +117,7 @@ public class DevolucionServicio
 
         if (!repositorio.FinalizarRevision(datos))
             throw new ReglaNegocioException(MensajeOtroUsuario);
+        AvisoServicio.EnviarPendientesEnSegundoPlano();
     }
 
     // Abono y cierre
@@ -159,6 +160,7 @@ public class DevolucionServicio
 
         if (!repositorio.RegistrarAbono(datos, DateTime.Today))
             throw new ReglaNegocioException(MensajeOtroUsuario);
+        AvisoServicio.EnviarPendientesEnSegundoPlano();
     }
 
     private static void ValidarAbono(DatosAbono datos, DateTime? fechaLlegada)

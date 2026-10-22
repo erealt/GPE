@@ -152,6 +152,8 @@ public static class TipoAviso
 {
     public const string NuevaDevolucion = "NUEVA_DEVOLUCION";
     public const string RecogidaSolicitada = "RECOGIDA_SOLICITADA";
+    public const string RevisionFinalizada = "REVISION_FINALIZADA";
+    public const string AbonoRegistrado = "ABONO_REGISTRADO";
 }
 
 // Aviso por correo pendiente, con los datos de la devolución para escribir el mensaje
@@ -168,12 +170,21 @@ public record AvisoPendiente(
     // Datos de la recogida (null si todavía no se ha programado)
     string? Transportista,
     DateTime? FechaRecogidaPrevista,
-    string? DireccionRecogida);
+    string? DireccionRecogida,
+    // Resultado de la revisión del almacén (unidades aptas y no aptas)
+    int UnidadesAptas,
+    int UnidadesNoAptas,
+    // Abono (null si todavía no se ha registrado)
+    string? ResultadoAbono,
+    string? NumeroAbono,
+    decimal? ImporteAbono,
+    string? ObservacionesAbono);
 
 // Resúmenes diarios por correo (tabla AVISO_RESUMEN, una vez al día por destinatario)
 public static class TipoResumen
 {
     public const string RevisionPendiente = "REVISION_PENDIENTE";
+    public const string AbonoPendiente = "ABONO_PENDIENTE";
 }
 
 // Devolución que alguien tiene pendiente, con el correo de esa persona

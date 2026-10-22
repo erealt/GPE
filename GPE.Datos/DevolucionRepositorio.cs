@@ -493,6 +493,14 @@ public class DevolucionRepositorio
             comando.ExecuteNonQuery();
         }
 
+        // Aviso a quien registra el abono (el siguiente paso)
+        using (var fabrica = new SqlCommand("SELECT fabrica_id FROM DEVOLUCION WHERE id = @devolucion;", conexion, transaccion))
+        {
+            fabrica.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId, (int)fabrica.ExecuteScalar()!,
+                TipoAviso.RevisionFinalizada, Fase.AbonoRealizado);
+        }
+
         transaccion.Commit();
         return true;
     }
@@ -539,8 +547,8 @@ public class DevolucionRepositorio
         return comando.ExecuteScalar() as string;
     }
 
-    // Guarda el abono y cierra la devolución (fase 4 → 6) en un solo UPDATE.
-    // Devuelve false si ya no estaba en la fase 4.
+    // Guarda el abono y cierra la devolución (fase 4 → 6) en un solo UPDATE, y avisa
+    // al almacén, todo en una transacción. Devuelve false si ya no estaba en la fase 4.
     public bool RegistrarAbono(DatosAbono datos, DateTime fechaCierre)
     {
         const string sql = @"
@@ -557,19 +565,35 @@ public class DevolucionRepositorio
             WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
         using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        comando.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
-        comando.Parameters.AddWithValue("@faseActual", Fase.RevisadaAlmacen);
-        comando.Parameters.AddWithValue("@faseNueva", Fase.Cierre);
-        comando.Parameters.AddWithValue("@resultado", datos.Resultado);
-        comando.Parameters.AddWithValue("@numero", (object?)datos.Numero ?? DBNull.Value);
-        comando.Parameters.AddWithValue("@fecha", datos.Fecha.Date);
-        comando.Parameters.Add("@importe", System.Data.SqlDbType.Decimal).Value = (object?)datos.Importe ?? DBNull.Value;
-        comando.Parameters["@importe"].Precision = 10;
-        comando.Parameters["@importe"].Scale = 2;
-        comando.Parameters.AddWithValue("@observaciones", (object?)datos.Observaciones ?? DBNull.Value);
-        comando.Parameters.AddWithValue("@cierre", fechaCierre.Date);
-        return comando.ExecuteNonQuery() == 1;
+        using var transaccion = conexion.BeginTransaction();
+
+        using (var comando = new SqlCommand(sql, conexion, transaccion))
+        {
+            comando.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            comando.Parameters.AddWithValue("@faseActual", Fase.RevisadaAlmacen);
+            comando.Parameters.AddWithValue("@faseNueva", Fase.Cierre);
+            comando.Parameters.AddWithValue("@resultado", datos.Resultado);
+            comando.Parameters.AddWithValue("@numero", (object?)datos.Numero ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@fecha", datos.Fecha.Date);
+            comando.Parameters.Add("@importe", System.Data.SqlDbType.Decimal).Value = (object?)datos.Importe ?? DBNull.Value;
+            comando.Parameters["@importe"].Precision = 10;
+            comando.Parameters["@importe"].Scale = 2;
+            comando.Parameters.AddWithValue("@observaciones", (object?)datos.Observaciones ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@cierre", fechaCierre.Date);
+            if (comando.ExecuteNonQuery() != 1)
+                return false;   // al salir sin Commit, la transacción se deshace
+        }
+
+        // Aviso al almacén (el responsable de la revisión) de cómo ha quedado el abono
+        using (var fabrica = new SqlCommand("SELECT fabrica_id FROM DEVOLUCION WHERE id = @devolucion;", conexion, transaccion))
+        {
+            fabrica.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId, (int)fabrica.ExecuteScalar()!,
+                TipoAviso.AbonoRegistrado, Fase.RevisadaAlmacen);
+        }
+
+        transaccion.Commit();
+        return true;
     }
 
     // Adjuntos (fotos y documentos)

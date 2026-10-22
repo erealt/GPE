@@ -44,7 +44,10 @@ public class AvisoRepositorio
         const string sqlDatos = @"
             SELECT a.id, a.tipo, a.destinatario, d.numero, c.nombre, c.codigo,
                    d.motivo, d.fecha_solicitud, d.observaciones,
-                   t.nombre, r.fecha_recogida, r.direccion
+                   t.nombre, r.fecha_recogida, r.direccion,
+                   (SELECT ISNULL(SUM(rl.cantidad), 0) FROM REVISION_LINEA rl WHERE rl.devolucion_id = d.id AND rl.apto = 1),
+                   (SELECT ISNULL(SUM(rl.cantidad), 0) FROM REVISION_LINEA rl WHERE rl.devolucion_id = d.id AND rl.apto = 0),
+                   d.resultado_abono, d.numero_abono, d.importe_abono, d.observaciones_abono
             FROM AVISO_CORREO a
             JOIN DEVOLUCION d ON d.id = a.devolucion_id
             JOIN CLIENTE c ON c.id = d.cliente_id
@@ -84,14 +87,21 @@ public class AvisoRepositorio
                 Observaciones: datos.IsDBNull(8) ? null : datos.GetString(8),
                 Transportista: datos.IsDBNull(9) ? null : datos.GetString(9),
                 FechaRecogidaPrevista: datos.IsDBNull(10) ? null : datos.GetDateTime(10),
-                DireccionRecogida: datos.IsDBNull(11) ? null : datos.GetString(11)));
+                DireccionRecogida: datos.IsDBNull(11) ? null : datos.GetString(11),
+                UnidadesAptas: datos.GetInt32(12),
+                UnidadesNoAptas: datos.GetInt32(13),
+                ResultadoAbono: datos.IsDBNull(14) ? null : datos.GetString(14),
+                NumeroAbono: datos.IsDBNull(15) ? null : datos.GetString(15),
+                ImporteAbono: datos.IsDBNull(16) ? null : datos.GetDecimal(16),
+                ObservacionesAbono: datos.IsDBNull(17) ? null : datos.GetString(17)));
         }
         return avisos;
     }
 
-    // Devoluciones con la mercancía recibida y sin revisar, para cada usuario con el rol
-    // responsable de la revisión en su fábrica. Se saltan quienes ya recibieron hoy el resumen.
-    public List<DevolucionPendiente> ObtenerRevisionesPendientes()
+    // Devoluciones que siguen en la fase indicada, para cada usuario con el rol responsable
+    // del paso siguiente en su fábrica (en la 3, el almacén tiene que revisar; en la 4,
+    // administración tiene que registrar el abono). Se saltan quienes ya recibieron hoy ese resumen.
+    public List<DevolucionPendiente> ObtenerPendientes(int faseActual, string tipoResumen)
     {
         const string sql = @"
             SELECT u.email, d.numero, c.nombre, c.codigo, d.fecha_llegada
@@ -110,9 +120,9 @@ public class AvisoRepositorio
 
         using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
-        comando.Parameters.AddWithValue("@faseActual", Fase.MercanciaRecibida);
-        comando.Parameters.AddWithValue("@faseSiguiente", Fase.RevisadaAlmacen);
-        comando.Parameters.AddWithValue("@tipo", TipoResumen.RevisionPendiente);
+        comando.Parameters.AddWithValue("@faseActual", faseActual);
+        comando.Parameters.AddWithValue("@faseSiguiente", faseActual + 1);
+        comando.Parameters.AddWithValue("@tipo", tipoResumen);
 
         using var lector = comando.ExecuteReader();
         while (lector.Read())

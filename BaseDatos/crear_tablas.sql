@@ -192,7 +192,7 @@ CREATE TABLE AVISO_CORREO (
     intentos INT NOT NULL CONSTRAINT DF_aviso_intentos DEFAULT 0,
     ultimo_error NVARCHAR(1000) NULL,
     bloqueado_hasta DATETIME2 NULL,   -- mientras un ordenador lo está enviando
-    CONSTRAINT CK_aviso_tipo CHECK (tipo IN ('NUEVA_DEVOLUCION', 'RECOGIDA_SOLICITADA')),
+    CONSTRAINT CK_aviso_tipo CHECK (tipo IN ('NUEVA_DEVOLUCION', 'RECOGIDA_SOLICITADA', 'REVISION_FINALIZADA', 'ABONO_REGISTRADO')),
     CONSTRAINT FK_aviso_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE
 );
@@ -407,14 +407,15 @@ GO
 
 INSERT INTO FABRICA (nombre) VALUES (N'Fábrica Principal');
 
-INSERT INTO ROL (nombre) VALUES (N'Transporte'), (N'Almacén');
+-- Administración da de alta las devoluciones y registra los abonos
+INSERT INTO ROL (nombre) VALUES (N'Administración'), (N'Transporte'), (N'Almacén');
 
 -- rol_responsable_id: quién hace el paso que lleva a esa fase (recibe los avisos por correo)
 INSERT INTO ESTADO_DEVOLUCION (nombre, fase, rol_responsable_id) VALUES
-    (N'Solicitud recibida',  1, NULL),
+    (N'Solicitud recibida',  1, (SELECT id FROM ROL WHERE nombre = N'Administración')),
     (N'Recogida solicitada', 2, (SELECT id FROM ROL WHERE nombre = N'Transporte')),
     (N'Mercancía recibida',  3, (SELECT id FROM ROL WHERE nombre = N'Almacén')),
     (N'Revisada almacén',    4, (SELECT id FROM ROL WHERE nombre = N'Almacén')),
-    (N'Abono realizado',     5, NULL),
-    (N'Cierre',              6, NULL);
+    (N'Abono realizado',     5, (SELECT id FROM ROL WHERE nombre = N'Administración')),
+    (N'Cierre',              6, (SELECT id FROM ROL WHERE nombre = N'Administración'));
 GO
