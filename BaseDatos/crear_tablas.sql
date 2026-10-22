@@ -198,6 +198,16 @@ CREATE TABLE AVISO_CORREO (
 );
 
 CREATE INDEX IX_aviso_pendiente ON AVISO_CORREO (enviado_en, id);
+
+-- Resúmenes diarios ya enviados (GPE.Avisos): uno por día, tipo y destinatario,
+-- para no repetirlo si la tarea programada se ejecuta más de una vez el mismo día
+CREATE TABLE AVISO_RESUMEN (
+    fecha DATE NOT NULL,
+    tipo NVARCHAR(30) NOT NULL,
+    destinatario NVARCHAR(150) NOT NULL,
+    enviado_en DATETIME2 NOT NULL CONSTRAINT DF_resumen_enviado DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_aviso_resumen PRIMARY KEY (fecha, tipo, destinatario)
+);
 GO
 
 -- Historial de cambios
@@ -388,4 +398,23 @@ BEGIN
     ) c
     WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
 END;
+GO
+
+-- Datos iniciales
+-- Sin estos datos la aplicación no funciona: las fases del proceso, la fábrica
+-- (la aplicación usa de momento la fábrica 1) y los roles que reciben los avisos.
+-- Usuarios, clientes, productos y transportistas se dan de alta después.
+
+INSERT INTO FABRICA (nombre) VALUES (N'Fábrica Principal');
+
+INSERT INTO ROL (nombre) VALUES (N'Transporte'), (N'Almacén');
+
+-- rol_responsable_id: quién hace el paso que lleva a esa fase (recibe los avisos por correo)
+INSERT INTO ESTADO_DEVOLUCION (nombre, fase, rol_responsable_id) VALUES
+    (N'Solicitud recibida',  1, NULL),
+    (N'Recogida solicitada', 2, (SELECT id FROM ROL WHERE nombre = N'Transporte')),
+    (N'Mercancía recibida',  3, (SELECT id FROM ROL WHERE nombre = N'Almacén')),
+    (N'Revisada almacén',    4, (SELECT id FROM ROL WHERE nombre = N'Almacén')),
+    (N'Abono realizado',     5, NULL),
+    (N'Cierre',              6, NULL);
 GO

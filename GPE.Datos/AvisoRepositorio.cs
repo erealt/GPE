@@ -89,6 +89,58 @@ public class AvisoRepositorio
         return avisos;
     }
 
+    // Devoluciones con la mercancía recibida y sin revisar, para cada usuario con el rol
+    // responsable de la revisión en su fábrica. Se saltan quienes ya recibieron hoy el resumen.
+    public List<DevolucionPendiente> ObtenerRevisionesPendientes()
+    {
+        const string sql = @"
+            SELECT u.email, d.numero, c.nombre, c.codigo, d.fecha_llegada
+            FROM DEVOLUCION d
+            JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id AND e.fase = @faseActual
+            JOIN ESTADO_DEVOLUCION siguiente ON siguiente.fase = @faseSiguiente
+            JOIN USUARIO_ROL ur ON ur.rol_id = siguiente.rol_responsable_id AND ur.fabrica_id = d.fabrica_id
+            JOIN USUARIO u ON u.id = ur.usuario_id
+            JOIN CLIENTE c ON c.id = d.cliente_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM AVISO_RESUMEN r
+                WHERE r.fecha = CAST(SYSDATETIME() AS DATE) AND r.tipo = @tipo AND r.destinatario = u.email)
+            ORDER BY u.email, d.fecha_llegada, d.id;";
+
+        var pendientes = new List<DevolucionPendiente>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@faseActual", Fase.MercanciaRecibida);
+        comando.Parameters.AddWithValue("@faseSiguiente", Fase.RevisadaAlmacen);
+        comando.Parameters.AddWithValue("@tipo", TipoResumen.RevisionPendiente);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            pendientes.Add(new DevolucionPendiente(
+                Destinatario: lector.GetString(0),
+                Numero: lector.GetString(1),
+                Cliente: lector.GetString(2),
+                CodigoCliente: lector.GetString(3),
+                FechaLlegada: lector.IsDBNull(4) ? null : lector.GetDateTime(4)));
+        }
+        return pendientes;
+    }
+
+    // Para no mandar el mismo resumen dos veces el mismo día
+    public void MarcarResumenEnviado(string tipo, string destinatario)
+    {
+        const string sql = @"
+            INSERT INTO AVISO_RESUMEN (fecha, tipo, destinatario)
+            VALUES (CAST(SYSDATETIME() AS DATE), @tipo, @destinatario);";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@tipo", tipo);
+        comando.Parameters.AddWithValue("@destinatario", destinatario);
+        comando.ExecuteNonQuery();
+    }
+
     public void MarcarEnviado(int avisoId)
     {
         const string sql = @"

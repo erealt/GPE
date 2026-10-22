@@ -7,7 +7,7 @@ using MimeKit;
 
 namespace GPE.Logica;
 
-// Envía los avisos por correo apuntados en AVISO_CORREO.
+// Envía los avisos por correo apuntados en AVISO_CORREO y el resumen diario al almacén.
 // La cuenta de envío se configura en cada ordenador con variables de entorno
 // (la contraseña nunca va en el código ni en la base de datos):
 //   GPE_SMTP_USUARIO   cuenta que envía, p. ej. avisos@empresa.com
@@ -34,21 +34,15 @@ public static class AvisoServicio
         if (Interlocked.Exchange(ref enviando, 1) == 1) return;
         try
         {
-            string remitente = Environment.GetEnvironmentVariable("GPE_SMTP_USUARIO") ?? "";
-            // Google muestra la contraseña de aplicación en grupos de 4 con espacios: se quitan
-            string clave = (Environment.GetEnvironmentVariable("GPE_SMTP_CLAVE") ?? "").Replace(" ", "");
-            if (remitente == "" || clave == "") return;
+            if (!Configurado(out string remitente, out _)) return;
 
             var avisos = repositorio.ReservarPendientes();
             if (avisos.Count == 0) return;
 
-            using var cliente = new SmtpClient { Timeout = 20000 };
+            SmtpClient cliente;
             try
             {
-                string servidor = Environment.GetEnvironmentVariable("GPE_SMTP_SERVIDOR") ?? "smtp.gmail.com";
-                int puerto = int.TryParse(Environment.GetEnvironmentVariable("GPE_SMTP_PUERTO"), out int p) ? p : 465;
-                cliente.Connect(servidor, puerto, SecureSocketOptions.Auto);
-                cliente.Authenticate(remitente, clave);
+                cliente = Conectar();
             }
             catch (Exception ex) when (ex is not DbException)
             {
@@ -58,20 +52,23 @@ public static class AvisoServicio
                 return;
             }
 
-            foreach (var aviso in avisos)
+            using (cliente)
             {
-                try
+                foreach (var aviso in avisos)
                 {
-                    cliente.Send(Mensaje(remitente, aviso));
-                    repositorio.MarcarEnviado(aviso.Id);
+                    try
+                    {
+                        var (asunto, cuerpo) = Redactar(aviso);
+                        cliente.Send(Mensaje(remitente, aviso.Destinatario, asunto, cuerpo));
+                        repositorio.MarcarEnviado(aviso.Id);
+                    }
+                    catch (Exception ex) when (ex is not DbException)
+                    {
+                        repositorio.MarcarFallo(aviso.Id, DescribirError(ex));
+                    }
                 }
-                catch (Exception ex) when (ex is not DbException)
-                {
-                    repositorio.MarcarFallo(aviso.Id, DescribirError(ex));
-                }
+                cliente.Disconnect(true);
             }
-
-            cliente.Disconnect(true);
         }
         finally
         {
@@ -79,19 +76,69 @@ public static class AvisoServicio
         }
     }
 
-    private static MimeMessage Mensaje(string remitente, AvisoPendiente aviso)
+    // Resumen diario al almacén: un correo por persona con todas las devoluciones que
+    // tienen la mercancía recibida y sin revisar. Lo lanza GPE.Avisos (tarea programada
+    // de Windows), sin necesidad de abrir GPE. A quien ya lo recibió hoy no se le repite.
+    // Devuelve cuántos correos se han enviado; lanza la excepción si no se puede conectar.
+    public static int EnviarResumenDiario()
     {
-        var (asunto, cuerpo) = Redactar(aviso);
+        if (!Configurado(out string remitente, out _))
+            throw new InvalidOperationException("Falta configurar GPE_SMTP_USUARIO y GPE_SMTP_CLAVE.");
+
+        var porPersona = repositorio.ObtenerRevisionesPendientes().GroupBy(p => p.Destinatario).ToList();
+        if (porPersona.Count == 0) return 0;
+
+        using var cliente = Conectar();
+        foreach (var grupo in porPersona)
+        {
+            var (asunto, cuerpo) = RedactarResumenRevision(grupo.ToList());
+            cliente.Send(Mensaje(remitente, grupo.Key, asunto, cuerpo));
+            repositorio.MarcarResumenEnviado(TipoResumen.RevisionPendiente, grupo.Key);
+        }
+        cliente.Disconnect(true);
+        return porPersona.Count;
+    }
+
+    private static bool Configurado(out string remitente, out string clave)
+    {
+        remitente = Environment.GetEnvironmentVariable("GPE_SMTP_USUARIO") ?? "";
+        // Google muestra la contraseña de aplicación en grupos de 4 con espacios: se quitan
+        clave = (Environment.GetEnvironmentVariable("GPE_SMTP_CLAVE") ?? "").Replace(" ", "");
+        return remitente != "" && clave != "";
+    }
+
+    private static SmtpClient Conectar()
+    {
+        Configurado(out string remitente, out string clave);
+        string servidor = Environment.GetEnvironmentVariable("GPE_SMTP_SERVIDOR") ?? "smtp.gmail.com";
+        int puerto = int.TryParse(Environment.GetEnvironmentVariable("GPE_SMTP_PUERTO"), out int p) ? p : 465;
+
+        var cliente = new SmtpClient { Timeout = 20000 };
+        try
+        {
+            cliente.Connect(servidor, puerto, SecureSocketOptions.Auto);
+            cliente.Authenticate(remitente, clave);
+            return cliente;
+        }
+        catch
+        {
+            cliente.Dispose();
+            throw;
+        }
+    }
+
+    private static MimeMessage Mensaje(string remitente, string destinatario, string asunto, string cuerpo)
+    {
         var mensaje = new MimeMessage();
         mensaje.From.Add(new MailboxAddress("GPE · Devoluciones", remitente));
-        mensaje.To.Add(MailboxAddress.Parse(aviso.Destinatario));
+        mensaje.To.Add(MailboxAddress.Parse(destinatario));
         mensaje.Subject = asunto;
         mensaje.Body = new TextPart("plain") { Text = cuerpo };
         return mensaje;
     }
 
     // La causa real puede estar en las excepciones internas
-    private static string DescribirError(Exception ex)
+    public static string DescribirError(Exception ex)
     {
         var mensajes = new List<string>();
         for (Exception? e = ex; e != null; e = e.InnerException)
@@ -134,5 +181,39 @@ public static class AvisoServicio
             Este correo se ha enviado automáticamente; no hace falta responder.
             """),
         _ => throw new InvalidOperationException($"Tipo de aviso desconocido: {aviso.Tipo}")
+    };
+
+    // Primero las que más tiempo llevan esperando
+    private static (string Asunto, string Cuerpo) RedactarResumenRevision(List<DevolucionPendiente> pendientes)
+    {
+        int n = pendientes.Count;
+        var lineas = pendientes.Select(p =>
+        {
+            string llegada = p.FechaLlegada is DateTime f
+                ? $"llegó el {f.ToString("dd/MM/yyyy", Es)} ({Dias((DateTime.Today - f.Date).Days)})"
+                : "sin fecha de llegada";
+            return $"  · {p.Numero} · {p.CodigoCliente} · {p.Cliente} · {llegada}";
+        });
+
+        return (
+            n == 1 ? "Tienes 1 devolución pendiente de revisar" : $"Tienes {n} devoluciones pendientes de revisar",
+            $"""
+            Buenos días.
+
+            {(n == 1 ? "Esta devolución tiene" : "Estas devoluciones tienen")} la mercancía en el almacén y falta revisarla:
+
+            {string.Join(Environment.NewLine, lineas)}
+
+            Abre GPE para revisar la mercancía. Recibirás este resumen cada día mientras quede alguna pendiente.
+
+            Este correo se ha enviado automáticamente; no hace falta responder.
+            """);
+    }
+
+    private static string Dias(int dias) => dias switch
+    {
+        0 => "hoy",
+        1 => "hace 1 día",
+        _ => $"hace {dias} días"
     };
 }

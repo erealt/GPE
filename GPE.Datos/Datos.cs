@@ -170,6 +170,20 @@ public record AvisoPendiente(
     DateTime? FechaRecogidaPrevista,
     string? DireccionRecogida);
 
+// Resúmenes diarios por correo (tabla AVISO_RESUMEN, una vez al día por destinatario)
+public static class TipoResumen
+{
+    public const string RevisionPendiente = "REVISION_PENDIENTE";
+}
+
+// Devolución que alguien tiene pendiente, con el correo de esa persona
+public record DevolucionPendiente(
+    string Destinatario,
+    string Numero,
+    string Cliente,
+    string CodigoCliente,
+    DateTime? FechaLlegada);
+
 public static class ResultadoAbono
 {
     public const string Total = "TOTAL";

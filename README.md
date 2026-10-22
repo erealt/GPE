@@ -259,6 +259,8 @@ Cuando una devolución pasa de paso se avisa por correo a quien le toca el sigui
 
 [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) prepara los roles *Transporte* y *Almacén* con un correo de prueba.
 
+**Resumen diario al almacén (sin abrir GPE).** El programa de consola [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana, a quien tenga el rol responsable de la revisión (fase 4, *Almacén*), un único correo con todas las devoluciones que tienen la mercancía recibida y sin revisar, de la más antigua a la más nueva. También envía los avisos de `AVISO_CORREO` que se quedaron pendientes. `AVISO_RESUMEN` evita mandar el mismo resumen dos veces el mismo día. Lo ejecuta una tarea programada de Windows en un ordenador que esté encendido por la mañana, con las mismas variables `GPE_SMTP_*` (y `GPE_CONEXION` si la base de datos no está en `localhost`). Deja lo que hace en `%LOCALAPPDATA%\GPE\avisos.log`. El aviso dentro de la aplicación ([`FormAvisoAbonos`](GPE.Escritorio/AvisoAbonos.cs)) sigue igual al entrar.
+
 ---
 
 ## 7. Cómo añadir algo nuevo
