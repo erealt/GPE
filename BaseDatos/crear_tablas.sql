@@ -9,8 +9,7 @@ CREATE TABLE FABRICA (
     nombre NVARCHAR(100) NOT NULL UNIQUE
 );
  
--- ROL, USUARIO_ROL y LOTE todavía no los usa la aplicación: están preparadas para
--- cuando haya login con permisos por rol y fábrica, y para elegir el lote de una
+-- LOTE todavía no la usa la aplicación: está preparada para elegir el lote de una
 -- lista en vez de escribirlo (hoy DEVOLUCION_PRODUCTO.lote es texto libre).
 CREATE TABLE ROL (
     id INT IDENTITY(1,1) PRIMARY KEY,

@@ -47,7 +47,7 @@ public record DatosNuevaDevolucion(
     DateTime FechaSolicitud,
     List<LineaNuevaDevolucion> Lineas);
 
-public record Usuario(int Id, string Nombre, string Email)
+public record Usuario(int Id, string Nombre)
 {
     public string Iniciales => string.Concat(Nombre
         .Split(' ', StringSplitOptions.RemoveEmptyEntries)

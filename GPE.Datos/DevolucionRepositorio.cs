@@ -101,7 +101,7 @@ public class DevolucionRepositorio
 
     public List<Usuario> ObtenerUsuarios()
     {
-        const string sql = "SELECT id, nombre, email FROM USUARIO ORDER BY nombre;";
+        const string sql = "SELECT id, nombre FROM USUARIO ORDER BY nombre;";
 
         var usuarios = new List<Usuario>();
 
@@ -110,7 +110,7 @@ public class DevolucionRepositorio
 
         using var lector = comando.ExecuteReader();
         while (lector.Read())
-            usuarios.Add(new Usuario(lector.GetInt32(0), lector.GetString(1), lector.GetString(2)));
+            usuarios.Add(new Usuario(lector.GetInt32(0), lector.GetString(1)));
 
         return usuarios;
     }
