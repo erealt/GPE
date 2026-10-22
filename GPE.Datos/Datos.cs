@@ -123,6 +123,28 @@ public record AdjuntoInfo(int Id, string NombreArchivo, int TamanoBytes, DateTim
 
 public record ArchivoNuevo(string NombreArchivo, byte[] Contenido);
 
+public static class TipoAviso
+{
+    public const string NuevaDevolucion = "NUEVA_DEVOLUCION";
+    public const string RecogidaSolicitada = "RECOGIDA_SOLICITADA";
+}
+
+// Aviso por correo pendiente, con los datos de la devolución para escribir el mensaje
+public record AvisoPendiente(
+    int Id,
+    string Tipo,
+    string Destinatario,
+    string NumeroDevolucion,
+    string Cliente,
+    string CodigoCliente,
+    string Motivo,
+    DateTime FechaSolicitud,
+    string? Observaciones,
+    // Datos de la recogida (null si todavía no se ha programado)
+    string? Transportista,
+    DateTime? FechaRecogidaPrevista,
+    string? DireccionRecogida);
+
 public static class ResultadoAbono
 {
     public const string Total = "TOTAL";

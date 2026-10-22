@@ -112,7 +112,6 @@ public class ModuloDevoluciones : UserControl
         titulos.Controls.Add(lblSubtitulo);
         titulos.Controls.Add(lblTitulo);
 
-        // Botón principal
         btnNueva.Height = 46;
         btnNueva.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnNueva.Margin = new Padding(0, 10, 0, 0);
@@ -371,7 +370,7 @@ public class ModuloDevoluciones : UserControl
         Componentes.PintarEtiqueta(e, devolucion.Estado, fondo, texto);
     }
 
-    // ---------- Datos y filtros ----------
+    // Datos y filtros
 
     private void CargarDatos()
     {

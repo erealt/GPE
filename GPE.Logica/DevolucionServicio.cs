@@ -11,7 +11,7 @@ public class DevolucionServicio
 {
     private readonly DevolucionRepositorio repositorio = new();
 
-    // ---------- Consultas ----------
+    // Consultas
 
     public List<DevolucionFila> ObtenerDevoluciones() => repositorio.ObtenerDevoluciones();
 
@@ -38,15 +38,17 @@ public class DevolucionServicio
         return HistorialFormateador.Agrupar(repositorio.ObtenerHistorial(devolucionId), nombres);
     }
 
-    // ---------- Operaciones ----------
+    // Operaciones
 
     public int CrearDevolucion(DatosNuevaDevolucion datos)
     {
         Validar(datos);
-        return repositorio.InsertarDevolucion(datos);
+        int id = repositorio.InsertarDevolucion(datos);
+        AvisoServicio.EnviarPendientesEnSegundoPlano();
+        return id;
     }
 
-    // ---------- Almacén ----------
+    // Almacén
 
     private const string MensajeOtroUsuario =
         "Otro usuario ya ha cambiado el estado de esta devolución. Cierra la pantalla y vuelve a abrirla.";
@@ -109,7 +111,7 @@ public class DevolucionServicio
             throw new ReglaNegocioException(MensajeOtroUsuario);
     }
 
-    // ---------- Abono y cierre ----------
+    // Abono y cierre
 
     // Pasados estos días desde la llegada de la mercancía sin abonar, se avisa al usuario
     public const int DiasAvisoAbono = 3;
@@ -172,7 +174,7 @@ public class DevolucionServicio
             throw new ReglaNegocioException("La fecha del abono no puede ser anterior a la llegada de la mercancía.");
     }
 
-    // ---------- Adjuntos ----------
+    // Adjuntos
 
     public const int TamanoMaximoAdjunto = 10 * 1024 * 1024;   // 10 MB por archivo
 
@@ -218,13 +220,14 @@ public class DevolucionServicio
         return archivos;
     }
 
-    // ---------- Recogida ----------
+    // Recogida
 
     public void GuardarRecogida(DatosRecogida datos, DateTime fechaSolicitud)
     {
         ValidarRecogida(datos, fechaSolicitud);
         if (!repositorio.GuardarRecogida(datos))
             throw new ReglaNegocioException("La mercancía ya ha llegado: la recogida ya no se puede modificar.");
+        AvisoServicio.EnviarPendientesEnSegundoPlano();
     }
 
     private static void ValidarRecogida(DatosRecogida datos, DateTime fechaSolicitud)

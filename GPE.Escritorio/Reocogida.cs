@@ -186,7 +186,7 @@ public class Recogida : PantallaFase
 
     private void Guardar()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         campos.LimpiarErrores();
         Control? primerError = null;
 

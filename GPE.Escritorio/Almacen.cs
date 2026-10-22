@@ -107,7 +107,7 @@ public class FormAlmacen : PantallaFase
         ResumeLayout();
     }
 
-    // ---------- Paso 3: llegada ----------
+    // Paso 3: llegada
 
     private Control CrearTarjetaPendiente()
     {
@@ -195,7 +195,7 @@ public class FormAlmacen : PantallaFase
         return tarjeta;
     }
 
-    // ---------- Reabrir ----------
+    // Reabrir
 
     // Vuelve a la fase anterior (con motivo) y muestra el paso indicado
     private void Reabrir(string titulo, string explicacion, int pasoDestino)
@@ -235,7 +235,7 @@ public class FormAlmacen : PantallaFase
         Construir();
     }
 
-    // ---------- Paso 4: revisión ----------
+    // Paso 4: revisión
 
     private Control CrearTarjetaProductos(bool editable)
     {
@@ -397,7 +397,7 @@ public class FormAlmacen : PantallaFase
         hayCambios = false;
     }
 
-    // ---------- Validación de la tabla ----------
+    // Validación de la tabla
 
     private void ValidarNumero(object? sender, DataGridViewCellValidatingEventArgs e)
     {
@@ -463,7 +463,7 @@ public class FormAlmacen : PantallaFase
         }
     }
 
-    // ---------- Finalizar ----------
+    // Finalizar
 
     private void FinalizarRevision()
     {

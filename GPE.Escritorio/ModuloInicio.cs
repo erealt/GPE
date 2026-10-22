@@ -115,7 +115,7 @@ public class ModuloInicio : UserControl
         }
     }
 
-    // ---------- Datos de cada tarjeta (null si no se pueden leer) ----------
+    // Datos de cada tarjeta (null si no se pueden leer)
 
     public static string? ResumenDevoluciones()
     {

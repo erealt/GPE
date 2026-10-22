@@ -2,14 +2,9 @@ namespace GPE.Escritorio;
 
 static class Program
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
     [STAThread]
     static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
 
         // Red de seguridad: un error que ninguna pantalla haya previsto se enseña
@@ -26,6 +21,9 @@ static class Program
         {
             if (seleccion.ShowDialog() != DialogResult.OK) return;
         }
+
+        // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)
+        GPE.Logica.AvisoServicio.EnviarPendientesEnSegundoPlano();
 
         Application.Run(new FormPrincipal());
     }

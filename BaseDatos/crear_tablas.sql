@@ -2,9 +2,7 @@
 USE GPE;
 GO
  
-/* ============================================================
-   1) TABLAS BASE
-   ============================================================ */
+-- Tablas base
  
 CREATE TABLE FABRICA (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -58,9 +56,7 @@ CREATE TABLE LOTE (
     CONSTRAINT UQ_lote_producto_codigo UNIQUE (producto_id, codigo)
 );
  
-/* ============================================================
-   2) DEVOLUCIONES
-   ============================================================ */
+-- Devoluciones
  
 -- Estados del proceso; "fase" (1-6) alimenta la barra de progreso
 CREATE TABLE ESTADO_DEVOLUCION (
@@ -166,9 +162,29 @@ CREATE TABLE ADJUNTO (
 CREATE INDEX IX_adjunto_devolucion ON ADJUNTO (devolucion_id, tipo);
 GO
 
-/* ============================================================
-   3) HISTORIAL DE CAMBIOS
-   ============================================================ */
+-- Avisos por correo pendientes de enviar. Se apuntan en la misma transacción que el
+-- cambio que los provoca y la aplicación los envía después: si el correo falla,
+-- el cambio se guarda igual y el aviso se reintenta.
+-- Los destinatarios son los usuarios con el rol responsable del paso (ESTADO_DEVOLUCION.rol_responsable_id).
+CREATE TABLE AVISO_CORREO (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    devolucion_id INT NOT NULL,
+    tipo NVARCHAR(30) NOT NULL,
+    destinatario NVARCHAR(150) NOT NULL,
+    creado_en DATETIME2 NOT NULL CONSTRAINT DF_aviso_creado DEFAULT SYSDATETIME(),
+    enviado_en DATETIME2 NULL,
+    intentos INT NOT NULL CONSTRAINT DF_aviso_intentos DEFAULT 0,
+    ultimo_error NVARCHAR(1000) NULL,
+    bloqueado_hasta DATETIME2 NULL,   -- mientras un ordenador lo está enviando
+    CONSTRAINT CK_aviso_tipo CHECK (tipo IN ('NUEVA_DEVOLUCION', 'RECOGIDA_SOLICITADA')),
+    CONSTRAINT FK_aviso_devolucion FOREIGN KEY (devolucion_id)
+        REFERENCES DEVOLUCION(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IX_aviso_pendiente ON AVISO_CORREO (enviado_en, id);
+GO
+
+-- Historial de cambios
 
 -- Quién modificó qué y cuándo. Lo rellenan los triggers de abajo.
 CREATE TABLE HISTORIAL_CAMBIOS (

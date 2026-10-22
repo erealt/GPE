@@ -88,7 +88,7 @@ public class FormPrincipal : Form
         MarcarElegido();
     }
 
-    // ---------- Menú lateral ----------
+    // Menú lateral
 
     private Control CrearMenuLateral()
     {
@@ -169,7 +169,7 @@ public class FormPrincipal : Form
         }
     }
 
-    // ---------- Barra superior ----------
+    // Barra superior
 
     private static Panel CrearBarraSuperior()
     {

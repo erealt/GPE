@@ -233,6 +233,32 @@ El historial **no lo escribe la aplicación**, lo escriben triggers de SQL Serve
 
 **¿Por qué JSON?** Porque así una sola tabla de historial sirve para todas las tablas aunque tengan columnas distintas, y al añadir una columna nueva (como las del abono) el historial la recoge solo, sin tocar los triggers. El trigger de `ADJUNTO` es la excepción: lista las columnas a mano para no copiar el contenido del archivo al historial.
 
+### Avisos por correo
+
+Cuando una devolución pasa de paso se avisa por correo a quien le toca el siguiente, sin que nadie tenga que escribirlo:
+
+| Momento | Aviso a | Tipo |
+|---|---|---|
+| Se crea la devolución | Transporte (programar la recogida) | `NUEVA_DEVOLUCION` |
+| Se solicita la recogida (solo la primera vez, no al modificarla) | Almacén (recibir la mercancía) | `RECOGIDA_SOLICITADA` |
+
+
+1. **A quién:** a los usuarios con el rol responsable del paso siguiente (`ESTADO_DEVOLUCION.rol_responsable_id`) en la fábrica de la devolución (`USUARIO_ROL`).
+2. **Cola en la base de datos:** el aviso se apunta en `AVISO_CORREO` dentro de la misma transacción que el cambio que lo provoca. Si el correo falla, la devolución se guarda igual.
+3. **Envío:** [`AvisoServicio`](GPE.Logica/AvisoServicio.cs) los envía en segundo plano con MailKit, justo después de guardar y al abrir la aplicación. Si falla, guarda el motivo en `ultimo_error` y lo reintenta (hasta 5 veces).
+4. **Cuenta de envío:** se configura en cada ordenador con variables de entorno, para que la contraseña no esté en el código:
+
+   | Variable | Valor |
+   |---|---|
+   | `GPE_SMTP_USUARIO` | Cuenta que envía (p. ej. `avisos@empresa.com`) |
+   | `GPE_SMTP_CLAVE` | Contraseña de aplicación de esa cuenta (en Gmail: myaccount.google.com/apppasswords, requiere verificación en dos pasos) |
+   | `GPE_SMTP_SERVIDOR` | Opcional, por defecto `smtp.gmail.com` |
+   | `GPE_SMTP_PUERTO` | Opcional, por defecto `465` |
+
+   Se guardan con `setx NOMBRE "valor"` y hay que volver a abrir la aplicación. Sin configurar, los avisos se quedan pendientes.
+
+[`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) prepara los roles *Transporte* y *Almacén* con un correo de prueba.
+
 ---
 
 ## 7. Cómo añadir algo nuevo

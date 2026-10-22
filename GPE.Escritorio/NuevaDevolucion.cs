@@ -16,7 +16,6 @@ public class FormNuevaDevolucion : Form
     private List<Producto> productos = new();
     private bool cargaCorrecta;
 
-    // 1. Datos de la devolución
     private readonly TextBox txtCodigoCliente = new();
     private readonly ComboBox cmbCliente = new();
     private readonly DateTimePicker dtpSolicitud = new();
@@ -51,7 +50,7 @@ public class FormNuevaDevolucion : Form
         Controls.Add(CrearContenido());
     }
 
-    // ---------- Preparación de controles ----------
+    // Preparación de controles
 
     private void PrepararControles()
     {
@@ -97,7 +96,7 @@ public class FormNuevaDevolucion : Form
         txtObservaciones.ScrollBars = ScrollBars.Vertical;
     }
 
-    // ---------- Estructura general ----------
+    // Estructura general
 
     private Panel CrearContenido()
     {
@@ -114,7 +113,7 @@ public class FormNuevaDevolucion : Form
         return scroll;
     }
 
-    // ---------- Tarjeta 1: datos ----------
+    // Tarjeta 1: datos
 
     private Control CrearTarjetaDatos()
     {
@@ -134,7 +133,7 @@ public class FormNuevaDevolucion : Form
         return tarjeta;
     }
 
-    // ---------- Tarjeta: productos esperados ----------
+    // Tarjeta: productos esperados
 
     private Control CrearTarjetaProductos()
     {
@@ -172,11 +171,11 @@ public class FormNuevaDevolucion : Form
         return Componentes.Acciones(btnGuardar, btnCancelar);
     }
 
-    // ---------- Guardado ----------
+    // Guardado
 
     private void Guardar()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         LimpiarErrores();
         Control? primerError = null;
 
@@ -228,7 +227,6 @@ public class FormNuevaDevolucion : Form
                 string.IsNullOrWhiteSpace(f.Lote.Text) ? null : f.Lote.Text.Trim()))
             .ToList();
 
-        // 2. Guardar en la base de datos
         var datos = new DatosNuevaDevolucion(
             FabricaProvisional,
             cliente.Id,
@@ -257,7 +255,7 @@ public class FormNuevaDevolucion : Form
         DialogResult = DialogResult.OK;
     }
 
-    // ---------- Mensajes de error ----------
+    // Mensajes de error
 
     private void MostrarErrorProductos(string mensaje)
     {
@@ -271,7 +269,7 @@ public class FormNuevaDevolucion : Form
         lblErrorProductos.Visible = false;
     }
 
-    // ---------- Filas de producto ----------
+    // Filas de producto
 
     private static TableLayoutPanel PlantillaFilaProducto()
     {

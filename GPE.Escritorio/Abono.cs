@@ -106,7 +106,7 @@ public class FormAbono : PantallaFase
         ResumeLayout();
     }
 
-    // ---------- Resumen de la revisión ----------
+    // Resumen de la revisión
 
     private Control CrearTarjetaRevision()
     {
@@ -206,7 +206,7 @@ public class FormAbono : PantallaFase
         return grid;
     }
 
-    // ---------- Datos del abono ----------
+    // Datos del abono
 
     private Control CrearTarjetaAbono()
     {
@@ -360,7 +360,7 @@ public class FormAbono : PantallaFase
         }
     }
 
-    // ---------- Botones ----------
+    // Botones
 
     private Control CrearAccionesRegistro()
     {
@@ -426,11 +426,11 @@ public class FormAbono : PantallaFase
         Construir();
     }
 
-    // ---------- Registrar ----------
+    // Registrar
 
     private void RegistrarAbono()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         campos.LimpiarErrores();
         Control? primerError = null;
 
@@ -467,7 +467,6 @@ public class FormAbono : PantallaFase
             return;
         }
 
-        // 2. Confirmación
         string pregunta = hayAbono
             ? $"Se registrará el abono {numero} de {importe.ToString("C", Componentes.Es)} " +
               $"con fecha {dtpFecha.Value.ToString("dd/MM/yyyy", Componentes.Es)}"
@@ -497,7 +496,6 @@ public class FormAbono : PantallaFase
                 avisoRepetido == "" ? MessageBoxIcon.Question : MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
-        // 3. Guardar
         var datos = new DatosAbono(
             devolucion.Id,
             resultado!,

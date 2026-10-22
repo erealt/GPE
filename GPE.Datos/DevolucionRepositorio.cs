@@ -5,7 +5,7 @@ namespace GPE.Datos;
 public class DevolucionRepositorio
 {
 
-    // ---------- Lectura ----------
+    // Lectura
 
     private const string SqlDevoluciones = @"
             SELECT d.id, d.numero, c.nombre, c.codigo, d.motivo,
@@ -224,7 +224,7 @@ public class DevolucionRepositorio
         return nombres;
     }
 
-    // ---------- Escritura ----------
+    // Escritura
 
     public int InsertarDevolucion(DatosNuevaDevolucion datos)
     {
@@ -272,11 +272,15 @@ public class DevolucionRepositorio
             comandoLinea.ExecuteNonQuery();
         }
 
+        // Aviso por correo a quien gestiona la recogida (el siguiente paso)
+        AvisoRepositorio.Apuntar(conexion, transaccion, idDevolucion, datos.FabricaId,
+            TipoAviso.NuevaDevolucion, Fase.RecogidaSolicitada);
+
         transaccion.Commit();
         return idDevolucion;
     }
 
-    // ---------- Almacén ----------
+    // Almacén
 
     // Pasa la devolución de "Recogida solicitada" (fase 2) a "Mercancía recibida" (fase 3)
     // y guarda el recibo de la agencia, todo en una transacción.
@@ -436,7 +440,7 @@ public class DevolucionRepositorio
         return true;
     }
 
-    // ---------- Abono y cierre ----------
+    // Abono y cierre
 
     // Null si todavía no se ha registrado ningún abono
     public AbonoGuardado? ObtenerAbono(int devolucionId)
@@ -511,7 +515,7 @@ public class DevolucionRepositorio
         return comando.ExecuteNonQuery() == 1;
     }
 
-    // ---------- Adjuntos (fotos y documentos) ----------
+    // Adjuntos (fotos y documentos)
 
     public List<AdjuntoInfo> ObtenerAdjuntos(int devolucionId, string tipo)
     {
@@ -624,15 +628,20 @@ public class DevolucionRepositorio
         using var transaccion = conexion.BeginTransaction();
 
         // UPDLOCK: bloquea la devolución hasta el final para que nadie cambie la fase entretanto
+        int faseActual, fabricaId;
         using (var fase = new SqlCommand(@"
-            SELECT e.fase FROM DEVOLUCION d WITH (UPDLOCK)
+            SELECT e.fase, d.fabrica_id FROM DEVOLUCION d WITH (UPDLOCK)
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion;", conexion, transaccion))
         {
             fase.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
-            if (fase.ExecuteScalar() is not int faseActual || faseActual > Fase.RecogidaSolicitada)
-                return false;
+            using var lector = fase.ExecuteReader();
+            if (!lector.Read()) return false;
+            faseActual = lector.GetInt32(0);
+            fabricaId = lector.GetInt32(1);
         }
+        if (faseActual > Fase.RecogidaSolicitada)
+            return false;
 
         using (var recogida = new SqlCommand(sqlRecogida, conexion, transaccion))
         {
@@ -653,6 +662,12 @@ public class DevolucionRepositorio
             devolucion.Parameters.AddWithValue("@faseNueva", Fase.RecogidaSolicitada);
             devolucion.ExecuteNonQuery();
         }
+
+        // Solo la primera vez (al pasar a "Recogida solicitada"), no al modificar la recogida:
+        // aviso a quien recibe la mercancía (el siguiente paso)
+        if (faseActual == Fase.SolicitudRecibida)
+            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId, fabricaId,
+                TipoAviso.RecogidaSolicitada, Fase.MercanciaRecibida);
 
         transaccion.Commit();
         return true;
