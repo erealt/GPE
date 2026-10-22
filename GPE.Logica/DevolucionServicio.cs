@@ -121,8 +121,17 @@ public class DevolucionServicio
 
     // Abono y cierre
 
-    // Pasados estos días desde la llegada de la mercancía sin abonar, se avisa al usuario
-    public const int DiasAvisoAbono = 3;
+    // Pasados estos días desde la llegada de la mercancía sin abonar, se avisa al usuario.
+    // Con 0 se avisa desde el mismo día en que llega.
+    public const int DiasAvisoAbono = 0;
+
+    // "hoy", "1 día", "5 días"
+    public static string TextoDias(int dias) => dias switch
+    {
+        0 => "hoy",
+        1 => "1 día",
+        _ => $"{dias} días"
+    };
 
     // Días desde que llegó la mercancía, o null si no está esperando abono
     // (aún no ha llegado o ya está cerrada)

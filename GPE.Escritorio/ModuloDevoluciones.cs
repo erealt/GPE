@@ -173,9 +173,11 @@ public class ModuloDevoluciones : UserControl
 
         int maximo = retrasadas.Max(d => DevolucionServicio.DiasSinAbono(d) ?? 0);
         lblAviso.Text = retrasadas.Count == 1
-            ? $"⚠  {retrasadas[0].Numero} lleva {maximo} días sin abono: el cliente está esperando."
-            : $"⚠  {retrasadas.Count} devoluciones llevan {DevolucionServicio.DiasAvisoAbono} días o más sin abono " +
-              $"(la más antigua, {maximo} días): los clientes están esperando.";
+            ? $"⚠  {retrasadas[0].Numero} está sin abono (llegó {(maximo == 0 ? "hoy" : "hace " + DevolucionServicio.TextoDias(maximo))}): " +
+              "el cliente está esperando."
+            : $"⚠  {retrasadas.Count} devoluciones están sin abono " +
+              $"(la más antigua llegó {(maximo == 0 ? "hoy" : "hace " + DevolucionServicio.TextoDias(maximo))}): " +
+              "los clientes están esperando.";
     }
 
     // Ventana de aviso, al entrar y cada MinutosEntreAvisos mientras quede alguna pendiente.
@@ -417,11 +419,11 @@ public class ModuloDevoluciones : UserControl
 
         grid.Rows[i].Tag = d;
 
-        // Lleva demasiados días sin abono: se marca la fecha de llegada
+        // Está esperando el abono: se marca la fecha de llegada
         if (DevolucionServicio.AbonoRetrasado(d))
         {
             var llegada = grid.Rows[i].Cells[6];
-            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.DiasSinAbono(d)} días";
+            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.TextoDias(DevolucionServicio.DiasSinAbono(d) ?? 0)}";
             llegada.Style.ForeColor = Tema.Aviso;
             llegada.Style.BackColor = Tema.AvisoFondo;
             llegada.Style.SelectionForeColor = Tema.Aviso;
