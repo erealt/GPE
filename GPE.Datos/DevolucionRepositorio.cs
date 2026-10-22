@@ -84,7 +84,7 @@ public class DevolucionRepositorio
 
     public List<Producto> ObtenerProductos()
     {
-        const string sql = "SELECT id, codigo, nombre FROM PRODUCTO ORDER BY nombre;";
+        const string sql = "SELECT id, codigo, nombre, formato FROM PRODUCTO ORDER BY nombre;";
 
         var productos = new List<Producto>();
 
@@ -93,7 +93,8 @@ public class DevolucionRepositorio
 
         using var lector = comando.ExecuteReader();
         while (lector.Read())
-            productos.Add(new Producto(lector.GetInt32(0), lector.GetString(1), lector.GetString(2)));
+            productos.Add(new Producto(lector.GetInt32(0), lector.GetString(1), lector.GetString(2),
+                lector.IsDBNull(3) ? null : lector.GetString(3)));
 
         return productos;
     }
@@ -314,15 +315,44 @@ public class DevolucionRepositorio
         return true;
     }
 
-    public List<LineaRevision> ObtenerLineasRevision(int devolucionId)
+    public List<LineaSolicitada> ObtenerProductosSolicitados(int devolucionId)
     {
         const string sql = @"
-            SELECT dp.id, p.nombre, dp.lote, dp.cantidad_esperada,
-                   dp.cantidad_recibida, dp.cantidad_apta, dp.observaciones
+            SELECT dp.producto_id, p.codigo, p.nombre, p.formato, dp.lote, dp.cantidad_esperada
             FROM DEVOLUCION_PRODUCTO dp
             JOIN PRODUCTO p ON p.id = dp.producto_id
             WHERE dp.devolucion_id = @devolucion
             ORDER BY dp.id;";
+
+        var lineas = new List<LineaSolicitada>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@devolucion", devolucionId);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            lineas.Add(new LineaSolicitada(
+                ProductoId: lector.GetInt32(0),
+                Codigo: lector.GetString(1),
+                Producto: lector.GetString(2),
+                Formato: lector.IsDBNull(3) ? null : lector.GetString(3),
+                Lote: lector.IsDBNull(4) ? null : lector.GetString(4),
+                Cantidad: lector.GetInt32(5)));
+        }
+
+        return lineas;
+    }
+
+    public List<LineaRevision> ObtenerLineasRevision(int devolucionId)
+    {
+        const string sql = @"
+            SELECT rl.producto_id, p.codigo, p.nombre, p.formato, rl.lote, rl.caducidad, rl.cantidad, rl.apto
+            FROM REVISION_LINEA rl
+            JOIN PRODUCTO p ON p.id = rl.producto_id
+            WHERE rl.devolucion_id = @devolucion
+            ORDER BY rl.id;";
 
         var lineas = new List<LineaRevision>();
 
@@ -334,13 +364,14 @@ public class DevolucionRepositorio
         while (lector.Read())
         {
             lineas.Add(new LineaRevision(
-                Id: lector.GetInt32(0),
-                Producto: lector.GetString(1),
-                Lote: lector.IsDBNull(2) ? null : lector.GetString(2),
-                Solicitada: lector.GetInt32(3),
-                Recibida: lector.IsDBNull(4) ? null : lector.GetInt32(4),
-                Apta: lector.IsDBNull(5) ? null : lector.GetInt32(5),
-                Observaciones: lector.IsDBNull(6) ? null : lector.GetString(6)));
+                ProductoId: lector.GetInt32(0),
+                Codigo: lector.GetString(1),
+                Producto: lector.GetString(2),
+                Formato: lector.IsDBNull(3) ? null : lector.GetString(3),
+                Lote: lector.IsDBNull(4) ? null : lector.GetString(4),
+                Caducidad: lector.IsDBNull(5) ? null : lector.GetDateTime(5),
+                Cantidad: lector.GetInt32(6),
+                Apto: lector.GetBoolean(7)));
         }
 
         return lineas;
@@ -385,54 +416,80 @@ public class DevolucionRepositorio
         return comando.ExecuteNonQuery() == 1;
     }
 
-    public string? ObtenerObservacionesRevision(int devolucionId)
+    public CabeceraRevision ObtenerCabeceraRevision(int devolucionId)
     {
-        const string sql = "SELECT observaciones_revision FROM DEVOLUCION WHERE id = @devolucion;";
+        const string sql = @"
+            SELECT d.revisada_por, d.agencia, d.observaciones_revision, t.nombre
+            FROM DEVOLUCION d
+            LEFT JOIN RECOGIDA r ON r.devolucion_id = d.id
+            LEFT JOIN TRANSPORTISTA t ON t.id = r.transportista_id
+            WHERE d.id = @devolucion;";
 
         using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
-        return comando.ExecuteScalar() as string;
+
+        using var lector = comando.ExecuteReader();
+        if (!lector.Read()) return new CabeceraRevision(null, null, null, null);
+
+        return new CabeceraRevision(
+            RevisadaPor: lector.IsDBNull(0) ? null : lector.GetString(0),
+            Agencia: lector.IsDBNull(1) ? null : lector.GetString(1),
+            Observaciones: lector.IsDBNull(2) ? null : lector.GetString(2),
+            Transportista: lector.IsDBNull(3) ? null : lector.GetString(3));
     }
 
-    // Guarda las cantidades de cada línea y pasa la devolución de la fase 3 a la 4,
-    // todo en una transacción. Devuelve false si ya no estaba en la fase 3.
-    public bool FinalizarRevision(int devolucionId, List<LineaRevisada> lineas, string? observaciones)
+    // Guarda la revisión (cabecera y líneas) y pasa la devolución de la fase 3 a la 4,
+    // todo en una transacción. Las líneas se sustituyen enteras por las nuevas.
+    // Devuelve false si ya no estaba en la fase 3.
+    public bool FinalizarRevision(DatosRevision datos)
     {
         const string sqlDevolucion = @"
             UPDATE d
             SET estado_id = (SELECT id FROM ESTADO_DEVOLUCION WHERE fase = @faseNueva),
+                revisada_por = @revisadaPor,
+                agencia = @agencia,
                 observaciones_revision = @observaciones
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion AND e.fase = @faseActual;";
 
+        const string sqlBorrar = "DELETE FROM REVISION_LINEA WHERE devolucion_id = @devolucion;";
+
         const string sqlLinea = @"
-            UPDATE DEVOLUCION_PRODUCTO
-            SET cantidad_recibida = @recibida, cantidad_apta = @apta, observaciones = @observaciones
-            WHERE id = @linea AND devolucion_id = @devolucion;";
+            INSERT INTO REVISION_LINEA (devolucion_id, producto_id, lote, caducidad, cantidad, apto)
+            VALUES (@devolucion, @producto, @lote, @caducidad, @cantidad, @apto);";
 
         using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
 
         using (var devolucion = new SqlCommand(sqlDevolucion, conexion, transaccion))
         {
-            devolucion.Parameters.AddWithValue("@devolucion", devolucionId);
-            devolucion.Parameters.AddWithValue("@observaciones", (object?)observaciones ?? DBNull.Value);
+            devolucion.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            devolucion.Parameters.AddWithValue("@revisadaPor", datos.RevisadaPor);
+            devolucion.Parameters.AddWithValue("@agencia", (object?)datos.Agencia ?? DBNull.Value);
+            devolucion.Parameters.AddWithValue("@observaciones", (object?)datos.Observaciones ?? DBNull.Value);
             devolucion.Parameters.AddWithValue("@faseActual", Fase.MercanciaRecibida);
             devolucion.Parameters.AddWithValue("@faseNueva", Fase.RevisadaAlmacen);
             if (devolucion.ExecuteNonQuery() != 1)
                 return false;   // al salir sin Commit, la transacción se deshace
         }
 
-        foreach (var linea in lineas)
+        using (var borrar = new SqlCommand(sqlBorrar, conexion, transaccion))
+        {
+            borrar.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            borrar.ExecuteNonQuery();
+        }
+
+        foreach (var linea in datos.Lineas)
         {
             using var comando = new SqlCommand(sqlLinea, conexion, transaccion);
-            comando.Parameters.AddWithValue("@linea", linea.Id);
-            comando.Parameters.AddWithValue("@devolucion", devolucionId);
-            comando.Parameters.AddWithValue("@recibida", linea.Recibida);
-            comando.Parameters.AddWithValue("@apta", linea.Apta);
-            comando.Parameters.AddWithValue("@observaciones", (object?)linea.Observaciones ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
+            comando.Parameters.AddWithValue("@producto", linea.ProductoId);
+            comando.Parameters.AddWithValue("@lote", (object?)linea.Lote ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@caducidad", (object?)linea.Caducidad?.Date ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@cantidad", linea.Cantidad);
+            comando.Parameters.AddWithValue("@apto", linea.Apto);
             comando.ExecuteNonQuery();
         }
 

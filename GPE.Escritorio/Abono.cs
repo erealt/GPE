@@ -111,19 +111,32 @@ public class FormAbono : PantallaFase
     private Control CrearTarjetaRevision()
     {
         var tarjeta = Componentes.Tarjeta("Resultado de la revisión",
-            "Lo que el almacén ha recibido y lo que está en buen estado, para decidir el abono.");
+            "Lo que el almacén ha recibido y si está bien para servir, para decidir el abono.");
 
-        tarjeta.Controls.Add(CrearTablaRevision());
-
-        string? observaciones = null;
+        CabeceraRevision? cabecera = null;
         try
         {
-            observaciones = servicio.ObtenerObservacionesRevision(devolucion.Id);
+            cabecera = servicio.ObtenerCabeceraRevision(devolucion.Id);
         }
         catch (DbException)
         {
-            // Las observaciones son informativas: sin ellas la pantalla sigue siendo útil
+            // Son datos informativos: sin ellos la pantalla sigue siendo útil
         }
+
+        if (cabecera != null)
+        {
+            tarjeta.Controls.Add(new Label
+            {
+                Text = $"Agencia: {cabecera.Agencia ?? "—"}     ·     Revisada por: {cabecera.RevisadaPor ?? "—"}",
+                AutoSize = true,
+                ForeColor = Tema.Texto,
+                Margin = new Padding(0, 0, 0, 10)
+            });
+        }
+
+        tarjeta.Controls.Add(CrearTablaRevision());
+
+        string? observaciones = cabecera?.Observaciones;
         if (!string.IsNullOrWhiteSpace(observaciones))
         {
             tarjeta.Controls.Add(new Label
@@ -166,9 +179,9 @@ public class FormAbono : PantallaFase
 
         foreach (var (titulo, peso, numero) in new[]
                  {
-                     ("PRODUCTO", 26f, false), ("LOTE", 11f, false), ("SOLICITADA", 11f, true),
-                     ("RECIBIDA", 10f, true), ("APTA", 9f, true), ("NO APTA", 10f, true),
-                     ("OBSERVACIONES", 30f, false)
+                     ("CÓDIGO", 12f, false), ("DESCRIPCIÓN", 28f, false), ("FORMATO", 15f, false),
+                     ("LOTE", 12f, false), ("CADUCIDAD", 12f, false), ("CANTIDAD", 10f, true),
+                     ("APTO PARA SERVIR", 13f, false)
                  })
         {
             var columna = new DataGridViewTextBoxColumn
@@ -183,21 +196,18 @@ public class FormAbono : PantallaFase
 
         foreach (var linea in lineas)
         {
-            int? noApta = linea.Recibida - linea.Apta;
-            int i = grid.Rows.Add(linea.Producto, linea.Lote ?? "—", linea.Solicitada,
-                linea.Recibida?.ToString() ?? "—", linea.Apta?.ToString() ?? "—",
-                noApta?.ToString() ?? "—", linea.Observaciones ?? "");
+            int i = grid.Rows.Add(linea.Codigo, linea.Producto, linea.Formato ?? "—", linea.Lote ?? "—",
+                Componentes.Fecha(linea.Caducidad), linea.Cantidad, linea.Apto ? "Sí" : "No");
 
-            // Diferencias en ámbar, como en la revisión del almacén
-            if (linea.Recibida != linea.Solicitada)
-                grid.Rows[i].Cells[3].Style.BackColor = Tema.FondoDiferencia;
-            if (noApta > 0)
-                grid.Rows[i].Cells[5].Style.BackColor = Tema.FondoDiferencia;
+            // Lo que no está bien para servir, en ámbar
+            if (!linea.Apto)
+                grid.Rows[i].Cells[6].Style.BackColor = Tema.FondoDiferencia;
         }
 
-        int total = grid.Rows.Add("Total", "",
-            lineas.Sum(l => l.Solicitada), lineas.Sum(l => l.Recibida ?? 0),
-            lineas.Sum(l => l.Apta ?? 0), lineas.Sum(l => (l.Recibida ?? 0) - (l.Apta ?? 0)), "");
+        // Totales: unidades aptas y no aptas
+        int aptas = lineas.Where(l => l.Apto).Sum(l => l.Cantidad);
+        int noAptas = lineas.Where(l => !l.Apto).Sum(l => l.Cantidad);
+        int total = grid.Rows.Add("Total", "", "", "", "", aptas + noAptas, $"{aptas} sí · {noAptas} no");
         grid.Rows[total].DefaultCellStyle.BackColor = Tema.FondoSoloLectura;
         grid.Rows[total].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
 
@@ -318,7 +328,7 @@ public class FormAbono : PantallaFase
             numImporte.Value = Math.Min(abono.Importe ?? 0, numImporte.Maximum);
             txtObservaciones.Text = abono.Observaciones ?? "";
         }
-        else if (lineas.Count > 0 && lineas.All(l => l.Recibida == l.Solicitada && l.Apta == l.Recibida))
+        else if (lineas.Count > 0 && lineas.All(l => l.Apto))
         {
             rbTotal.Checked = true;   
         }

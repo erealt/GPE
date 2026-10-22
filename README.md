@@ -202,10 +202,10 @@ Transportista, fecha de recogida prevista, dirección, teléfono y observaciones
 ### Pasos 3 y 4 · Almacén (`FormAlmacen`)
 Una sola clase para dos pasos:
 - **Llegada (paso 3)**: botón *Marcar como recibida*: pide el recibo de la agencia y, en una sola transacción, lo guarda, pone la fecha de llegada y pasa a la fase 3. Si se deshace la recepción, el recibo se conserva y no se vuelve a pedir. Mientras no se haya revisado, *Deshacer recepción*.
-- **Revisión (paso 4)**: tabla con una línea por producto donde el almacén escribe cantidad **recibida** y **apta** (la que se puede volver a vender). Si recibida ≠ solicitada la celda se pinta en ámbar; si apta < recibida, las observaciones son obligatorias. Más observaciones generales y fotos. *Finalizar revisión* guarda todo y pasa a la fase 4; luego queda *Reabrir revisión*.
+- **Revisión (paso 4)**: como la hoja que rellena el almacén. Arriba, **agencia** (propone el transportista de la recogida) y **mercancía revisada por** (propone el usuario de GPE); los dos se pueden cambiar. Después, una tabla (`REVISION_LINEA`) con **código** (desplegable; la descripción y el formato salen del producto), **lote**, **caducidad**, **cantidad** y **apto para servir** (Sí/No). La primera vez la tabla trae los productos indicados al crear la devolución, si los hay; se pueden añadir y quitar líneas. Si de un producto unas unidades están bien y otras no, van en dos líneas. Más observaciones y fotos. *Finalizar revisión* guarda todo (las líneas se sustituyen enteras) y pasa a la fase 4; luego queda *Reabrir revisión*.
 
 ### Pasos 5 y 6 · Abono y cierre (`FormAbono`)
-- **Resultado de la revisión** (solo lectura): tabla con solicitada / recibida / apta / no apta y totales, observaciones del almacén y fotos. Es lo que necesita quien decide el abono.
+- **Resultado de la revisión** (solo lectura): agencia y quién revisó, las líneas del almacén con el total de unidades aptas y no aptas, observaciones y fotos. Es lo que necesita quien decide el abono.
 - **Abono**: resultado (*total*, *parcial* o *sin abono*), nº de abono, fecha, importe y observaciones, más el documento del abono (PDF o imagen).
   - Si hay abono: número, importe > 0 y documento son obligatorios.
   - Parcial o sin abono: hay que explicar el motivo en observaciones.

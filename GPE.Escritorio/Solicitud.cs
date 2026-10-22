@@ -84,8 +84,8 @@ public class FormSolicitud : PantallaFase
     {
         try
         {
-            foreach (var linea in servicio.ObtenerLineasRevision(devolucion.Id))
-                grid.Rows.Add(linea.Producto, linea.Lote ?? "—", linea.Solicitada);
+            foreach (var linea in servicio.ObtenerProductosSolicitados(devolucion.Id))
+                grid.Rows.Add(linea.Producto, linea.Lote ?? "—", linea.Cantidad);
 
             string? observaciones = servicio.ObtenerObservacionesSolicitud(devolucion.Id);
             lblObservaciones.Text = observaciones ?? "Sin observaciones.";

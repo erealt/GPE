@@ -32,7 +32,7 @@ public record Cliente(int Id, string Codigo, string Nombre)
     public override string ToString() => $"{Codigo} · {Nombre}";
 }
 
-public record Producto(int Id, string Codigo, string Nombre)
+public record Producto(int Id, string Codigo, string Nombre, string? Formato)
 {
     public override string ToString() => Nombre;
 }
@@ -98,18 +98,43 @@ public record RecogidaGuardada(
     string? Observaciones,
     DateTime CreadaEn);   // cuándo se registró el transportista
 
-// Línea de producto tal como la ve el almacén al revisar
-public record LineaRevision(
-    int Id,
+// Producto que el cliente dijo que iba a devolver (al crear la devolución)
+public record LineaSolicitada(
+    int ProductoId,
+    string Codigo,
     string Producto,
+    string? Formato,
     string? Lote,
-    int Solicitada,
-    int? Recibida,
-    int? Apta,
-    string? Observaciones);
+    int Cantidad);
 
-// Lo que el almacén ha anotado de cada línea al finalizar la revisión
-public record LineaRevisada(int Id, int Recibida, int Apta, string? Observaciones);
+// Línea apuntada por el almacén al revisar la mercancía
+public record LineaRevision(
+    int ProductoId,
+    string Codigo,
+    string Producto,
+    string? Formato,
+    string? Lote,
+    DateTime? Caducidad,
+    int Cantidad,
+    bool Apto);
+
+// Cabecera de la revisión. Agencia y RevisadaPor son null si aún no se ha guardado;
+// Transportista es el de la recogida, para proponerlo como agencia.
+public record CabeceraRevision(
+    string? RevisadaPor,
+    string? Agencia,
+    string? Observaciones,
+    string? Transportista);
+
+// Lo que se guarda al finalizar la revisión
+public record LineaRevisada(int ProductoId, string? Lote, DateTime? Caducidad, int Cantidad, bool Apto);
+
+public record DatosRevision(
+    int DevolucionId,
+    string RevisadaPor,
+    string? Agencia,
+    string? Observaciones,
+    List<LineaRevisada> Lineas);
 
 public static class TipoAdjunto
 {

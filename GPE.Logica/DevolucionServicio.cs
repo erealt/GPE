@@ -53,11 +53,14 @@ public class DevolucionServicio
     private const string MensajeOtroUsuario =
         "Otro usuario ya ha cambiado el estado de esta devolución. Cierra la pantalla y vuelve a abrirla.";
 
+    public List<LineaSolicitada> ObtenerProductosSolicitados(int devolucionId) =>
+        repositorio.ObtenerProductosSolicitados(devolucionId);
+
     public List<LineaRevision> ObtenerLineasRevision(int devolucionId) =>
         repositorio.ObtenerLineasRevision(devolucionId);
 
-    public string? ObtenerObservacionesRevision(int devolucionId) =>
-        repositorio.ObtenerObservacionesRevision(devolucionId);
+    public CabeceraRevision ObtenerCabeceraRevision(int devolucionId) =>
+        repositorio.ObtenerCabeceraRevision(devolucionId);
 
     // Solo se puede reabrir el último paso completado (el siguiente aún no ha empezado):
     // fase 3 → 2 deshace la recepción; fase 4 → 3 reabre la revisión;
@@ -89,25 +92,30 @@ public class DevolucionServicio
             throw new ReglaNegocioException(MensajeOtroUsuario);
     }
 
-    // Comprueba que una línea esté completa. Devuelve el error o null si está bien.
-    public static string? ErrorLinea(int? recibida, int? apta, string? observaciones)
+    // Comprueba que una línea de la revisión esté completa. Devuelve el error o null si está bien.
+    public static string? ErrorLinea(int? productoId, string? lote, int? cantidad, bool? apto)
     {
-        if (recibida == null) return "Indica la cantidad recibida.";
-        if (recibida < 0) return "La cantidad recibida no puede ser negativa.";
-        if (apta == null) return "Indica la cantidad apta.";
-        if (apta < 0) return "La cantidad apta no puede ser negativa.";
-        if (apta > recibida) return "La cantidad apta no puede ser mayor que la recibida.";
-        if (apta < recibida && string.IsNullOrWhiteSpace(observaciones))
-            return "Explica en observaciones por qué no todo lo recibido es apto.";
+        if (productoId == null) return "Elige el código del producto.";
+        if (lote?.Length > 30) return "El lote no puede superar los 30 caracteres.";
+        if (cantidad == null) return "Indica la cantidad.";
+        if (cantidad <= 0) return "La cantidad debe ser mayor que 0.";
+        if (apto == null) return "Indica si está bien para servir.";
         return null;
     }
 
-    public void FinalizarRevision(int devolucionId, List<LineaRevisada> lineas, string? observaciones)
+    public void FinalizarRevision(DatosRevision datos)
     {
-        if (lineas.Any(l => ErrorLinea(l.Recibida, l.Apta, l.Observaciones) != null))
+        if (string.IsNullOrWhiteSpace(datos.RevisadaPor))
+            throw new ReglaNegocioException("Indica quién ha revisado la mercancía.");
+        if (datos.RevisadaPor.Length > 100 || datos.Agencia?.Length > 100)
+            throw new ReglaNegocioException("La agencia y quién revisa no pueden superar los 100 caracteres.");
+
+        if (datos.Lineas.Count == 0)
+            throw new ReglaNegocioException("Apunta al menos un producto de la mercancía recibida.");
+        if (datos.Lineas.Any(l => ErrorLinea(l.ProductoId, l.Lote, l.Cantidad, l.Apto) != null))
             throw new ReglaNegocioException("Hay líneas de producto incompletas o con errores.");
 
-        if (!repositorio.FinalizarRevision(devolucionId, lineas, observaciones))
+        if (!repositorio.FinalizarRevision(datos))
             throw new ReglaNegocioException(MensajeOtroUsuario);
     }
 

@@ -32,7 +32,8 @@ CREATE TABLE CLIENTE (
 CREATE TABLE PRODUCTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     codigo NVARCHAR(30) NOT NULL UNIQUE,
-    nombre NVARCHAR(100) NOT NULL
+    nombre NVARCHAR(100) NOT NULL,
+    formato NVARCHAR(50) NULL   -- presentación, p. ej. "Caja 12 × 500 g"
 );
  
 CREATE TABLE USUARIO_ROL (
@@ -84,6 +85,9 @@ CREATE TABLE DEVOLUCION (
     fecha_solicitud DATE NOT NULL,
     fecha_recogida DATE NULL,                    -- fecha de recogida prevista
     fecha_llegada DATE NULL,
+    -- Revisión del almacén
+    revisada_por NVARCHAR(100) NULL,             -- quién revisó la mercancía (puede no ser usuario de GPE)
+    agencia NVARCHAR(100) NULL,                  -- agencia que trajo la mercancía
     observaciones_revision NVARCHAR(MAX) NULL,   -- observaciones generales del almacén
     motivo_reapertura NVARCHAR(500) NULL,        -- motivo de la última vez que se volvió a un paso anterior
     -- Abono y cierre (se rellenan juntos al registrar el abono)
@@ -100,22 +104,34 @@ CREATE TABLE DEVOLUCION (
     CONSTRAINT FK_devolucion_estado  FOREIGN KEY (estado_id)  REFERENCES ESTADO_DEVOLUCION(id)
 );
  
--- Líneas de producto de cada devolución (el lote es texto libre)
+-- Productos que el cliente dijo que iba a devolver (opcional; el lote es texto libre)
 CREATE TABLE DEVOLUCION_PRODUCTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
     producto_id INT NOT NULL,
     lote NVARCHAR(30) NULL,
     cantidad_esperada INT NOT NULL CHECK (cantidad_esperada > 0),
-    cantidad_recibida INT NULL CHECK (cantidad_recibida >= 0),  -- la rellena el almacén
-    cantidad_apta INT NULL,             -- de lo recibido, lo que se puede volver a vender
-    observaciones NVARCHAR(500) NULL,   -- por qué no es apto, daños, etc.
-    CONSTRAINT CK_devprod_apta CHECK (cantidad_apta IS NULL
-        OR (cantidad_apta >= 0 AND cantidad_recibida IS NOT NULL AND cantidad_apta <= cantidad_recibida)),
     CONSTRAINT FK_devprod_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
     CONSTRAINT FK_devprod_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
 );
+
+-- Lo que el almacén apunta al revisar la mercancía. Si de un mismo producto unas
+-- unidades están bien y otras no, van en dos líneas (una apta y otra no).
+CREATE TABLE REVISION_LINEA (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    devolucion_id INT NOT NULL,
+    producto_id INT NOT NULL,
+    lote NVARCHAR(30) NULL,
+    caducidad DATE NULL,
+    cantidad INT NOT NULL CONSTRAINT CK_revlinea_cantidad CHECK (cantidad > 0),
+    apto BIT NOT NULL,   -- 1 = está bien para servir
+    CONSTRAINT FK_revlinea_devolucion FOREIGN KEY (devolucion_id)
+        REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
+    CONSTRAINT FK_revlinea_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
+);
+
+CREATE INDEX IX_revlinea_devolucion ON REVISION_LINEA (devolucion_id);
 GO
 
 -- Transportistas que pueden hacer las recogidas
@@ -268,6 +284,35 @@ BEGIN
     INSERT INTO HISTORIAL_CAMBIOS
         (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
     SELECT c.devolucion_id, @usuario, 'DEVOLUCION_PRODUCTO', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        COALESCE(i.devolucion_id, d.devolucion_id) AS devolucion_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+CREATE OR ALTER TRIGGER TR_REVISION_LINEA_HISTORIAL ON REVISION_LINEA
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT c.devolucion_id, @usuario, 'REVISION_LINEA', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT
