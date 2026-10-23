@@ -9,22 +9,25 @@ Este documento explica cómo está organizado el código y cómo están hechas l
 ## 1. Puesta en marcha
 
 1. **Base de datos**: ejecutar [`BaseDatos/crear_tablas.sql`](BaseDatos/crear_tablas.sql) en una base de datos llamada `GPE`.
-   - Las tablas de catálogo (`ESTADO_DEVOLUCION`, `FABRICA`, `CLIENTE`, `PRODUCTO`, `USUARIO`, `TRANSPORTISTA`...) se rellenan a mano. Los estados tienen que ser estos seis, con su fase:
+   - El script ya da de alta la fábrica, los tres roles (*Administración*, *Transporte* y *Almacén*) y los seis estados de la devolución, cada uno con su fase y el rol que hace el paso que lleva a ella:
 
-     | fase | nombre |
-     |---|---|
-     | 1 | Solicitud recibida |
-     | 2 | Recogida solicitada |
-     | 3 | Mercancía recibida |
-     | 4 | Revisada almacén |
-     | 5 | Abono realizado |
-     | 6 | Cierre |
+     | fase | nombre | rol responsable |
+     |---|---|---|
+     | 1 | Solicitud recibida | Administración |
+     | 2 | Recogida solicitada | Transporte |
+     | 3 | Mercancía recibida | Almacén |
+     | 4 | Revisada almacén | Almacén |
+     | 5 | Abono realizado | Administración |
+     | 6 | Cierre | Administración |
 
-   - Los permisos van por rol (`ROL`, `USUARIO_ROL`); ver el apartado 4.5. [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) prepara un usuario por rol para probar (Administrador, Transporte y Almacén). Con `sqlcmd` hay que ejecutarlo con `-f 65001`, por las tildes.
+   - Usuarios, clientes, productos y transportistas (`USUARIO`, `USUARIO_ROL`, `CLIENTE`, `PRODUCTO`, `TRANSPORTISTA`) se dan de alta a mano.
+   - Para probar hay dos scripts (con `sqlcmd` hay que ejecutarlos con `-f 65001`, por las tildes):
+     - [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql): crea un usuario por rol (el usuario *Administrador* tiene el rol *Administración*; los otros dos se llaman como su rol). Ver el apartado 4.5.
+     - [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql): crea un único usuario de prueba con los tres roles, para que todos los avisos por correo lleguen a la misma dirección. Ver el apartado 7.
    - La tabla `LOTE` todavía no la usa la aplicación: está preparada para elegir el lote de una lista (hoy el lote es texto libre).
 
 2. **Conexión**: por defecto se usa `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos (por ejemplo una de pruebas) se define la variable de entorno `GPE_CONEXION` con otra cadena de conexión.
-3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (pantalla provisional hasta que haya login); ese usuario es el que queda registrado en el historial. Después se abre la ventana principal, con el inicio y el menú lateral de módulos (apartado 4.0).
+3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (`FormSeleccionUsuario`, provisional hasta que haya login); ese usuario es el que queda registrado en el historial y sus roles deciden qué puede hacer. Después se abre la ventana principal, con el inicio y el menú lateral de módulos (apartado 4.0).
 
 > Para modificar datos a mano desde SSMS hay que indicar antes el usuario, porque los triggers del historial lo exigen:
 > `EXEC sp_set_session_context @key = N'usuario_id', @value = 1;`
@@ -38,13 +41,17 @@ El código está en tres capas. Cada una solo conoce a la de debajo:
 ```
 GPE.Escritorio   →   GPE.Logica   →   GPE.Datos   →   SQL Server
  (pantallas)         (reglas)         (consultas)
+                         ↑
+                     GPE.Avisos
+              (resúmenes diarios por correo)
 ```
 
 | Proyecto | Qué contiene | Archivos principales |
 |---|---|---|
-| **GPE.Datos** | Acceso a SQL Server con `Microsoft.Data.SqlClient` (SQL escrito a mano, sin ORM) y los `record` con los datos que viajan entre capas. | `DevolucionRepositorio.cs`, `Datos.cs` |
-| **GPE.Logica** | Reglas de negocio y validaciones. Es lo único que llaman las pantallas. Lanza `ReglaNegocioException` con un mensaje listo para enseñar al usuario. | `DevolucionServicio.cs`, `HistorialFormateador.cs` |
+| **GPE.Datos** | Acceso a SQL Server con `Microsoft.Data.SqlClient` (SQL escrito a mano, sin ORM) y los `record` con los datos que viajan entre capas. | `DevolucionRepositorio.cs`, `AvisoRepositorio.cs`, `Conexion.cs`, `Datos.cs` |
+| **GPE.Logica** | Reglas de negocio y validaciones. Es lo único que llaman las pantallas. Lanza `ReglaNegocioException` con un mensaje listo para enseñar al usuario. | `DevolucionServicio.cs`, `AvisoServicio.cs`, `HistorialFormateador.cs` |
 | **GPE.Escritorio** | Las pantallas (Windows Forms creadas por código, sin diseñador). | Ver apartado 4 |
+| **GPE.Avisos** | Programa de consola que envía los resúmenes diarios por correo (apartado 7). | `Program.cs` |
 
 Ejemplo del recorrido de una acción, "Finalizar revisión":
 
@@ -74,13 +81,22 @@ flowchart LR
 - El abono y el cierre se registran a la vez, así que se pasa directamente de la fase 4 a la 6. La fase 5 solo aparece en la barra como paso completado.
 - Solo se puede reabrir el último paso completado: si la revisión ya está cerrada con abono, primero hay que reabrir el abono.
 
-| Fase actual | Pantalla que se abre | Qué se hace |
-|---|---|---|
-| 1 | Recogida | Programar la recogida |
-| 2 | Almacén · llegada | Marcar la mercancía como recibida |
-| 3 | Almacén · revisión | Anotar cantidades recibidas y aptas, fotos |
-| 4 | Abono | Registrar el abono y cerrar |
-| 6 | Abono (solo lectura) | Consultar; reabrir el abono si hay un error |
+### Fase y paso
+
+Son dos números distintos que conviene no confundir:
+
+- La **fase** es dónde está la devolución (lo que ya se ha hecho).
+- El **paso N** es la pantalla con la que se llega a la fase N. Por ejemplo, el paso 3 (*Almacén · llegada*) es el que pasa la devolución a la fase 3 (*Mercancía recibida*).
+
+Por eso, al abrir una devolución se muestra el paso **fase + 1**, el que queda por hacer:
+
+| Fase actual | Paso que se abre | Pantalla | Qué se hace |
+|---|---|---|---|
+| 1 | 2 | Recogida | Programar la recogida |
+| 2 | 3 | Almacén · llegada | Marcar la mercancía como recibida |
+| 3 | 4 | Almacén · revisión | Anotar cantidades recibidas y aptas, fotos |
+| 4 | 5 | Abono | Registrar el abono y cerrar |
+| 6 | 6 | Abono (solo lectura) | Consultar; reabrir el abono si hay un error |
 
 ---
 
@@ -96,14 +112,14 @@ Una sola ventana con un **menú lateral** (*Inicio*, *Devoluciones*...) y la bar
 | Devoluciones | `ModuloDevoluciones`: la lista de devoluciones (apartado 4.1) | `ModuloDevoluciones.cs` |
 
 - Al arrancar se ve el inicio. Cada módulo se crea la primera vez que se elige y no se cierra al cambiar de módulo, así que conserva sus filtros.
-- El de devoluciones se crea desde el principio, porque el **aviso de abonos retrasados** tiene que saltar en cualquier módulo; si se elige una devolución en el aviso, la ventana cambia sola a Devoluciones.
+- El de devoluciones se crea desde el principio, porque el **aviso de abonos retrasados** ([`FormAvisoAbonos`](GPE.Escritorio/AvisoAbonos.cs)) tiene que saltar en cualquier módulo; si se elige una devolución en el aviso, la ventana cambia sola a Devoluciones.
 - **Añadir un módulo**: una entrada más en `FormPrincipal.CrearModulos` (nombre, frase de su tarjeta, dato del momento y el control que se muestra). El menú y la tarjeta del inicio salen solos.
 
 ### 4.1 Lista de devoluciones (`ModuloDevoluciones`)
 
 Lista de devoluciones con filtros (texto, estado, fechas), el estado pintado como una etiqueta del color de su fase, y los botones *Nueva devolución* y *Ver historial*.
 
-Al hacer doble clic en una devolución se abre **el paso en curso** (el siguiente al último completado). Desde ahí se puede navegar a otros pasos con la barra de progreso:
+Al hacer doble clic en una devolución se abre **el paso en curso** (fase + 1, ver apartado 3). Desde ahí se puede navegar a otros pasos con la barra de progreso:
 
 ```csharp
 // ModuloDevoluciones.AbrirDevolucion (simplificado)
@@ -123,9 +139,11 @@ while (true)
 | Paso | Pantalla | Archivo |
 |---|---|---|
 | 1 | `FormSolicitud` | `Solicitud.cs` |
-| 2 | `Recogida` | `Reocogida.cs` |
+| 2 | `Recogida` | `Recogida.cs` |
 | 3 y 4 | `FormAlmacen` | `Almacen.cs` |
 | 5 y 6 | `FormAbono` | `Abono.cs` |
+
+Las demás ventanas no son pasos y se abren desde la lista: `FormNuevaDevolucion` (`NuevaDevolucion.cs`) y `FormHistorial` (`Historial.cs`).
 
 ### 4.2 La base común: `PantallaFase`
 
@@ -191,13 +209,21 @@ Controls.Add(scroll);
 
 Cada paso lo hace un rol; quien no lo tiene ve ese paso en **solo consulta** (con el aviso *"Solo consulta: este paso lo hace el rol..."*).
 
-La **lista de devoluciones** solo enseña las que esperan algo del rol del usuario (si tiene varios roles, las de todos): *Administración*, las recién creadas y las revisadas que esperan el abono (y solo a este rol le salen los avisos de abono retrasado); *Transporte*, las recién creadas; *Almacén*, las que tienen la recogida programada y las recibidas sin revisar. Las cerradas las puede consultar cualquiera: salen al filtrar por el estado *Cierre* o al buscar por número o cliente. Las fases de cada rol están en `DevolucionServicio.FasesPorRol`.
-
 | Rol | Puede |
 |---|---|
 | **Administración** | *Nueva devolución* (sin el rol no se ve el botón), *Registrar abono y cerrar*, *Reabrir abono*, el documento del abono |
 | **Transporte** | Solicitar y modificar la recogida |
 | **Almacén** | *Marcar como recibida*, *Deshacer recepción*, la revisión, *Reabrir revisión* (también desde la pantalla del abono), el recibo y las fotos |
+
+La **lista de devoluciones** solo enseña las que esperan algo de los roles del usuario (si tiene varios, las de todos):
+
+| Rol | Ve en la lista |
+|---|---|
+| **Administración** | Las recién creadas y las revisadas que esperan el abono. Solo a este rol le salen los avisos de abono retrasado. |
+| **Transporte** | Las recién creadas. |
+| **Almacén** | Las que tienen la recogida programada y las recibidas sin revisar. |
+
+Las cerradas las puede consultar cualquiera: salen al filtrar por el estado *Cierre* o al buscar por número o cliente. Las fases de cada rol están en `DevolucionServicio.FasesPorRol`.
 
 - Los roles del usuario se leen al entrar (`Sesion.Roles`, `Sesion.TieneRol(Rol.Almacen)`). Los nombres están en la clase `Rol` de [`Datos.cs`](GPE.Datos/Datos.cs) y tienen que coincidir con la tabla `ROL`.
 - Las pantallas deciden con eso si son editables, y `DevolucionServicio` lo vuelve a comprobar en cada operación (`ExigirRol`), como el resto de validaciones.
@@ -218,8 +244,12 @@ Transportista, fecha de recogida prevista, dirección, teléfono y observaciones
 
 ### Pasos 3 y 4 · Almacén (`FormAlmacen`)
 Una sola clase para dos pasos:
-- **Llegada (paso 3)**: botón *Marcar como recibida*: pide el recibo de la agencia y, en una sola transacción, lo guarda, pone la fecha de llegada y pasa a la fase 3. Si se deshace la recepción, el recibo se conserva y no se vuelve a pedir. Mientras no se haya revisado, *Deshacer recepción*.
-- **Revisión (paso 4)**: como la hoja que rellena el almacén. Arriba, **agencia** (propone el transportista de la recogida) y **mercancía revisada por** (propone el usuario de GPE); los dos se pueden cambiar. Después, una tabla (`REVISION_LINEA`) con **código** (desplegable; la descripción y el formato salen del producto), **lote**, **caducidad**, **cantidad** y **apto para servir** (Sí/No). La primera vez la tabla trae los productos indicados al crear la devolución, si los hay; se pueden añadir y quitar líneas. Si de un producto unas unidades están bien y otras no, van en dos líneas. Más observaciones y fotos. *Finalizar revisión* guarda todo (las líneas se sustituyen enteras) y pasa a la fase 4; luego queda *Reabrir revisión*.
+- **Llegada (paso 3)**: el botón *Marcar como recibida* pide el recibo de la agencia y, en una sola transacción, lo guarda, pone la fecha de llegada y pasa a la fase 3. Mientras no se haya revisado, se puede *Deshacer recepción*; el recibo se conserva y no se vuelve a pedir.
+- **Revisión (paso 4)**: como la hoja que rellena el almacén.
+  - Arriba, **agencia** (propone el transportista de la recogida) y **mercancía revisada por** (propone el usuario de GPE); los dos se pueden cambiar.
+  - Después, una tabla (`REVISION_LINEA`) con **código** (desplegable; la descripción y el formato salen del producto), **lote**, **caducidad**, **cantidad** y **apto para servir** (Sí/No). La primera vez trae los productos indicados al crear la devolución, si los hay; se pueden añadir y quitar líneas. Si de un producto unas unidades están bien y otras no, van en dos líneas.
+  - Por último, observaciones y fotos.
+  - *Finalizar revisión* guarda todo (las líneas se sustituyen enteras) y pasa a la fase 4; luego queda *Reabrir revisión*.
 
 ### Pasos 5 y 6 · Abono y cierre (`FormAbono`)
 - **Resultado de la revisión** (solo lectura): agencia y quién revisó, las líneas del almacén con el total de unidades aptas y no aptas, observaciones y fotos. Es lo que necesita quien decide el abono.
@@ -250,7 +280,9 @@ El historial **no lo escribe la aplicación**, lo escriben triggers de SQL Serve
 
 **¿Por qué JSON?** Porque así una sola tabla de historial sirve para todas las tablas aunque tengan columnas distintas, y al añadir una columna nueva (como las del abono) el historial la recoge solo, sin tocar los triggers. El trigger de `ADJUNTO` es la excepción: lista las columnas a mano para no copiar el contenido del archivo al historial.
 
-### Avisos por correo
+---
+
+## 7. Avisos por correo
 
 Cuando una devolución pasa de paso se avisa por correo a quien le toca el siguiente, sin que nadie tenga que escribirlo:
 
@@ -263,30 +295,44 @@ Cuando una devolución pasa de paso se avisa por correo a quien le toca el sigui
 | Revisada y sin abono | Administración | Cada día hasta que se registre | Resumen `ABONO_PENDIENTE` |
 | Se registra el abono | Almacén (cómo ha quedado el abono) | Al momento | `ABONO_REGISTRADO` |
 
-Roles: *Administración* da de alta las devoluciones y registra los abonos; *Transporte* programa las recogidas; *Almacén* recibe y revisa la mercancía.
-
+### Cómo funciona
 
 1. **A quién:** a los usuarios con el rol responsable del paso siguiente (`ESTADO_DEVOLUCION.rol_responsable_id`) en la fábrica de la devolución (`USUARIO_ROL`).
 2. **Cola en la base de datos:** el aviso se apunta en `AVISO_CORREO` dentro de la misma transacción que el cambio que lo provoca. Si el correo falla, la devolución se guarda igual.
 3. **Envío:** [`AvisoServicio`](GPE.Logica/AvisoServicio.cs) los envía en segundo plano con MailKit, justo después de guardar y al abrir la aplicación. Si falla, guarda el motivo en `ultimo_error` y lo reintenta (hasta 5 veces).
-4. **Cuenta de envío:** se configura en cada ordenador con variables de entorno, para que la contraseña no esté en el código:
 
-   | Variable | Valor |
-   |---|---|
-   | `GPE_SMTP_USUARIO` | Cuenta que envía (p. ej. `avisos@empresa.com`) |
-   | `GPE_SMTP_CLAVE` | Contraseña de aplicación de esa cuenta (en Gmail: myaccount.google.com/apppasswords, requiere verificación en dos pasos) |
-   | `GPE_SMTP_SERVIDOR` | Opcional, por defecto `smtp.gmail.com` |
-   | `GPE_SMTP_PUERTO` | Opcional, por defecto `465` |
+### Cuenta de envío
 
-   Se guardan con `setx NOMBRE "valor"` y hay que volver a abrir la aplicación. Sin configurar, los avisos se quedan pendientes.
+Se configura en cada ordenador con variables de entorno, para que la contraseña no esté en el código:
 
-[`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) prepara los roles *Transporte* y *Almacén* con un correo de prueba.
+| Variable | Valor |
+|---|---|
+| `GPE_SMTP_USUARIO` | Cuenta que envía (p. ej. `avisos@empresa.com`) |
+| `GPE_SMTP_CLAVE` | Contraseña de aplicación de esa cuenta (en Gmail: myaccount.google.com/apppasswords, requiere verificación en dos pasos) |
+| `GPE_SMTP_SERVIDOR` | Opcional, por defecto `smtp.gmail.com` |
+| `GPE_SMTP_PUERTO` | Opcional, por defecto `465` |
 
-**Resúmenes diarios (sin abrir GPE).** El programa de consola [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un único correo por persona con lo que tiene pendiente, de lo más antiguo a lo más nuevo: al *Almacén*, las devoluciones con la mercancía recibida y sin revisar; a *Administración*, las revisadas que esperan el abono. También envía los avisos de `AVISO_CORREO` que se quedaron pendientes. `AVISO_RESUMEN` evita mandar el mismo resumen dos veces el mismo día. Lo ejecuta una tarea programada de Windows en un ordenador que esté encendido por la mañana, con las mismas variables `GPE_SMTP_*` (y `GPE_CONEXION` si la base de datos no está en `localhost`). Deja lo que hace en `%LOCALAPPDATA%\GPE\avisos.log`. El aviso dentro de la aplicación ([`FormAvisoAbonos`](GPE.Escritorio/AvisoAbonos.cs)) sigue igual al entrar.
+Se guardan con `setx NOMBRE "valor"` y hay que volver a abrir la aplicación. Sin configurar, los avisos se quedan pendientes.
+
+Para probarlo, [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) crea un usuario con los tres roles y un correo de prueba, así que todos los avisos llegan a esa dirección.
+
+### Resúmenes diarios (sin abrir GPE)
+
+El programa de consola [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un único correo por persona con lo que tiene pendiente, de lo más antiguo a lo más nuevo:
+
+- Al *Almacén*: las devoluciones con la mercancía recibida y sin revisar.
+- A *Administración*: las revisadas que esperan el abono.
+
+Además:
+
+- Envía también los avisos de `AVISO_CORREO` que se quedaron pendientes.
+- `AVISO_RESUMEN` evita mandar el mismo resumen dos veces el mismo día.
+- Lo ejecuta una tarea programada de Windows en un ordenador que esté encendido por la mañana, con las mismas variables `GPE_SMTP_*` (y `GPE_CONEXION` si la base de datos no está en `localhost`).
+- Deja lo que hace en `%LOCALAPPDATA%\GPE\avisos.log`.
 
 ---
 
-## 7. Cómo añadir algo nuevo
+## 8. Cómo añadir algo nuevo
 
 **Un campo nuevo en un paso existente**
 1. Columna en `crear_tablas.sql` (y un script `ALTER TABLE` para las bases de datos ya creadas).
