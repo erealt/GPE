@@ -26,7 +26,7 @@ try
     int enviados = AvisoServicio.EnviarResumenDiario();
     Log(enviados == 0
         ? "Resumen diario: nada que enviar (no hay devoluciones pendientes de revisar o ya se envió hoy)."
-        : $"Resumen diario: enviado a {enviados} persona(s).");
+        : $"Resumen diario: {enviados} correo(s) enviado(s).");
     return 0;
 }
 catch (Exception ex)

@@ -355,7 +355,10 @@ public class ModuloDevoluciones : UserControl
 
         grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
         grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        grid.Columns[0].MinimumWidth = 135;   // el número entero, sin cortar
+        // El número entero, sin cortar: la columna mide lo que ocupa el número. Con un ancho
+        // mínimo y "Fill", al maximizar la ventana esta columna se quedaba con todo el sobrante.
+        grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+        grid.Columns[0].MinimumWidth = 135;
         grid.Columns[ColumnaEstado].FillWeight = 140;
         grid.Columns[6].FillWeight = 150;   // fecha de llegada: puede llevar "⚠ N días"
 

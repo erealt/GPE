@@ -81,7 +81,8 @@ public static class AvisoServicio
     //   - a administración, las revisadas que esperan el abono (fase 4)
     // Lo lanza GPE.Avisos (tarea programada de Windows), sin necesidad de abrir GPE.
     // A quien ya recibió hoy un resumen no se le repite.
-    // Devuelve cuántos correos se han enviado; lanza la excepción si no se puede conectar.
+    // Devuelve cuántos correos se han enviado (uno por persona y tipo de resumen);
+    // lanza la excepción si no se puede conectar.
     public static int EnviarResumenDiario()
     {
         if (!Configurado(out string remitente, out _))
