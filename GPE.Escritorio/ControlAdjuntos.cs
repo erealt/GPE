@@ -6,7 +6,7 @@ using System.Diagnostics;
 namespace GPE.Escritorio;
 
 // Lista de archivos de una devolución con botones Añadir / Ver / Quitar.
-// Se usa para las fotos del almacén (FOTO) y para el documento del abono (ABONO).
+// Se usa para el recibo de la agencia (RECIBO), las fotos del almacén (FOTO) y el documento del abono (ABONO).
 // Los cambios se guardan en la base de datos al momento, sin esperar a otro botón.
 public class ControlAdjuntos : UserControl
 {
@@ -182,7 +182,12 @@ public class ControlAdjuntos : UserControl
 
         try
         {
-            servicio.EliminarAdjunto(adjunto.Id);
+            servicio.EliminarAdjunto(adjunto.Id, tipo);
+        }
+        catch (ReglaNegocioException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Sin permiso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
         catch (DbException ex)
         {

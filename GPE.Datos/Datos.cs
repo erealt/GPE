@@ -19,20 +19,20 @@ public record DevolucionFila(
     int Id,
     string Numero,
     string Cliente,
-    string? Albaran,
+    string CodigoCliente,
     string Motivo,
     DateTime FechaSolicitud,
-    DateTime? FechaRecogida,
+    DateTime? FechaRecogida,   // fecha de recogida prevista
     DateTime? FechaLlegada,
     string Estado,
     int Fase);
 
-public record Cliente(int Id, string Nombre)
+public record Cliente(int Id, string Codigo, string Nombre)
 {
-    public override string ToString() => Nombre;
+    public override string ToString() => $"{Codigo} · {Nombre}";
 }
 
-public record Producto(int Id, string Codigo, string Nombre)
+public record Producto(int Id, string Codigo, string Nombre, string? Formato)
 {
     public override string ToString() => Nombre;
 }
@@ -43,12 +43,11 @@ public record DatosNuevaDevolucion(
     int FabricaId,
     int ClienteId,
     string Motivo,
-    string? Albaran,
     string? Observaciones,
     DateTime FechaSolicitud,
     List<LineaNuevaDevolucion> Lineas);
 
-public record Usuario(int Id, string Nombre, string Email)
+public record Usuario(int Id, string Nombre)
 {
     public string Iniciales => string.Concat(Nombre
         .Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -75,6 +74,20 @@ public record CambioHistorial(
 public static class Sesion
 {
     public static Usuario? UsuarioActual { get; set; }
+
+    // Roles del usuario (tabla USUARIO_ROL): deciden qué pasos puede hacer
+    public static HashSet<string> Roles { get; set; } = new();
+
+    public static bool TieneRol(string rol) => Roles.Contains(rol);
+}
+
+// Nombres de la tabla ROL. Cada rol hace unos pasos de la devolución;
+// los demás usuarios solo pueden consultarlos.
+public static class Rol
+{
+    public const string Administracion = "Administración";   // nueva devolución, abono y cierre
+    public const string Transporte = "Transporte";           // recogida
+    public const string Almacen = "Almacén";                 // llegada y revisión de la mercancía
 }
 
 public record Transportista(int Id, string Nombre, string? Telefono)
@@ -97,31 +110,104 @@ public record RecogidaGuardada(
     string Direccion,
     string? TelefonoContacto,
     string? Observaciones,
-    DateTime CreadaEn);
+    DateTime CreadaEn);   // cuándo se registró el transportista
 
-// Línea de producto tal como la ve el almacén al revisar
-public record LineaRevision(
-    int Id,
+// Producto que el cliente dijo que iba a devolver (al crear la devolución)
+public record LineaSolicitada(
+    int ProductoId,
+    string Codigo,
     string Producto,
+    string? Formato,
     string? Lote,
-    int Solicitada,
-    int? Recibida,
-    int? Apta,
-    string? Observaciones);
+    int Cantidad);
 
-// Lo que el almacén ha anotado de cada línea al finalizar la revisión
-public record LineaRevisada(int Id, int Recibida, int Apta, string? Observaciones);
+// Línea apuntada por el almacén al revisar la mercancía
+public record LineaRevision(
+    int ProductoId,
+    string Codigo,
+    string Producto,
+    string? Formato,
+    string? Lote,
+    DateTime? Caducidad,
+    int Cantidad,
+    bool Apto);
+
+// Cabecera de la revisión. Agencia y RevisadaPor son null si aún no se ha guardado;
+// Transportista es el de la recogida, para proponerlo como agencia.
+public record CabeceraRevision(
+    string? RevisadaPor,
+    string? Agencia,
+    string? Observaciones,
+    string? Transportista);
+
+// Lo que se guarda al finalizar la revisión
+public record LineaRevisada(int ProductoId, string? Lote, DateTime? Caducidad, int Cantidad, bool Apto);
+
+public record DatosRevision(
+    int DevolucionId,
+    string RevisadaPor,
+    string? Agencia,
+    string? Observaciones,
+    List<LineaRevisada> Lineas);
 
 public static class TipoAdjunto
 {
     public const string Foto = "FOTO";
     public const string Abono = "ABONO";
+    public const string Recibo = "RECIBO";   // recibo de la agencia al llegar la mercancía
 }
 
 // Datos de un adjunto sin su contenido (para listarlo)
 public record AdjuntoInfo(int Id, string NombreArchivo, int TamanoBytes, DateTime SubidoEn, string Usuario);
 
 public record ArchivoNuevo(string NombreArchivo, byte[] Contenido);
+
+public static class TipoAviso
+{
+    public const string NuevaDevolucion = "NUEVA_DEVOLUCION";
+    public const string RecogidaSolicitada = "RECOGIDA_SOLICITADA";
+    public const string RevisionFinalizada = "REVISION_FINALIZADA";
+    public const string AbonoRegistrado = "ABONO_REGISTRADO";
+}
+
+// Aviso por correo pendiente, con los datos de la devolución para escribir el mensaje
+public record AvisoPendiente(
+    int Id,
+    string Tipo,
+    string Destinatario,
+    string NumeroDevolucion,
+    string Cliente,
+    string CodigoCliente,
+    string Motivo,
+    DateTime FechaSolicitud,
+    string? Observaciones,
+    // Datos de la recogida (null si todavía no se ha programado)
+    string? Transportista,
+    DateTime? FechaRecogidaPrevista,
+    string? DireccionRecogida,
+    // Resultado de la revisión del almacén (unidades aptas y no aptas)
+    int UnidadesAptas,
+    int UnidadesNoAptas,
+    // Abono (null si todavía no se ha registrado)
+    string? ResultadoAbono,
+    string? NumeroAbono,
+    decimal? ImporteAbono,
+    string? ObservacionesAbono);
+
+// Resúmenes diarios por correo (tabla AVISO_RESUMEN, una vez al día por destinatario)
+public static class TipoResumen
+{
+    public const string RevisionPendiente = "REVISION_PENDIENTE";
+    public const string AbonoPendiente = "ABONO_PENDIENTE";
+}
+
+// Devolución que alguien tiene pendiente, con el correo de esa persona
+public record DevolucionPendiente(
+    string Destinatario,
+    string Numero,
+    string Cliente,
+    string CodigoCliente,
+    DateTime? FechaLlegada);
 
 public static class ResultadoAbono
 {

@@ -26,7 +26,7 @@ public static class HistorialFormateador
         ["motivo"] = "Motivo",
         ["observaciones"] = "Observaciones",
         ["fecha_solicitud"] = "Fecha de solicitud",
-        ["fecha_recogida"] = "Fecha de recogida",
+        ["fecha_recogida"] = "Fecha de recogida prevista",
         ["fecha_llegada"] = "Fecha de llegada",
         ["producto_id"] = "Producto",
         ["lote"] = "Lote",
@@ -37,6 +37,8 @@ public static class HistorialFormateador
         ["telefono_contacto"] = "Teléfono de contacto",
         ["cantidad_apta"] = "Cantidad apta",
         ["observaciones_revision"] = "Observaciones de la revisión",
+        ["revisada_por"] = "Revisada por",
+        ["agencia"] = "Agencia",
         ["resultado_abono"] = "Resultado del abono",
         ["numero_abono"] = "Nº de abono",
         ["fecha_abono"] = "Fecha del abono",
@@ -105,6 +107,8 @@ public static class HistorialFormateador
         bool creaDevolucion = grupo.Any(c => c.Tabla == "DEVOLUCION" && c.Accion == "INSERT");
         bool borraDevolucion = grupo.Any(c => c.Tabla == "DEVOLUCION" && c.Accion == "DELETE");
         bool tocaRecogida = grupo.Any(c => c.Tabla == "RECOGIDA");
+        // Al finalizar la revisión sus líneas se borran y se vuelven a escribir enteras
+        bool escribeRevision = grupo.Any(c => c.Tabla == "REVISION_LINEA" && c.Accion == "INSERT");
 
         // Varias filas pueden proponer un título; gana el de menor prioridad
         var titulos = new List<(int Prioridad, string Texto)>();
@@ -164,10 +168,19 @@ public static class HistorialFormateador
 
                 case ("DEVOLUCION_PRODUCTO", "UPDATE"):
                     titulos.Add((2, "Modificó los productos"));
-                    detalles.Add(antes.GetValueOrDefault("cantidad_recibida") == null
-                        ? LineaRevisada(despues)   // primera revisión: un resumen por producto
-                        : $"{despues.GetValueOrDefault("producto_id")} · " +
-                          string.Join("; ", Diferencias(antes, despues).Select(d => d.Texto)));
+                    detalles.Add($"{despues.GetValueOrDefault("producto_id")} · " +
+                                 string.Join("; ", Diferencias(antes, despues).Select(d => d.Texto)));
+                    break;
+
+                case ("REVISION_LINEA", "INSERT"):
+                    titulos.Add((2, "Apuntó la revisión"));
+                    detalles.Add(LineaRevision(despues));
+                    break;
+
+                case ("REVISION_LINEA", "DELETE"):
+                    if (borraDevolucion || escribeRevision) break;
+                    titulos.Add((2, "Quitó líneas de la revisión"));
+                    detalles.Add("Quitado: " + LineaRevision(antes));
                     break;
 
                 case ("DEVOLUCION_PRODUCTO", "DELETE"):
@@ -191,13 +204,13 @@ public static class HistorialFormateador
                     break;
 
                 case ("ADJUNTO", "INSERT"):
-                    titulos.Add((2, EsFoto(despues) ? "Añadió fotos" : "Adjuntó el documento del abono"));
+                    titulos.Add((2, TituloAdjunto(despues, "Añadió fotos", "Adjuntó el recibo de la agencia", "Adjuntó el documento del abono")));
                     detalles.Add(despues.GetValueOrDefault("nombre_archivo") ?? "");
                     break;
 
                 case ("ADJUNTO", "DELETE"):
                     if (borraDevolucion) break;
-                    titulos.Add((2, EsFoto(antes) ? "Quitó fotos" : "Quitó el documento del abono"));
+                    titulos.Add((2, TituloAdjunto(antes, "Quitó fotos", "Quitó el recibo de la agencia", "Quitó el documento del abono")));
                     detalles.Add(antes.GetValueOrDefault("nombre_archivo") ?? "");
                     break;
             }
@@ -240,17 +253,26 @@ public static class HistorialFormateador
                 : $"{Nombre(c.Key)}: {c.Value}"));   // antes estaba vacío: solo el valor nuevo
 
    
-    private static string LineaRevisada(Dictionary<string, string?> linea)
+    // "Cacao en polvo 500 g × 3 · lote 564 · cad. 01/03/2027 · apto"
+    private static string LineaRevision(Dictionary<string, string?> linea)
     {
-        string texto = $"{linea.GetValueOrDefault("producto_id")}: " +
-                       $"{linea.GetValueOrDefault("cantidad_recibida")} recibidas, " +
-                       $"{linea.GetValueOrDefault("cantidad_apta")} aptas";
-        string? observaciones = linea.GetValueOrDefault("observaciones");
-        return observaciones == null ? texto : $"{texto} · {observaciones}";
+        var partes = new List<string>
+        {
+            $"{linea.GetValueOrDefault("producto_id")} × {linea.GetValueOrDefault("cantidad")}"
+        };
+        if (linea.GetValueOrDefault("lote") is string lote) partes.Add($"lote {lote}");
+        if (linea.GetValueOrDefault("caducidad") is string caducidad) partes.Add($"cad. {caducidad}");
+        partes.Add(linea.GetValueOrDefault("apto") == "true" ? "apto" : "no apto");
+        return string.Join(" · ", partes);
     }
 
-    private static bool EsFoto(Dictionary<string, string?> adjunto) =>
-        adjunto.GetValueOrDefault("tipo") == TipoAdjunto.Foto;
+    private static string TituloAdjunto(Dictionary<string, string?> adjunto, string foto, string recibo, string abono) =>
+        adjunto.GetValueOrDefault("tipo") switch
+        {
+            TipoAdjunto.Foto => foto,
+            TipoAdjunto.Recibo => recibo,
+            _ => abono
+        };
 
     // "Cacao en polvo 500 g × 3 · lote 564"
     private static string LineaProducto(Dictionary<string, string?> linea)

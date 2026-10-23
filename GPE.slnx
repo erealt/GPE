@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="GPE.Avisos/GPE.Avisos.csproj" />
   <Project Path="GPE.Datos/GPE.Datos.csproj" />
   <Project Path="GPE.Escritorio/GPE.Escritorio.csproj" />
   <Project Path="GPE.Logica/GPE.Logica.csproj" />

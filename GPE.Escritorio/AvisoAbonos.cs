@@ -41,8 +41,8 @@ public class FormAvisoAbonos : Form
         };
         var lblExplicacion = new Label
         {
-            Text = $"La mercancía llegó hace {DevolucionServicio.DiasAvisoAbono} días o más y el cliente sigue " +
-                   "esperando. Revisa la devolución y registra el abono. Este aviso se repetirá hasta que se registre.",
+            Text = "La mercancía ya está en el almacén y el cliente está esperando el abono. " +
+                   "Revisa la devolución y registra el abono. Este aviso se repetirá hasta que se registre.",
             Dock = DockStyle.Top,
             Height = 60,
             Padding = new Padding(20, 10, 20, 0),
@@ -58,7 +58,7 @@ public class FormAvisoAbonos : Form
         lista.Columns.Add("Nº devolución", 130);
         lista.Columns.Add("Cliente", 190);
         lista.Columns.Add("Llegada", 100);
-        lista.Columns.Add("Sin abono", 90);
+        lista.Columns.Add("Llegó hace", 90);
         lista.Columns.Add("Pendiente de", 180);
 
         // Primero las que más llevan esperando
@@ -70,7 +70,7 @@ public class FormAvisoAbonos : Form
                 d.Numero,
                 d.Cliente,
                 d.FechaLlegada?.ToString("dd/MM/yyyy", Componentes.Es) ?? "",
-                $"{dias} días",
+                DevolucionServicio.TextoDias(dias),
                 d.Fase == Fase.MercanciaRecibida ? "Revisión del almacén" : "Registrar el abono"
             }) { Tag = d });
         }
