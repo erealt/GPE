@@ -191,7 +191,7 @@ Controls.Add(scroll);
 
 Cada paso lo hace un rol; quien no lo tiene ve ese paso en **solo consulta** (con el aviso *"Solo consulta: este paso lo hace el rol..."*).
 
-La **lista de devoluciones** solo enseña las que esperan algo del rol del usuario (si tiene varios roles, las de todos): *Administración*, las recién creadas y las revisadas que esperan el abono (y solo a este rol le salen los avisos de abono retrasado); *Transporte*, las recién creadas; *Almacén*, las que tienen la recogida programada y las recibidas sin revisar. Las cerradas no las ve nadie en la lista. Las fases de cada rol están en `DevolucionServicio.FasesPorRol`.
+La **lista de devoluciones** solo enseña las que esperan algo del rol del usuario (si tiene varios roles, las de todos): *Administración*, las recién creadas y las revisadas que esperan el abono (y solo a este rol le salen los avisos de abono retrasado); *Transporte*, las recién creadas; *Almacén*, las que tienen la recogida programada y las recibidas sin revisar. Las cerradas las puede consultar cualquiera: salen al filtrar por el estado *Cierre* o al buscar por número o cliente. Las fases de cada rol están en `DevolucionServicio.FasesPorRol`.
 
 | Rol | Puede |
 |---|---|

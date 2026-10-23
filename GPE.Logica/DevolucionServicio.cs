@@ -24,9 +24,15 @@ public class DevolucionServicio
         [Rol.Almacen] = new[] { Fase.RecogidaSolicitada, Fase.MercanciaRecibida },
     };
 
-    // Fases que ve el usuario de la sesión (si tiene varios roles, las de todos)
-    public static HashSet<int> FasesVisibles() =>
-        Sesion.Roles.Where(FasesPorRol.ContainsKey).SelectMany(r => FasesPorRol[r]).ToHashSet();
+    // Fases que ve el usuario de la sesión (si tiene varios roles, las de todos).
+    // Las cerradas las ve cualquiera, por si hay que comprobar algo; la lista
+    // solo las enseña al filtrar por el estado "Cierre".
+    public static HashSet<int> FasesVisibles()
+    {
+        var fases = Sesion.Roles.Where(FasesPorRol.ContainsKey).SelectMany(r => FasesPorRol[r]).ToHashSet();
+        fases.Add(Fase.Cierre);
+        return fases;
+    }
 
     public List<DevolucionFila> ObtenerDevolucionesVisibles()
     {

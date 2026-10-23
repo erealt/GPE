@@ -448,8 +448,9 @@ public class ModuloDevoluciones : UserControl
 
         if (fila == null) return;
 
-        if (!fila.Visible)
+        if (!fila.Visible && fila.Tag is DevolucionFila { Fase: < Fase.Cierre })
             LimpiarFiltros();
+        if (!fila.Visible) return;   // se acaba de cerrar y no se está buscando: ya no está pendiente
 
         grid.ClearSelection();
         grid.CurrentCell = fila.Cells[0];
@@ -534,7 +535,10 @@ public class ModuloDevoluciones : UserControl
                 || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
                 || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
                 || codigoCliente.Contains(texto, StringComparison.OrdinalIgnoreCase);
-            bool coincideEstado = estado == "" || est == estado;
+            // Las cerradas solo salen al buscar una o al filtrar por su estado: así la lista
+            // enseña lo pendiente y se puede consultar cualquier cerrada si hace falta
+            bool cerrada = fila.Tag is DevolucionFila { Fase: Fase.Cierre };
+            bool coincideEstado = estado == "" ? !cerrada || texto != "" : est == estado;
 
             bool coincideFecha = fila.Tag is not DevolucionFila d
                 || ((desde == null || d.FechaSolicitud >= desde)
@@ -569,7 +573,8 @@ public class ModuloDevoluciones : UserControl
 
         lblVacio.Text = fechasCruzadas
             ? "La fecha \"desde\" es posterior a la fecha \"hasta\"."
-            : grid.Rows.Count == 0
+            : !grid.Rows.Cast<DataGridViewRow>().Any(f => f.Tag is DevolucionFila { Fase: < Fase.Cierre })
+              && cmbEstado.SelectedIndex <= 0 && txtBuscar.Text.Trim() == ""
                 ? (Sesion.TieneRol(Rol.Administracion)
                     ? "No hay devoluciones pendientes. Crea una nueva con \"+ Nueva devolución\"."
                     : "No hay devoluciones pendientes para tu rol.")

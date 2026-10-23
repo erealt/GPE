@@ -16,16 +16,25 @@ static class Program
             if (e.ExceptionObject is Exception ex) MostrarErrorInesperado(ex);
         };
 
-        // Sin usuario no se puede registrar el historial, así que no se entra
-        using (var seleccion = new FormSeleccionUsuario())
+        // Con "Salir" se vuelve a elegir usuario; al cerrar la ventana se acaba
+        while (true)
         {
-            if (seleccion.ShowDialog() != DialogResult.OK) return;
+            // Sin usuario no se puede registrar el historial, así que no se entra
+            using (var seleccion = new FormSeleccionUsuario())
+            {
+                if (seleccion.ShowDialog() != DialogResult.OK) return;
+            }
+
+            // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)
+            GPE.Logica.AvisoServicio.EnviarPendientesEnSegundoPlano();
+
+            using var principal = new FormPrincipal();
+            Application.Run(principal);
+            if (!principal.CambiarUsuario) return;
+
+            GPE.Datos.Sesion.UsuarioActual = null;
+            GPE.Datos.Sesion.Roles = new();
         }
-
-        // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)
-        GPE.Logica.AvisoServicio.EnviarPendientesEnSegundoPlano();
-
-        Application.Run(new FormPrincipal());
     }
 
     private static void MostrarErrorInesperado(Exception ex) =>
