@@ -20,7 +20,8 @@ Este documento explica cómo está organizado el código y cómo están hechas l
      | 5 | Abono realizado |
      | 6 | Cierre |
 
-   - Las tablas `ROL`, `USUARIO_ROL` y `LOTE` todavía no las usa la aplicación: están preparadas para cuando haya login con permisos por rol y fábrica, y para elegir el lote de una lista (hoy el lote es texto libre).
+   - Los permisos van por rol (`ROL`, `USUARIO_ROL`); ver el apartado 4.5. [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) prepara un usuario por rol para probar (Administrador, Transporte y Almacén). Con `sqlcmd` hay que ejecutarlo con `-f 65001`, por las tildes.
+   - La tabla `LOTE` todavía no la usa la aplicación: está preparada para elegir el lote de una lista (hoy el lote es texto libre).
 
 2. **Conexión**: por defecto se usa `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos (por ejemplo una de pruebas) se define la variable de entorno `GPE_CONEXION` con otra cadena de conexión.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar el proyecto `GPE.Escritorio`. Al entrar se elige el usuario (pantalla provisional hasta que haya login); ese usuario es el que queda registrado en el historial. Después se abre la ventana principal, con el inicio y el menú lateral de módulos (apartado 4.0).
@@ -185,6 +186,22 @@ Controls.Add(scroll);
 **Otro usuario ya lo cambió.** Todos los cambios de fase son un `UPDATE ... WHERE fase = <la esperada>`. Si devuelve 0 filas, es que otra persona cambió la devolución mientras tanto y se muestra: *"Otro usuario ya ha cambiado el estado de esta devolución. Cierra la pantalla y vuelve a abrirla."*
 
 **Errores de base de datos.** Se capturan `DbException` y se enseña un mensaje en vez de cerrar la aplicación.
+
+### 4.5 Permisos por rol
+
+Cada paso lo hace un rol; quien no lo tiene ve ese paso en **solo consulta** (con el aviso *"Solo consulta: este paso lo hace el rol..."*).
+
+La **lista de devoluciones** solo enseña las que esperan algo del rol del usuario (si tiene varios roles, las de todos): *Administración*, las recién creadas y las revisadas que esperan el abono (y solo a este rol le salen los avisos de abono retrasado); *Transporte*, las recién creadas; *Almacén*, las que tienen la recogida programada y las recibidas sin revisar. Las cerradas no las ve nadie en la lista. Las fases de cada rol están en `DevolucionServicio.FasesPorRol`.
+
+| Rol | Puede |
+|---|---|
+| **Administración** | *Nueva devolución* (sin el rol no se ve el botón), *Registrar abono y cerrar*, *Reabrir abono*, el documento del abono |
+| **Transporte** | Solicitar y modificar la recogida |
+| **Almacén** | *Marcar como recibida*, *Deshacer recepción*, la revisión, *Reabrir revisión* (también desde la pantalla del abono), el recibo y las fotos |
+
+- Los roles del usuario se leen al entrar (`Sesion.Roles`, `Sesion.TieneRol(Rol.Almacen)`). Los nombres están en la clase `Rol` de [`Datos.cs`](GPE.Datos/Datos.cs) y tienen que coincidir con la tabla `ROL`.
+- Las pantallas deciden con eso si son editables, y `DevolucionServicio` lo vuelve a comprobar en cada operación (`ExigirRol`), como el resto de validaciones.
+- De momento cuentan los roles de cualquier fábrica, porque la aplicación trabaja con una sola.
 
 ---
 

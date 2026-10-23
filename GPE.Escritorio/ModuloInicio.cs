@@ -121,9 +121,9 @@ public class ModuloInicio : UserControl
     {
         try
         {
-            var lista = new DevolucionServicio().ObtenerDevoluciones();
+            var lista = new DevolucionServicio().ObtenerDevolucionesVisibles();
             int enCurso = lista.Count(d => d.Fase < Fase.Cierre);
-            int retrasadas = lista.Count(DevolucionServicio.AbonoRetrasado);
+            int retrasadas = Sesion.TieneRol(Rol.Administracion) ? lista.Count(DevolucionServicio.AbonoRetrasado) : 0;
             return $"{enCurso} en curso" + (retrasadas > 0 ? $"  ·  ⚠ {retrasadas} esperando abono" : "");
         }
         catch (DbException)

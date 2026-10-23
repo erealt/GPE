@@ -13,7 +13,8 @@ public class Recogida : PantallaFase
 
     public const int PasoRecogida = Fase.RecogidaSolicitada;
 
-    private bool SoloLectura => devolucion.Fase >= Fase.MercanciaRecibida;
+    private bool SinPermiso => !Sesion.TieneRol(Rol.Transporte);
+    private bool SoloLectura => devolucion.Fase >= Fase.MercanciaRecibida || SinPermiso;
 
     private readonly ComboBox cmbTransportista = new();
     private readonly Label lblTelefonoTransportista = new();
@@ -142,7 +143,9 @@ public class Recogida : PantallaFase
 
     private Control CrearTarjetaRecogida()
     {
-        var tarjeta = Componentes.Tarjeta("Datos de la recogida", SoloLectura
+        var tarjeta = Componentes.Tarjeta("Datos de la recogida", SinPermiso
+            ? SoloConsulta(Rol.Transporte)
+            : SoloLectura
             ? "La mercancía ya ha llegado: la recogida solo se puede consultar."
             : existente == null
                 ? "Indica quién recoge la mercancía, dónde y cuándo está previsto."

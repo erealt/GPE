@@ -21,6 +21,9 @@ public class FormAlmacen : PantallaFase
     private readonly DevolucionServicio servicio = new();
     private DevolucionFila devolucion;
     private int paso;
+
+    // Solo el almacén marca la llegada y revisa; los demás ven estos pasos en consulta
+    private static bool PuedeEditar => Sesion.TieneRol(Rol.Almacen);
     private List<Producto> productos = new();
 
     // Se crean de nuevo cada vez que se reconstruye la pantalla
@@ -89,11 +92,11 @@ public class FormAlmacen : PantallaFase
             {
                 pila.Controls.Add(Componentes.Tarjeta("Mercancía recibida",
                     $"La mercancía llegó al almacén el {Componentes.Fecha(devolucion.FechaLlegada)}."));
-                pila.Controls.Add(CrearTarjetaRecibo(editable: devolucion.Fase == Fase.MercanciaRecibida));
+                pila.Controls.Add(CrearTarjetaRecibo(editable: devolucion.Fase == Fase.MercanciaRecibida && PuedeEditar));
 
                 // Solo mientras no se haya finalizado la revisión
                 var botones = new List<Button> { BotonCerrar() };
-                if (devolucion.Fase == Fase.MercanciaRecibida)
+                if (devolucion.Fase == Fase.MercanciaRecibida && PuedeEditar)
                     botones.Insert(0, BotonReabrir("Deshacer recepción", 190, () => Reabrir(
                         "Deshacer recepción",
                         "La devolución volverá a \"Recogida solicitada\" y se borrará la fecha de llegada. " +
@@ -104,7 +107,7 @@ public class FormAlmacen : PantallaFase
         }
         else
         {
-            bool editable = devolucion.Fase == Fase.MercanciaRecibida;
+            bool editable = devolucion.Fase == Fase.MercanciaRecibida && PuedeEditar;
 
             CargarProductos();
             pila.Controls.Add(CrearTarjetaDatosRevision(editable));
@@ -123,6 +126,10 @@ public class FormAlmacen : PantallaFase
 
     private Control CrearTarjetaPendiente()
     {
+        if (!PuedeEditar)
+            return Componentes.Tarjeta("La mercancía todavía no ha llegado",
+                "Cuando llegue, el almacén la marcará como recibida. " + SoloConsulta(Rol.Almacen));
+
         var tarjeta = Componentes.Tarjeta("La mercancía todavía no ha llegado",
             "Cuando llegue al almacén, márcala como recibida y adjunta el recibo de la agencia para empezar la revisión.");
 
@@ -267,6 +274,7 @@ public class FormAlmacen : PantallaFase
     {
         var tarjeta = Componentes.Tarjeta("Datos de la revisión", editable
             ? "Agencia que ha traído la mercancía y persona del almacén que la revisa."
+            : !PuedeEditar ? SoloConsulta(Rol.Almacen)
             : "Revisión finalizada: solo consulta.");
 
         foreach (var texto in new[] { txtAgencia, txtRevisadaPor })
@@ -475,7 +483,7 @@ public class FormAlmacen : PantallaFase
     private Control CrearAccionesConsulta()
     {
         var botones = new List<Button> { BotonCerrar() };
-        if (devolucion.Fase == Fase.RevisadaAlmacen)
+        if (devolucion.Fase == Fase.RevisadaAlmacen && PuedeEditar)
             botones.Insert(0, BotonReabrir("Reabrir revisión", 180, () => Reabrir(
                 "Reabrir revisión",
                 "La devolución volverá a \"Mercancía recibida\" para poder corregir la revisión. " +
@@ -492,7 +500,8 @@ public class FormAlmacen : PantallaFase
         {
             var cabecera = servicio.ObtenerCabeceraRevision(devolucion.Id);
             txtAgencia.Text = cabecera.Agencia ?? cabecera.Transportista ?? "";
-            txtRevisadaPor.Text = cabecera.RevisadaPor ?? Sesion.UsuarioActual?.Nombre ?? "";
+            // Se propone quien la está revisando; en consulta solo se ve lo guardado
+            txtRevisadaPor.Text = cabecera.RevisadaPor ?? (editable ? Sesion.UsuarioActual?.Nombre : null) ?? "";
             txtObservaciones.Text = cabecera.Observaciones ?? "";
 
             var lineas = servicio.ObtenerLineasRevision(devolucion.Id);

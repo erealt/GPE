@@ -115,6 +115,29 @@ public class DevolucionRepositorio
         return usuarios;
     }
 
+    // De momento la aplicación trabaja con una sola fábrica, así que cuentan los roles
+    // de cualquier fábrica
+    public List<string> ObtenerRoles(int usuarioId)
+    {
+        const string sql = @"
+            SELECT DISTINCT r.nombre
+            FROM USUARIO_ROL ur
+            JOIN ROL r ON r.id = ur.rol_id
+            WHERE ur.usuario_id = @usuario;";
+
+        var roles = new List<string>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@usuario", usuarioId);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+            roles.Add(lector.GetString(0));
+
+        return roles;
+    }
+
     public List<CambioHistorial> ObtenerHistorial(int devolucionId)
     {
         const string sql = @"

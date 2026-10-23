@@ -74,6 +74,20 @@ public record CambioHistorial(
 public static class Sesion
 {
     public static Usuario? UsuarioActual { get; set; }
+
+    // Roles del usuario (tabla USUARIO_ROL): deciden qué pasos puede hacer
+    public static HashSet<string> Roles { get; set; } = new();
+
+    public static bool TieneRol(string rol) => Roles.Contains(rol);
+}
+
+// Nombres de la tabla ROL. Cada rol hace unos pasos de la devolución;
+// los demás usuarios solo pueden consultarlos.
+public static class Rol
+{
+    public const string Administracion = "Administración";   // nueva devolución, abono y cierre
+    public const string Transporte = "Transporte";           // recogida
+    public const string Almacen = "Almacén";                 // llegada y revisión de la mercancía
 }
 
 public record Transportista(int Id, string Nombre, string? Telefono)

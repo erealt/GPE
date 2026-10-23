@@ -13,14 +13,38 @@ public class DevolucionServicio
 
     // Consultas
 
-    public List<DevolucionFila> ObtenerDevoluciones() => repositorio.ObtenerDevoluciones();
+    // Cada rol ve en la lista las devoluciones que esperan algo de él
+    private static readonly Dictionary<string, int[]> FasesPorRol = new()
+    {
+        // Las recién creadas y las que esperan el abono
+        [Rol.Administracion] = new[] { Fase.SolicitudRecibida, Fase.RevisadaAlmacen },
+        // Las nuevas, para programar la recogida
+        [Rol.Transporte] = new[] { Fase.SolicitudRecibida },
+        // Las que tienen la recogida programada y las que ya han llegado sin revisar
+        [Rol.Almacen] = new[] { Fase.RecogidaSolicitada, Fase.MercanciaRecibida },
+    };
+
+    // Fases que ve el usuario de la sesión (si tiene varios roles, las de todos)
+    public static HashSet<int> FasesVisibles() =>
+        Sesion.Roles.Where(FasesPorRol.ContainsKey).SelectMany(r => FasesPorRol[r]).ToHashSet();
+
+    public List<DevolucionFila> ObtenerDevolucionesVisibles()
+    {
+        var fases = FasesVisibles();
+        return repositorio.ObtenerDevoluciones().Where(d => fases.Contains(d.Fase)).ToList();
+    }
 
     public DevolucionFila? ObtenerDevolucion(int devolucionId) => repositorio.ObtenerDevolucion(devolucionId);
 
     public string? ObtenerObservacionesSolicitud(int devolucionId) =>
         repositorio.ObtenerObservacionesSolicitud(devolucionId);
 
-    public List<string> ObtenerEstados() => repositorio.ObtenerEstados();
+    // Los estados vienen ordenados por fase (el primero es la fase 1)
+    public List<string> ObtenerEstadosVisibles()
+    {
+        var fases = FasesVisibles();
+        return repositorio.ObtenerEstados().Where((estado, i) => fases.Contains(i + 1)).ToList();
+    }
 
     public List<Cliente> ObtenerClientes() => repositorio.ObtenerClientes();
 
@@ -32,6 +56,20 @@ public class DevolucionServicio
 
     public RecogidaGuardada? ObtenerRecogida(int devolucionId) => repositorio.ObtenerRecogida(devolucionId);
 
+    public List<string> ObtenerRoles(int usuarioId) => repositorio.ObtenerRoles(usuarioId);
+
+    // Permisos: cada paso lo hace un rol. Las pantallas ya no dejan hacerlo a los demás;
+    // esto es la segunda comprobación, como el resto de validaciones.
+    private static void ExigirRol(string rol, string accion)
+    {
+        if (!Sesion.TieneRol(rol))
+            throw new ReglaNegocioException($"No tienes permiso para {accion}: hace falta el rol {rol}.");
+    }
+
+    // Recibo y fotos son del almacén; el documento del abono, de administración
+    private static void ExigirRolAdjunto(string tipo) =>
+        ExigirRol(tipo == TipoAdjunto.Abono ? Rol.Administracion : Rol.Almacen, "cambiar estos archivos");
+
     public List<EntradaHistorial> ObtenerHistorial(int devolucionId)
     {
         var nombres = repositorio.ObtenerNombresPorCampo();
@@ -42,6 +80,7 @@ public class DevolucionServicio
 
     public int CrearDevolucion(DatosNuevaDevolucion datos)
     {
+        ExigirRol(Rol.Administracion, "dar de alta devoluciones");
         Validar(datos);
         int id = repositorio.InsertarDevolucion(datos);
         AvisoServicio.EnviarPendientesEnSegundoPlano();
@@ -69,6 +108,10 @@ public class DevolucionServicio
     {
         if (faseActual is not (Fase.MercanciaRecibida or Fase.RevisadaAlmacen or Fase.Cierre))
             throw new ReglaNegocioException("Este paso ya no se puede reabrir.");
+        if (faseActual == Fase.Cierre)
+            ExigirRol(Rol.Administracion, "reabrir el abono");
+        else
+            ExigirRol(Rol.Almacen, "reabrir este paso del almacén");
 
         motivo = motivo.Trim();
         if (motivo.Length < 5)
@@ -84,6 +127,7 @@ public class DevolucionServicio
     // recepción anterior que se deshizo
     public void MarcarRecibida(int devolucionId, IEnumerable<string> rutasRecibo)
     {
+        ExigirRol(Rol.Almacen, "marcar la mercancía como recibida");
         var recibo = LeerArchivos(TipoAdjunto.Recibo, rutasRecibo);
         if (recibo.Count == 0 && repositorio.ObtenerAdjuntos(devolucionId, TipoAdjunto.Recibo).Count == 0)
             throw new ReglaNegocioException("Adjunta el recibo de la agencia de transporte.");
@@ -105,6 +149,7 @@ public class DevolucionServicio
 
     public void FinalizarRevision(DatosRevision datos)
     {
+        ExigirRol(Rol.Almacen, "finalizar la revisión");
         if (string.IsNullOrWhiteSpace(datos.RevisadaPor))
             throw new ReglaNegocioException("Indica quién ha revisado la mercancía.");
         if (datos.RevisadaPor.Length > 100 || datos.Agencia?.Length > 100)
@@ -152,6 +197,7 @@ public class DevolucionServicio
 
     public void RegistrarAbono(DatosAbono datos, DateTime? fechaLlegada)
     {
+        ExigirRol(Rol.Administracion, "registrar el abono");
         ValidarAbono(datos, fechaLlegada);
 
         if (datos.Resultado != ResultadoAbono.Ninguno
@@ -211,10 +257,15 @@ public class DevolucionServicio
 
     public byte[] ObtenerContenidoAdjunto(int adjuntoId) => repositorio.ObtenerContenidoAdjunto(adjuntoId);
 
-    public void EliminarAdjunto(int adjuntoId) => repositorio.EliminarAdjunto(adjuntoId);
+    public void EliminarAdjunto(int adjuntoId, string tipo)
+    {
+        ExigirRolAdjunto(tipo);
+        repositorio.EliminarAdjunto(adjuntoId);
+    }
 
     public void AnadirAdjuntos(int devolucionId, string tipo, IEnumerable<string> rutas)
     {
+        ExigirRolAdjunto(tipo);
         var archivos = LeerArchivos(tipo, rutas);
         if (archivos.Count > 0)
             repositorio.InsertarAdjuntos(devolucionId, tipo, archivos);
@@ -243,6 +294,7 @@ public class DevolucionServicio
 
     public void GuardarRecogida(DatosRecogida datos, DateTime fechaSolicitud)
     {
+        ExigirRol(Rol.Transporte, "programar la recogida");
         ValidarRecogida(datos, fechaSolicitud);
         if (!repositorio.GuardarRecogida(datos))
             throw new ReglaNegocioException("La mercancía ya ha llegado: la recogida ya no se puede modificar.");

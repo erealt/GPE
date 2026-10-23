@@ -113,6 +113,7 @@ public class ModuloDevoluciones : UserControl
         titulos.Controls.Add(lblTitulo);
 
         btnNueva.Height = 46;
+        btnNueva.Visible = Sesion.TieneRol(Rol.Administracion);   // dar de alta es cosa de administración
         btnNueva.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnNueva.Margin = new Padding(0, 10, 0, 0);
         btnNueva.Click += (s, e) =>
@@ -163,7 +164,7 @@ public class ModuloDevoluciones : UserControl
 
     private void ActualizarFranjaAviso(List<DevolucionFila> devoluciones)
     {
-        var retrasadas = devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList();
+        var retrasadas = RetrasadasDelUsuario(devoluciones);
         franjaAviso.Visible = retrasadas.Count > 0;
         if (retrasadas.Count == 0)
         {
@@ -180,6 +181,12 @@ public class ModuloDevoluciones : UserControl
               "los clientes están esperando.";
     }
 
+    // El aviso de abonos retrasados es para quien registra el abono
+    private static List<DevolucionFila> RetrasadasDelUsuario(List<DevolucionFila> devoluciones) =>
+        Sesion.TieneRol(Rol.Administracion)
+            ? devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList()
+            : new List<DevolucionFila>();
+
     // Ventana de aviso, al entrar y cada MinutosEntreAvisos mientras quede alguna pendiente.
     // Salta aunque se esté en otro módulo (FormPrincipal la llama al arrancar).
     public void MostrarAvisoAbonos()
@@ -194,7 +201,7 @@ public class ModuloDevoluciones : UserControl
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = servicio.ObtenerDevoluciones();
+            devoluciones = servicio.ObtenerDevolucionesVisibles();
         }
         catch (DbException)
         {
@@ -202,7 +209,7 @@ public class ModuloDevoluciones : UserControl
         }
         ActualizarFranjaAviso(devoluciones);   // los días cuentan aunque nadie recargue la lista
 
-        var retrasadas = devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList();
+        var retrasadas = RetrasadasDelUsuario(devoluciones);
         if (retrasadas.Count == 0) return;
 
         int? elegida;
@@ -382,12 +389,12 @@ public class ModuloDevoluciones : UserControl
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = servicio.ObtenerDevoluciones();
+            devoluciones = servicio.ObtenerDevolucionesVisibles();
 
             if (cmbEstado.Items.Count == 0)
             {
                 cmbEstado.Items.Add("Todos los estados");
-                foreach (string estado in servicio.ObtenerEstados())
+                foreach (string estado in servicio.ObtenerEstadosVisibles())
                     cmbEstado.Items.Add(estado);
                 cmbEstado.SelectedIndex = 0;
             }
@@ -423,7 +430,7 @@ public class ModuloDevoluciones : UserControl
         grid.Rows[i].Tag = d;
 
         // Está esperando el abono: se marca la fecha de llegada
-        if (DevolucionServicio.AbonoRetrasado(d))
+        if (DevolucionServicio.AbonoRetrasado(d) && Sesion.TieneRol(Rol.Administracion))
         {
             var llegada = grid.Rows[i].Cells[6];
             llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.TextoDias(DevolucionServicio.DiasSinAbono(d) ?? 0)}";
@@ -563,7 +570,9 @@ public class ModuloDevoluciones : UserControl
         lblVacio.Text = fechasCruzadas
             ? "La fecha \"desde\" es posterior a la fecha \"hasta\"."
             : grid.Rows.Count == 0
-                ? "Todavía no hay devoluciones. Crea la primera con \"+ Nueva devolución\"."
+                ? (Sesion.TieneRol(Rol.Administracion)
+                    ? "No hay devoluciones pendientes. Crea una nueva con \"+ Nueva devolución\"."
+                    : "No hay devoluciones pendientes para tu rol.")
                 : "No hay devoluciones que coincidan con los filtros.";
         lblVacio.ForeColor = fechasCruzadas ? Tema.Error : Tema.Suave;
         lblVacio.Visible = visibles == 0;

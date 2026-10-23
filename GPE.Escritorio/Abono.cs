@@ -28,7 +28,7 @@ public class FormAbono : PantallaFase
 
     private bool hayCambios;   // para avisar al cerrar sin registrar
 
-    private bool Editable => devolucion.Fase == Fase.RevisadaAlmacen;
+    private bool Editable => devolucion.Fase == Fase.RevisadaAlmacen && Sesion.TieneRol(Rol.Administracion);
 
     public FormAbono(DevolucionFila devolucion, int paso)
     {
@@ -222,6 +222,7 @@ public class FormAbono : PantallaFase
     {
         var tarjeta = Componentes.Tarjeta("Abono", Editable
             ? "Al registrar el abono la devolución queda cerrada. El documento se guarda al momento."
+            : !Sesion.TieneRol(Rol.Administracion) ? SoloConsulta(Rol.Administracion)
             : "Abono registrado: solo consulta.");
 
         panelResultado = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
@@ -328,7 +329,7 @@ public class FormAbono : PantallaFase
             numImporte.Value = Math.Min(abono.Importe ?? 0, numImporte.Maximum);
             txtObservaciones.Text = abono.Observaciones ?? "";
         }
-        else if (lineas.Count > 0 && lineas.All(l => l.Apto))
+        else if (Editable && lineas.Count > 0 && lineas.All(l => l.Apto))
         {
             rbTotal.Checked = true;   
         }
@@ -381,21 +382,34 @@ public class FormAbono : PantallaFase
         btnCancelar.DialogResult = DialogResult.Cancel;
         CancelButton = btnCancelar;
 
-        var btnReabrir = BotonReabrir("Reabrir revisión", 180, () =>
-            Reabrir("Reabrir revisión",
-                "La devolución volverá a \"Mercancía recibida\" para poder corregir la revisión. " +
-                "Lo que hayas rellenado aquí sin registrar se perderá; el documento del abono se conserva.",
-                () => IrAPaso(FormAlmacen.PasoRevision)));
+        // Reabrir la revisión es cosa del almacén
+        if (!Sesion.TieneRol(Rol.Almacen))
+            return Componentes.Acciones(btnRegistrar, btnCancelar);
 
-        return Componentes.Acciones(btnRegistrar, btnCancelar, btnReabrir);
+        return Componentes.Acciones(btnRegistrar, btnCancelar, BotonReabrirRevision(
+            "Lo que hayas rellenado aquí sin registrar se perderá; el documento del abono se conserva."));
     }
 
-    private Control CrearAccionesConsulta() =>
-        Componentes.Acciones(BotonCerrar(), BotonReabrir("Reabrir abono", 170, () =>
-            Reabrir("Reabrir abono",
-                "La devolución dejará de estar cerrada y volverá a \"Revisada almacén\" para poder corregir el abono. " +
-                "Los datos del abono se conservan.",
-                () => Recargar(PasoAbono))));
+    // Sin poder registrar: el abono ya está registrado o el usuario no es de administración
+    private Control CrearAccionesConsulta()
+    {
+        var botones = new List<Button> { BotonCerrar() };
+        if (devolucion.Fase == Fase.Cierre && Sesion.TieneRol(Rol.Administracion))
+            botones.Insert(0, BotonReabrir("Reabrir abono", 170, () =>
+                Reabrir("Reabrir abono",
+                    "La devolución dejará de estar cerrada y volverá a \"Revisada almacén\" para poder corregir el abono. " +
+                    "Los datos del abono se conservan.",
+                    () => Recargar(PasoAbono))));
+        else if (devolucion.Fase == Fase.RevisadaAlmacen && Sesion.TieneRol(Rol.Almacen))
+            botones.Insert(0, BotonReabrirRevision("El documento del abono, si ya se ha adjuntado, se conserva."));
+        return Componentes.Acciones(botones.ToArray());
+    }
+
+    private Button BotonReabrirRevision(string queSeConserva) =>
+        BotonReabrir("Reabrir revisión", 180, () =>
+            Reabrir("Reabrir revisión",
+                "La devolución volverá a \"Mercancía recibida\" para poder corregir la revisión. " + queSeConserva,
+                () => IrAPaso(FormAlmacen.PasoRevision)));
 
     private void Reabrir(string titulo, string explicacion, Action despues)
     {

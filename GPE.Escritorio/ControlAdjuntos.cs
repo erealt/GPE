@@ -182,7 +182,12 @@ public class ControlAdjuntos : UserControl
 
         try
         {
-            servicio.EliminarAdjunto(adjunto.Id);
+            servicio.EliminarAdjunto(adjunto.Id, tipo);
+        }
+        catch (ReglaNegocioException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Sin permiso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
         catch (DbException ex)
         {
