@@ -112,8 +112,8 @@ public class ModuloDevoluciones : UserControl
         titulos.Controls.Add(lblSubtitulo);
         titulos.Controls.Add(lblTitulo);
 
-        // Botón principal
         btnNueva.Height = 46;
+        btnNueva.Visible = Sesion.TieneRol(Rol.Administracion);   // dar de alta es cosa de administración
         btnNueva.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnNueva.Margin = new Padding(0, 10, 0, 0);
         btnNueva.Click += (s, e) =>
@@ -164,7 +164,7 @@ public class ModuloDevoluciones : UserControl
 
     private void ActualizarFranjaAviso(List<DevolucionFila> devoluciones)
     {
-        var retrasadas = devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList();
+        var retrasadas = RetrasadasDelUsuario(devoluciones);
         franjaAviso.Visible = retrasadas.Count > 0;
         if (retrasadas.Count == 0)
         {
@@ -174,10 +174,18 @@ public class ModuloDevoluciones : UserControl
 
         int maximo = retrasadas.Max(d => DevolucionServicio.DiasSinAbono(d) ?? 0);
         lblAviso.Text = retrasadas.Count == 1
-            ? $"⚠  {retrasadas[0].Numero} lleva {maximo} días sin abono: el cliente está esperando."
-            : $"⚠  {retrasadas.Count} devoluciones llevan {DevolucionServicio.DiasAvisoAbono} días o más sin abono " +
-              $"(la más antigua, {maximo} días): los clientes están esperando.";
+            ? $"⚠  {retrasadas[0].Numero} está sin abono (llegó {(maximo == 0 ? "hoy" : "hace " + DevolucionServicio.TextoDias(maximo))}): " +
+              "el cliente está esperando."
+            : $"⚠  {retrasadas.Count} devoluciones están sin abono " +
+              $"(la más antigua llegó {(maximo == 0 ? "hoy" : "hace " + DevolucionServicio.TextoDias(maximo))}): " +
+              "los clientes están esperando.";
     }
+
+    // El aviso de abonos retrasados es para quien registra el abono
+    private static List<DevolucionFila> RetrasadasDelUsuario(List<DevolucionFila> devoluciones) =>
+        Sesion.TieneRol(Rol.Administracion)
+            ? devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList()
+            : new List<DevolucionFila>();
 
     // Ventana de aviso, al entrar y cada MinutosEntreAvisos mientras quede alguna pendiente.
     // Salta aunque se esté en otro módulo (FormPrincipal la llama al arrancar).
@@ -193,7 +201,7 @@ public class ModuloDevoluciones : UserControl
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = servicio.ObtenerDevoluciones();
+            devoluciones = servicio.ObtenerDevolucionesVisibles();
         }
         catch (DbException)
         {
@@ -201,7 +209,7 @@ public class ModuloDevoluciones : UserControl
         }
         ActualizarFranjaAviso(devoluciones);   // los días cuentan aunque nadie recargue la lista
 
-        var retrasadas = devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList();
+        var retrasadas = RetrasadasDelUsuario(devoluciones);
         if (retrasadas.Count == 0) return;
 
         int? elegida;
@@ -346,15 +354,18 @@ public class ModuloDevoluciones : UserControl
 
         string[] columnas =
         {
-            "Nº DEVOLUCIÓN", "CLIENTE", "ALBARÁN", "MOTIVO",
-            "FECHA SOLICITUD", "FECHA RECOGIDA", "FECHA LLEGADA", "ESTADO"
+            "Nº DEVOLUCIÓN", "CLIENTE", "CÓD. CLIENTE", "MOTIVO",
+            "FECHA SOLICITUD", "RECOGIDA PREVISTA", "FECHA LLEGADA", "ESTADO"
         };
         foreach (string nombre in columnas)
             grid.Columns.Add(nombre, nombre);
 
         grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
         grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
-        grid.Columns[0].MinimumWidth = 135;   // el número entero, sin cortar
+        // El número entero, sin cortar: la columna mide lo que ocupa el número. Con un ancho
+        // mínimo y "Fill", al maximizar la ventana esta columna se quedaba con todo el sobrante.
+        grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+        grid.Columns[0].MinimumWidth = 135;
         grid.Columns[ColumnaEstado].FillWeight = 140;
         grid.Columns[6].FillWeight = 150;   // fecha de llegada: puede llevar "⚠ N días"
 
@@ -371,19 +382,19 @@ public class ModuloDevoluciones : UserControl
         Componentes.PintarEtiqueta(e, devolucion.Estado, fondo, texto);
     }
 
-    // ---------- Datos y filtros ----------
+    // Datos y filtros
 
     private void CargarDatos()
     {
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = servicio.ObtenerDevoluciones();
+            devoluciones = servicio.ObtenerDevolucionesVisibles();
 
             if (cmbEstado.Items.Count == 0)
             {
                 cmbEstado.Items.Add("Todos los estados");
-                foreach (string estado in servicio.ObtenerEstados())
+                foreach (string estado in servicio.ObtenerEstadosVisibles())
                     cmbEstado.Items.Add(estado);
                 cmbEstado.SelectedIndex = 0;
             }
@@ -409,7 +420,7 @@ public class ModuloDevoluciones : UserControl
         int i = grid.Rows.Add(
             d.Numero,
             d.Cliente,
-            d.Albaran ?? "—",
+            d.CodigoCliente,
             d.Motivo,
             Componentes.Fecha(d.FechaSolicitud),
             Componentes.Fecha(d.FechaRecogida),
@@ -418,11 +429,11 @@ public class ModuloDevoluciones : UserControl
 
         grid.Rows[i].Tag = d;
 
-        // Lleva demasiados días sin abono: se marca la fecha de llegada
-        if (DevolucionServicio.AbonoRetrasado(d))
+        // Está esperando el abono: se marca la fecha de llegada
+        if (DevolucionServicio.AbonoRetrasado(d) && Sesion.TieneRol(Rol.Administracion))
         {
             var llegada = grid.Rows[i].Cells[6];
-            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.DiasSinAbono(d)} días";
+            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.TextoDias(DevolucionServicio.DiasSinAbono(d) ?? 0)}";
             llegada.Style.ForeColor = Tema.Aviso;
             llegada.Style.BackColor = Tema.AvisoFondo;
             llegada.Style.SelectionForeColor = Tema.Aviso;
@@ -437,8 +448,9 @@ public class ModuloDevoluciones : UserControl
 
         if (fila == null) return;
 
-        if (!fila.Visible)
+        if (!fila.Visible && fila.Tag is DevolucionFila { Fase: < Fase.Cierre })
             LimpiarFiltros();
+        if (!fila.Visible) return;   // se acaba de cerrar y no se está buscando: ya no está pendiente
 
         grid.ClearSelection();
         grid.CurrentCell = fila.Cells[0];
@@ -516,14 +528,17 @@ public class ModuloDevoluciones : UserControl
         {
             string numero = fila.Cells[0].Value?.ToString() ?? "";
             string cli = fila.Cells[1].Value?.ToString() ?? "";
-            string albaran = fila.Cells[2].Value?.ToString() ?? "";
+            string codigoCliente = fila.Cells[2].Value?.ToString() ?? "";
             string est = fila.Cells[ColumnaEstado].Value?.ToString() ?? "";
 
             bool coincideTexto = texto == ""
                 || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
                 || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
-                || albaran.Contains(texto, StringComparison.OrdinalIgnoreCase);
-            bool coincideEstado = estado == "" || est == estado;
+                || codigoCliente.Contains(texto, StringComparison.OrdinalIgnoreCase);
+            // Las cerradas solo salen al buscar una o al filtrar por su estado: así la lista
+            // enseña lo pendiente y se puede consultar cualquier cerrada si hace falta
+            bool cerrada = fila.Tag is DevolucionFila { Fase: Fase.Cierre };
+            bool coincideEstado = estado == "" ? !cerrada || texto != "" : est == estado;
 
             bool coincideFecha = fila.Tag is not DevolucionFila d
                 || ((desde == null || d.FechaSolicitud >= desde)
@@ -558,8 +573,11 @@ public class ModuloDevoluciones : UserControl
 
         lblVacio.Text = fechasCruzadas
             ? "La fecha \"desde\" es posterior a la fecha \"hasta\"."
-            : grid.Rows.Count == 0
-                ? "Todavía no hay devoluciones. Crea la primera con \"+ Nueva devolución\"."
+            : !grid.Rows.Cast<DataGridViewRow>().Any(f => f.Tag is DevolucionFila { Fase: < Fase.Cierre })
+              && cmbEstado.SelectedIndex <= 0 && txtBuscar.Text.Trim() == ""
+                ? (Sesion.TieneRol(Rol.Administracion)
+                    ? "No hay devoluciones pendientes. Crea una nueva con \"+ Nueva devolución\"."
+                    : "No hay devoluciones pendientes para tu rol.")
                 : "No hay devoluciones que coincidan con los filtros.";
         lblVacio.ForeColor = fechasCruzadas ? Tema.Error : Tema.Suave;
         lblVacio.Visible = visibles == 0;

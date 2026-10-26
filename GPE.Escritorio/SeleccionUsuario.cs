@@ -86,6 +86,23 @@ public class FormSeleccionUsuario : Form
     {
         if (cmbUsuario.SelectedItem is not Usuario usuario) return;
 
+        try
+        {
+            Sesion.Roles = servicio.ObtenerRoles(usuario.Id).ToHashSet();
+        }
+        catch (DbException ex)
+        {
+            MessageBox.Show(this,
+                "No se pudieron cargar los permisos del usuario.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (Sesion.Roles.Count == 0)
+            MessageBox.Show(this,
+                $"{usuario.Nombre} no tiene ningún rol asignado: podrá consultar las devoluciones, pero no hacer ningún paso.",
+                "Sin permisos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
         Sesion.UsuarioActual = usuario;
         DialogResult = DialogResult.OK;
     }

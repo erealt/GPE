@@ -13,10 +13,12 @@ public class Recogida : PantallaFase
 
     public const int PasoRecogida = Fase.RecogidaSolicitada;
 
-    private bool SoloLectura => devolucion.Fase >= Fase.MercanciaRecibida;
+    private bool SinPermiso => !Sesion.TieneRol(Rol.Transporte);
+    private bool SoloLectura => devolucion.Fase >= Fase.MercanciaRecibida || SinPermiso;
 
     private readonly ComboBox cmbTransportista = new();
     private readonly Label lblTelefonoTransportista = new();
+    private readonly TextBox txtFechaRegistro = new();   // solo lectura: cuándo se registró el transportista
     private readonly DateTimePicker dtpRecogida = new();
     private readonly TextBox txtDireccion = new();
     private readonly TextBox txtTelefono = new();
@@ -56,6 +58,10 @@ public class Recogida : PantallaFase
         lblTelefonoTransportista.Font = new Font("Segoe UI", 9);
         lblTelefonoTransportista.Margin = new Padding(0, 4, 0, 0);
 
+        txtFechaRegistro.ReadOnly = true;
+        txtFechaRegistro.TabStop = false;
+        txtFechaRegistro.BackColor = Tema.FondoSoloLectura;
+
         dtpRecogida.Format = DateTimePickerFormat.Short;
         dtpRecogida.MinDate = devolucion.FechaSolicitud.Date;   // no puede ser antes de la solicitud
 
@@ -93,9 +99,11 @@ public class Recogida : PantallaFase
             txtDireccion.Text = guardada.Direccion;
             txtTelefono.Text = guardada.TelefonoContacto ?? "";
             txtObservaciones.Text = guardada.Observaciones ?? "";
+            txtFechaRegistro.Text = guardada.CreadaEn.ToString("dd/MM/yyyy HH:mm", Componentes.Es);
         }
         else
         {
+            txtFechaRegistro.PlaceholderText = "Se guardará al solicitar la recogida";
             dtpRecogida.Value = DateTime.Today < dtpRecogida.MinDate ? dtpRecogida.MinDate : DateTime.Today;
         }
     }
@@ -124,7 +132,7 @@ public class Recogida : PantallaFase
         pila.Controls.Add(Progreso(devolucion, PasoRecogida));
         pila.Controls.Add(Componentes.Resumen(
             ("CLIENTE", devolucion.Cliente),
-            ("ALBARÁN", devolucion.Albaran ?? "—"),
+            ("CÓD. CLIENTE", devolucion.CodigoCliente),
             ("MOTIVO", devolucion.Motivo),
             ("FECHA SOLICITUD", Componentes.Fecha(devolucion.FechaSolicitud))));
         pila.Controls.Add(CrearTarjetaRecogida());
@@ -135,19 +143,25 @@ public class Recogida : PantallaFase
 
     private Control CrearTarjetaRecogida()
     {
-        var tarjeta = Componentes.Tarjeta("Datos de la recogida", SoloLectura
+        var tarjeta = Componentes.Tarjeta("Datos de la recogida", SinPermiso
+            ? SoloConsulta(Rol.Transporte)
+            : SoloLectura
             ? "La mercancía ya ha llegado: la recogida solo se puede consultar."
             : existente == null
-                ? "Indica quién recoge la mercancía, dónde y cuándo."
+                ? "Indica quién recoge la mercancía, dónde y cuándo está previsto."
                 : "Esta devolución ya tiene una recogida programada. Puedes modificarla hasta que llegue la mercancía.");
 
         var rejilla = Componentes.Rejilla(2);
 
         rejilla.Controls.Add(campos.Campo("Transportista", cmbTransportista, lblTelefonoTransportista));
-        rejilla.Controls.Add(campos.Campo("Fecha de recogida", dtpRecogida));
+        rejilla.Controls.Add(campos.Campo("Fecha de registro del transportista", txtFechaRegistro));
 
-        rejilla.Controls.Add(campos.Campo("Dirección de recogida", txtDireccion));
+        rejilla.Controls.Add(campos.Campo("Fecha de recogida prevista", dtpRecogida));
         rejilla.Controls.Add(campos.Campo("Teléfono de contacto", txtTelefono));
+
+        var campoDireccion = campos.Campo("Dirección de recogida", txtDireccion);
+        rejilla.Controls.Add(campoDireccion);
+        rejilla.SetColumnSpan(campoDireccion, 2);
 
         var campoObservaciones = campos.Campo("Observaciones", txtObservaciones);
         rejilla.Controls.Add(campoObservaciones);
@@ -175,7 +189,7 @@ public class Recogida : PantallaFase
 
     private void Guardar()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         campos.LimpiarErrores();
         Control? primerError = null;
 

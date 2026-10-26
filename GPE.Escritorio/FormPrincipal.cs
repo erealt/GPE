@@ -93,7 +93,7 @@ public class FormPrincipal : Form
         MarcarElegido();
     }
 
-    // ---------- Menú lateral ----------
+    // Menú lateral
 
     private Control CrearMenuLateral()
     {
@@ -174,9 +174,12 @@ public class FormPrincipal : Form
         }
     }
 
-    // ---------- Barra superior ----------
+    // Barra superior
 
-    private static Panel CrearBarraSuperior()
+    // Se pulsó "Salir": Program vuelve a pedir el usuario en vez de cerrar la aplicación
+    public bool CambiarUsuario { get; private set; }
+
+    private Panel CrearBarraSuperior()
     {
         var barra = new Panel
         {
@@ -224,9 +227,21 @@ public class FormPrincipal : Form
             Text = Sesion.UsuarioActual?.Nombre ?? ""
         };
 
+        // Cierra la sesión y vuelve a la pantalla de elegir usuario
+        var btnSalir = Tema.BotonSecundario("Salir", 90);
+        btnSalir.Dock = DockStyle.Fill;
+        btnSalir.Click += (s, e) =>
+        {
+            CambiarUsuario = true;
+            Close();
+        };
+        var marcoSalir = new Panel { Dock = DockStyle.Right, Width = 90 + 15, Padding = new Padding(15, 13, 0, 13) };
+        marcoSalir.Controls.Add(btnSalir);
+
         barra.Controls.Add(lblFecha);
         barra.Controls.Add(lblNombre);
         barra.Controls.Add(lblUsuario);
+        barra.Controls.Add(marcoSalir);
         return barra;
     }
 }

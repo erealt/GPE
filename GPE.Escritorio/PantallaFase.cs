@@ -33,6 +33,9 @@ public class PantallaFase : Form
         if (e.Cancel) PasoSolicitado = null;
     }
 
+    // Subtítulo de las tarjetas cuando el usuario no tiene el rol que hace ese paso
+    protected static string SoloConsulta(string rol) => $"Solo consulta: este paso lo hace el rol {rol}.";
+
     // Botón "Cerrar" de las pantallas de consulta; también responde a Esc
     protected Button BotonCerrar()
     {
