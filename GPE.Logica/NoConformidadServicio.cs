@@ -250,6 +250,10 @@ public class NoConformidadServicio
     // ---------- Guardado ----------
 
     private const string MensajeBorrado = "Este registro ya no existe: puede que otro usuario lo haya borrado.";
+    private const string MensajeModificado =
+        "Otro usuario ha guardado cambios en este registro mientras lo tenías abierto. " +
+        "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
+        "Copia lo que hayas escrito, cierra la ficha y vuelve a abrirla para ver lo último.";
 
     // Crea el registro (Id = 0) o guarda los cambios, con sus acciones. Devuelve su id.
     // El número no lo pone la pantalla: se calcula aquí según su serie.
@@ -280,7 +284,39 @@ public class NoConformidadServicio
         nc = nc with { Numero = serie == null ? null : anterior.Numero };
 
         if (!repositorio.Actualizar(nc, lista, Renumerar(anterior, serie) ? serie : null))
-            throw new ReglaNegocioException(MensajeBorrado);
+            throw new ReglaNegocioException(
+                repositorio.ObtenerRegistro(nc.Id) == null ? MensajeBorrado : MensajeModificado);
         return nc.Id;
+    }
+
+    // ---------- Fichas abiertas ----------
+
+    // Mientras una ficha está abierta, la pantalla renueva el bloqueo cada minuto. Si pasan
+    // estos segundos sin renovarlo (GPE se cerró de golpe, se cortó la red...), deja de contar.
+    public const int SegundosRenovarBloqueo = 60;
+    private const int CaducidadBloqueo = 180;
+
+    // Identifica este GPE abierto: el mismo usuario puede tener GPE en dos equipos
+    private static readonly Guid EsteGpe = Guid.NewGuid();
+
+    // Apunta que este GPE tiene abierta la ficha (o lo renueva). Devuelve null si se puede
+    // editar, o quién la tiene abierta si no.
+    public BloqueoNc? Bloquear(int noConformidadId)
+    {
+        if (Sesion.UsuarioActual is not Usuario usuario)
+            throw new ReglaNegocioException("No hay ningún usuario elegido.");
+        return repositorio.Bloquear(noConformidadId, usuario.Id, EsteGpe, Environment.MachineName, CaducidadBloqueo);
+    }
+
+    public void Desbloquear(int noConformidadId) => repositorio.Desbloquear(noConformidadId, EsteGpe);
+
+    // "María tiene abierta esta ficha desde las 10:42 en PC-CALIDAD."
+    public static string DescribirBloqueo(BloqueoNc bloqueo)
+    {
+        string quien = bloqueo.MismoUsuario ? "Tú mismo tienes" : bloqueo.Usuario + " tiene";
+        string cuando = bloqueo.Desde.Date == DateTime.Today
+            ? $"desde las {bloqueo.Desde:HH:mm}"
+            : $"desde el {bloqueo.Desde:dd/MM/yyyy} a las {bloqueo.Desde:HH:mm}";
+        return $"{quien} abierta esta ficha {cuando} en el equipo {bloqueo.Equipo}.";
     }
 }

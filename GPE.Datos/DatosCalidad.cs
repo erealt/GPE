@@ -43,6 +43,8 @@ public record SerieNumero(string TipoRegistro, string Prefijo);
 
 // Una fila de la hoja INCIDENCIAS. Id = 0 en un registro nuevo.
 // Tipo solo se usa en las NC; McPccBpm, Parametro y Operario solo en las incidencias.
+// Version es la columna ROWVERSION tal como se leyó (null en uno nuevo): al guardar
+// se comprueba que siga igual, es decir, que nadie haya guardado mientras tanto.
 public record NoConformidad(
     int Id,
     string TipoRegistro,
@@ -64,7 +66,12 @@ public record NoConformidad(
     string? CapituloNorma,
     string? AnalisisCausaRaiz,
     decimal? CosteEconomico,
-    decimal? HorasManoObra);
+    decimal? HorasManoObra,
+    byte[]? Version = null);
+
+// Quién tiene abierta una ficha (tabla NC_BLOQUEO). MismoUsuario: es el usuario actual,
+// pero en otro GPE (otro equipo, u otra ventana de GPE en este).
+public record BloqueoNc(string Usuario, string Equipo, DateTime Desde, bool MismoUsuario);
 
 // Columna NC_ACCION.clase: en qué tabla de la ficha va la acción
 public static class ClaseAccion

@@ -16,6 +16,12 @@ public class FormNoConformidad : Form
     private readonly NoConformidadServicio servicio = new();
     private readonly NoConformidad? original;   // null si es nuevo
 
+    // Quién tiene abierta la ficha si es otro GPE: entonces solo se consulta.
+    // Si no, este GPE la bloquea y renueva el bloqueo cada minuto hasta cerrarla.
+    private readonly BloqueoNc? bloqueo;
+    private bool SoloLectura => bloqueo != null;
+    private readonly System.Windows.Forms.Timer renovarBloqueo = new();
+
     public int IdGuardado { get; private set; }
 
     private Dictionary<string, List<OpcionLista>> listas = new();
@@ -80,8 +86,10 @@ public class FormNoConformidad : Form
     public FormNoConformidad(NoConformidad? registro = null)
     {
         original = registro;
+        if (registro != null)
+            bloqueo = Bloquear(registro.Id);
 
-        Text = registro == null ? "Nuevo registro" : Titulo(registro);
+        Text = registro == null ? "Nuevo registro" : Titulo(registro) + (SoloLectura ? " (solo lectura)" : "");
         Size = new Size(1200, 800);
         MinimumSize = new Size(1100, 600);
         StartPosition = FormStartPosition.CenterParent;
@@ -90,6 +98,7 @@ public class FormNoConformidad : Form
 
         PrepararControles();
         Controls.Add(CrearContenido());
+        if (SoloLectura) Controls.Add(CrearFranjaBloqueo());
         Controls.Add(CrearFranjaFases());   // después: así se coloca arriba y el contenido debajo
         CargarValores();
         ActualizarSegunTipo();
@@ -126,6 +135,93 @@ public class FormNoConformidad : Form
 
         // Uno nuevo empieza por el registro; uno ya guardado, por la fase en curso
         MostrarFase(original == null ? 0 : NoConformidadServicio.FaseEnCurso(fases) ?? 0);
+
+        if (SoloLectura)
+        {
+            BloquearEntradas();
+            Shown += (s, e) => MessageBox.Show(this,
+                NoConformidadServicio.DescribirBloqueo(bloqueo!) + "\n\n" +
+                "Para que no se pisen los cambios, se abre en solo lectura. " +
+                "Cuando la cierre, vuelve a abrirla para poder editarla.",
+                "Ficha abierta por otra persona", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        else if (original != null)
+        {
+            int id = original.Id;
+            renovarBloqueo.Interval = NoConformidadServicio.SegundosRenovarBloqueo * 1000;
+            renovarBloqueo.Tick += (s, e) => Bloquear(id);
+            renovarBloqueo.Start();
+            FormClosed += (s, e) => Desbloquear(id);
+        }
+    }
+
+    // ---------- Ficha abierta por otra persona ----------
+
+    // Si falla la base de datos, se deja editar: al guardar, la versión del registro
+    // sigue impidiendo que se pisen los cambios de otro
+    private BloqueoNc? Bloquear(int id)
+    {
+        try
+        {
+            return servicio.Bloquear(id);
+        }
+        catch (Exception ex) when (ex is DbException or ReglaNegocioException)
+        {
+            return null;
+        }
+    }
+
+    private void Desbloquear(int id)
+    {
+        renovarBloqueo.Dispose();
+        try
+        {
+            servicio.Desbloquear(id);
+        }
+        catch (DbException)
+        {
+            // Si no se puede quitar, caduca solo a los pocos minutos
+        }
+    }
+
+    // Franja amarilla fija bajo la barra de fases: quién la tiene abierta
+    private Control CrearFranjaBloqueo()
+    {
+        var franja = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 44,
+            BackColor = Tema.AvisoFondo,
+            Padding = new Padding(40, 0, 40, 0)
+        };
+        franja.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = NoConformidadServicio.DescribirBloqueo(bloqueo!) + " Solo puedes consultarla.",
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Tema.Aviso,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            AutoEllipsis = true
+        });
+        return franja;
+    }
+
+    // Deja la ficha solo para consultar: los textos se pueden leer y copiar, pero no cambiar
+    private void BloquearEntradas()
+    {
+        foreach (var control in Entradas(this).ToList())
+        {
+            if (control is TextBox texto)
+            {
+                texto.ReadOnly = true;
+                texto.BackColor = Color.White;
+            }
+            else
+                control.Enabled = false;
+        }
+        tablaInmediatas.SoloLectura = true;
+        tablaCorrectoras.SoloLectura = true;
+        tablaSeguimientos.SoloLectura = true;
     }
 
     private static string Titulo(NoConformidad nc) =>
@@ -302,6 +398,7 @@ public class FormNoConformidad : Form
             original == null ? "Nuevo registro" : Titulo(original),
             original == null
                 ? "Para darlo de alta basta con el registro; el resto de fases se pueden completar después."
+                : SoloLectura ? "Solo consulta: otra persona tiene abierta esta ficha."
                 : "Completa o corrige los datos del registro."));
 
         var registro = CrearTarjetaRegistro();
@@ -450,11 +547,11 @@ public class FormNoConformidad : Form
         btnGuardar.Enabled = cargaCorrecta;
         btnGuardar.Click += (s, e) => Guardar();
 
-        var btnCancelar = Tema.BotonSecundario("Cancelar", 130);
+        var btnCancelar = Tema.BotonSecundario(SoloLectura ? "Cerrar" : "Cancelar", 130);
         btnCancelar.Click += (s, e) => Close();
         CancelButton = btnCancelar;   // Esc cierra (avisando si hay cambios)
 
-        return Componentes.Acciones(btnGuardar, btnCancelar);
+        return SoloLectura ? Componentes.Acciones(btnCancelar) : Componentes.Acciones(btnGuardar, btnCancelar);
     }
 
     // ---------- Valores ----------
@@ -693,7 +790,8 @@ public class FormNoConformidad : Form
             CapituloNorma: Valor(cmbCapitulo),
             AnalisisCausaRaiz: txtAnalisis.Text,
             CosteEconomico: coste,
-            HorasManoObra: horas);
+            HorasManoObra: horas,
+            Version: original?.Version);
     }
 
     // ---------- Guardado ----------

@@ -46,6 +46,9 @@ CREATE TABLE NO_CONFORMIDAD (
     horas_mano_obra DECIMAL(7,2) NULL,
     creado_por INT NOT NULL,
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_no_conformidad_creado DEFAULT SYSDATETIME(),
+    -- Cambia sola en cada UPDATE: al guardar se comprueba que nadie haya guardado
+    -- desde que se abrió la ficha. No sale en el historial (ver el trigger).
+    version ROWVERSION NOT NULL,
     CONSTRAINT CK_no_conformidad_tipo CHECK (tipo_registro IN ('NC', 'INCIDENCIA', 'MEJORA')),
     CONSTRAINT CK_no_conformidad_coste CHECK (coste_economico >= 0),
     CONSTRAINT CK_no_conformidad_horas CHECK (horas_mano_obra >= 0),
@@ -73,6 +76,23 @@ CREATE TABLE NC_ACCION (
 );
 
 CREATE INDEX IX_nc_accion_no_conformidad ON NC_ACCION (no_conformidad_id, clase, orden);
+
+-- Quién tiene abierta cada ficha, para avisar a los demás y que la vean en solo lectura.
+-- sesion identifica cada GPE abierto (el mismo usuario puede tenerlo en dos equipos).
+-- Mientras la ficha está abierta, GPE actualiza ultimo_aviso cada minuto; si pasan unos
+-- minutos sin hacerlo (GPE se cerró de golpe, se fue la luz...), el bloqueo deja de contar.
+-- No lleva historial: abrir una ficha no es un cambio.
+CREATE TABLE NC_BLOQUEO (
+    no_conformidad_id INT PRIMARY KEY,
+    usuario_id INT NOT NULL,
+    sesion UNIQUEIDENTIFIER NOT NULL,
+    equipo NVARCHAR(100) NOT NULL,
+    abierta_desde DATETIME2 NOT NULL,
+    ultimo_aviso DATETIME2 NOT NULL,
+    CONSTRAINT FK_nc_bloqueo_no_conformidad FOREIGN KEY (no_conformidad_id)
+        REFERENCES NO_CONFORMIDAD(id) ON DELETE CASCADE,
+    CONSTRAINT FK_nc_bloqueo_usuario FOREIGN KEY (usuario_id) REFERENCES USUARIO(id)
+);
 GO
 
 -- Historial: igual que los de devoluciones, con devolucion_id NULL.
@@ -93,13 +113,15 @@ BEGIN
     SELECT NULL, @usuario, 'NO_CONFORMIDAD', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
+    -- La versión se quita del JSON: cambia en cada UPDATE y haría que un guardado sin
+    -- cambios contara como cambio (JSON_MODIFY con NULL borra la propiedad)
     CROSS APPLY (SELECT
         COALESCE(i.id, d.id) AS registro_id,
         CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
         CASE WHEN d.id IS NULL THEN NULL
-             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+             ELSE JSON_MODIFY((SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES), '$.version', NULL) END AS anteriores,
         CASE WHEN i.id IS NULL THEN NULL
-             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+             ELSE JSON_MODIFY((SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES), '$.version', NULL) END AS nuevos
     ) c
     WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
 END;

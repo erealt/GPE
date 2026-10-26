@@ -15,7 +15,7 @@ public class NoConformidadRepositorio
                    fecha_prevista, fecha_fin, cliente, proveedor,
                    mc_pcc_bpm, parametro, operario,
                    capitulo_norma, analisis_causa_raiz,
-                   coste_economico, horas_mano_obra
+                   coste_economico, horas_mano_obra, version
             FROM NO_CONFORMIDAD";
 
     public List<NoConformidad> ObtenerRegistros() =>
@@ -62,7 +62,8 @@ public class NoConformidadRepositorio
                 CapituloNorma: Texto(17),
                 AnalisisCausaRaiz: Texto(18),
                 CosteEconomico: Numero(19),
-                HorasManoObra: Numero(20)));
+                HorasManoObra: Numero(20),
+                Version: (byte[])lector[21]));
         }
 
         return lista;
@@ -214,7 +215,9 @@ public class NoConformidadRepositorio
     }
 
     // Guarda los cambios y las acciones. Con serie, se le da un número nuevo de esa serie; sin ella,
-    // se guarda el número que trae. false si el registro ya no existe (otro usuario lo ha borrado).
+    // se guarda el número que trae. false si el registro ya no existe (otro usuario lo ha borrado)
+    // o si su versión ya no es la que trae nc (otro usuario lo ha guardado mientras tanto).
+    // Las acciones se guardan siempre junto con la cabecera, así que su versión también las cubre.
     public bool Actualizar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? numerarEn)
     {
         const string sql = @"
@@ -228,7 +231,7 @@ public class NoConformidadRepositorio
                 mc_pcc_bpm = @mc_pcc_bpm, parametro = @parametro, operario = @operario,
                 capitulo_norma = @capitulo_norma, analisis_causa_raiz = @analisis_causa_raiz,
                 coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra
-            WHERE id = @id;";
+            WHERE id = @id AND version = @version;";
 
         using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
@@ -241,6 +244,8 @@ public class NoConformidadRepositorio
         {
             AnadirParametros(comando, nc);
             comando.Parameters.AddWithValue("@id", nc.Id);
+            comando.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value =
+                (object?)nc.Version ?? DBNull.Value;
             filas = comando.ExecuteNonQuery();
         }
         if (filas == 0) return false;
@@ -331,5 +336,60 @@ public class NoConformidadRepositorio
         Valor("@analisis_causa_raiz", nc.AnalisisCausaRaiz);
         Valor("@coste_economico", nc.CosteEconomico);
         Valor("@horas_mano_obra", nc.HorasManoObra);
+    }
+
+    // ---------- Bloqueos (quién tiene abierta cada ficha) ----------
+
+    // Apunta que este GPE (sesion) tiene abierta la ficha, o renueva su ultimo_aviso si ya
+    // la tenía. Se la queda también si el bloqueo de otro lleva más de caducidadSegundos
+    // sin renovarse. Devuelve null si la ficha es de este GPE, o quién la tiene si no.
+    // HOLDLOCK: si dos la abren a la vez, el segundo espera y ve el bloqueo del primero.
+    public BloqueoNc? Bloquear(int noConformidadId, int usuarioId, Guid sesion, string equipo, int caducidadSegundos)
+    {
+        const string sql = @"
+            MERGE NC_BLOQUEO WITH (HOLDLOCK) AS b
+            USING (SELECT @nc AS no_conformidad_id) AS s ON b.no_conformidad_id = s.no_conformidad_id
+            WHEN MATCHED AND (b.sesion = @sesion
+                              OR b.ultimo_aviso < DATEADD(SECOND, -@caducidad, SYSDATETIME())) THEN
+                UPDATE SET usuario_id = @usuario, sesion = @sesion, equipo = @equipo,
+                           abierta_desde = CASE WHEN b.sesion = @sesion THEN b.abierta_desde ELSE SYSDATETIME() END,
+                           ultimo_aviso = SYSDATETIME()
+            WHEN NOT MATCHED THEN
+                INSERT (no_conformidad_id, usuario_id, sesion, equipo, abierta_desde, ultimo_aviso)
+                VALUES (@nc, @usuario, @sesion, @equipo, SYSDATETIME(), SYSDATETIME());
+
+            SELECT b.sesion, u.nombre, b.equipo, b.abierta_desde, b.usuario_id
+            FROM NC_BLOQUEO b
+            JOIN USUARIO u ON u.id = b.usuario_id
+            WHERE b.no_conformidad_id = @nc;";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@nc", noConformidadId);
+        comando.Parameters.AddWithValue("@usuario", usuarioId);
+        comando.Parameters.AddWithValue("@sesion", sesion);
+        comando.Parameters.AddWithValue("@equipo", equipo);
+        comando.Parameters.AddWithValue("@caducidad", caducidadSegundos);
+
+        using var lector = comando.ExecuteReader();
+        if (!lector.Read() || lector.GetGuid(0) == sesion)
+            return null;
+
+        return new BloqueoNc(
+            Usuario: lector.GetString(1),
+            Equipo: lector.GetString(2),
+            Desde: lector.GetDateTime(3),
+            MismoUsuario: lector.GetInt32(4) == usuarioId);
+    }
+
+    // Quita el bloqueo al cerrar la ficha, si sigue siendo de este GPE
+    public void Desbloquear(int noConformidadId, Guid sesion)
+    {
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(
+            "DELETE FROM NC_BLOQUEO WHERE no_conformidad_id = @nc AND sesion = @sesion;", conexion);
+        comando.Parameters.AddWithValue("@nc", noConformidadId);
+        comando.Parameters.AddWithValue("@sesion", sesion);
+        comando.ExecuteNonQuery();
     }
 }

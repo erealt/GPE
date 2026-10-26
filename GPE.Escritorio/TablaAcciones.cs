@@ -19,6 +19,7 @@ public class TablaAcciones : TableLayoutPanel
     private readonly DataGridViewComboBoxColumn colResponsable = new();
     private readonly Label lblVacia = new();
     private readonly Label lblError = CamposFormulario.EtiquetaError();
+    private readonly Button btnAnadir;
     private bool cargando;
 
     // El usuario ha cambiado algo (para el aviso de cambios sin guardar)
@@ -42,7 +43,7 @@ public class TablaAcciones : TableLayoutPanel
         lblVacia.ForeColor = Tema.Suave;
         lblVacia.Margin = new Padding(6, 10, 0, 0);
 
-        var btnAnadir = Tema.BotonSecundario(EsSeguimiento ? "+ Añadir seguimiento" : "+ Añadir acción", 210);
+        btnAnadir = Tema.BotonSecundario(EsSeguimiento ? "+ Añadir seguimiento" : "+ Añadir acción", 210);
         btnAnadir.Margin = new Padding(0, 10, 0, 0);
         btnAnadir.Click += (s, e) => AnadirFila();
 
@@ -51,6 +52,21 @@ public class TablaAcciones : TableLayoutPanel
         Controls.Add(lblError);
         Controls.Add(btnAnadir);
         AjustarAlto();
+    }
+
+    // Solo consulta: no se puede escribir, añadir ni quitar filas
+    [System.ComponentModel.Browsable(false)]
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool SoloLectura
+    {
+        get => grid.ReadOnly;
+        set
+        {
+            grid.ReadOnly = value;
+            grid.Columns[ColQuitar].Visible = !value;
+            btnAnadir.Visible = !value;
+        }
     }
 
     private void ConfigurarGrid(IEnumerable<string> personas)
