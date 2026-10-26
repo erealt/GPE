@@ -23,6 +23,8 @@ public class NoConformidadServicio
 
     public NoConformidad? ObtenerRegistro(int id) => repositorio.ObtenerRegistro(id);
 
+    public List<AccionNc> ObtenerAcciones(int id) => repositorio.ObtenerAcciones(id);
+
     public Dictionary<string, List<OpcionLista>> ObtenerListas() => repositorio.ObtenerListas();
 
     public List<string> ObtenerClientes() => repositorio.ObtenerClientes();
@@ -34,6 +36,13 @@ public class NoConformidadServicio
     // Secciones de las NC de auditoría, que llevan su propia numeración
     private const string AuditoriaExterna = "A. EXTERNA";
     private const string AuditoriaInterna = "A. INTERNA";
+    private const string AuditoriaCliente = "A. CLIENTE";
+
+    // Origen A = auditoría: en una NC, la sección solo puede ser una de las de auditoría
+    public static readonly string[] SeccionesAuditoria = { AuditoriaInterna, AuditoriaExterna, AuditoriaCliente };
+
+    public static bool SoloSeccionesAuditoria(string tipoRegistro, string? origen) =>
+        tipoRegistro == TipoRegistro.NoConformidad && origen == "A";
 
     // Serie en la que se numera un registro, como en el Excel:
     //   incidencias          1, 2, 3...
@@ -107,7 +116,6 @@ public class NoConformidadServicio
             Tipo = esNc ? Limpio(nc.Tipo) : null,
             Problema = nc.Problema.Trim(),
             DescripcionCausa = Limpio(nc.DescripcionCausa),
-            AccionInmediata = Limpio(nc.AccionInmediata),
             Responsable = Limpio(nc.Responsable),
             Cliente = Limpio(nc.Cliente),
             Proveedor = Limpio(nc.Proveedor),
@@ -116,8 +124,6 @@ public class NoConformidadServicio
             Operario = esIncidencia ? Limpio(nc.Operario) : null,
             CapituloNorma = Limpio(nc.CapituloNorma),
             AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz),
-            AccionCorrectora = Limpio(nc.AccionCorrectora),
-            ResponsableAccionCorrectora = Limpio(nc.ResponsableAccionCorrectora),
             Seguimiento = Limpio(nc.Seguimiento)
         };
     }
@@ -141,6 +147,8 @@ public class NoConformidadServicio
             Error(nameof(nc.Origen), "Elige el origen de la no conformidad.");
         if (nc.Seccion == null)
             Error(nameof(nc.Seccion), "Elige la sección.");
+        else if (SoloSeccionesAuditoria(nc.TipoRegistro, nc.Origen) && !SeccionesAuditoria.Contains(nc.Seccion))
+            Error(nameof(nc.Seccion), "En una NC de auditoría, la sección es A. INTERNA, A. EXTERNA o A. CLIENTE.");
         if (esNc && nc.Tipo == null)
             Error(nameof(nc.Tipo), "Elige el tipo de no conformidad.");
 
@@ -168,19 +176,46 @@ public class NoConformidadServicio
         return errores;
     }
 
+    public static AccionNc NormalizarAccion(AccionNc accion)
+    {
+        static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+        return accion with
+        {
+            Accion = accion.Accion.Trim(),
+            Fecha = accion.Fecha?.Date,
+            Responsable = Limpio(accion.Responsable),
+            Observaciones = Limpio(accion.Observaciones)
+        };
+    }
+
+    // Error de una acción ya normalizada (null si está bien)
+    public static string? ErrorAccion(AccionNc accion, DateTime fechaDetectado)
+    {
+        if (accion.Accion == "")
+            return "Describe la acción.";
+        if (accion.Fecha < fechaDetectado.Date)
+            return "La fecha no puede ser anterior a la detección.";
+        return null;
+    }
+
     // ---------- Guardado ----------
 
     private const string MensajeBorrado = "Este registro ya no existe: puede que otro usuario lo haya borrado.";
 
-    // Crea el registro (Id = 0) o guarda los cambios. Devuelve su id.
+    // Crea el registro (Id = 0) o guarda los cambios, con sus acciones. Devuelve su id.
     // El número no lo pone la pantalla: se calcula aquí según su serie.
-    public int Guardar(NoConformidad nc)
+    public int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones)
     {
         nc = Normalizar(nc);
+        var lista = acciones.Select(NormalizarAccion).ToList();
 
         var errores = Errores(nc);
         if (errores.Count > 0)
             throw new ReglaNegocioException(errores[0].Mensaje);
+        foreach (var accion in lista)
+            if (ErrorAccion(accion, nc.FechaDetectado) is string error)
+                throw new ReglaNegocioException(error);
 
         var serie = Serie(nc);
 
@@ -188,7 +223,7 @@ public class NoConformidadServicio
         {
             if (Sesion.UsuarioActual is not Usuario usuario)
                 throw new ReglaNegocioException("No hay ningún usuario elegido.");
-            return repositorio.Insertar(nc with { Numero = null }, serie, usuario.Id);
+            return repositorio.Insertar(nc with { Numero = null }, lista, serie, usuario.Id);
         }
 
         // Se mira el número guardado, no el que trae la pantalla
@@ -196,7 +231,7 @@ public class NoConformidadServicio
             ?? throw new ReglaNegocioException(MensajeBorrado);
         nc = nc with { Numero = serie == null ? null : anterior.Numero };
 
-        if (!repositorio.Actualizar(nc, Renumerar(anterior, serie) ? serie : null))
+        if (!repositorio.Actualizar(nc, lista, Renumerar(anterior, serie) ? serie : null))
             throw new ReglaNegocioException(MensajeBorrado);
         return nc.Id;
     }

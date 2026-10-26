@@ -38,7 +38,6 @@ public class FormNoConformidad : Form
     // Descripción y acción inmediata
     private readonly TextBox txtProblema = new();
     private readonly TextBox txtCausa = new();
-    private readonly TextBox txtAccionInmediata = new();
     private readonly ComboBox cmbResponsable = new();
     private readonly DateTimePicker dtpPrevista = new();
     private readonly DateTimePicker dtpFin = new();
@@ -51,10 +50,13 @@ public class FormNoConformidad : Form
     // Análisis y acción correctora
     private readonly ComboBox cmbCapitulo = new();
     private readonly TextBox txtAnalisis = new();
-    private readonly TextBox txtAccionCorrectora = new();
-    private readonly ComboBox cmbResponsableAccion = new();
     private readonly TextBox txtCoste = new();
     private readonly TextBox txtHoras = new();
+
+    // Acciones inmediatas y correctoras: una tabla cada una
+    private TablaAcciones tablaInmediatas = null!;
+    private TablaAcciones tablaCorrectoras = null!;
+    private List<AccionNc> acciones = new();
 
     private readonly TextBox txtSeguimiento = new();
     private readonly Label lblEstado = new();
@@ -81,6 +83,7 @@ public class FormNoConformidad : Form
         ActualizarEstado();
 
         // Las NC de auditoría se numeran por año o por fecha: el número cambia con ellas
+        cmbOrigen.SelectedIndexChanged += (s, e) => ActualizarSecciones();
         cmbSeccion.SelectedIndexChanged += (s, e) => ActualizarNumero();
         dtpDetectado.ValueChanged += (s, e) => ActualizarNumero();
 
@@ -95,6 +98,8 @@ public class FormNoConformidad : Form
                 default: control.TextChanged += (s, e) => hayCambios = true; break;
             }
         }
+        tablaInmediatas.Cambiado += (s, e) => hayCambios = true;
+        tablaCorrectoras.Cambiado += (s, e) => hayCambios = true;
         FormClosing += AvisarCambiosSinGuardar;
     }
 
@@ -113,6 +118,7 @@ public class FormNoConformidad : Form
             listas = servicio.ObtenerListas();
             clientes = servicio.ObtenerClientes();
             proveedores = servicio.ObtenerProveedores();
+            if (original != null) acciones = servicio.ObtenerAcciones(original.Id);
             cargaCorrecta = true;
         }
         catch (DbException ex)
@@ -149,13 +155,15 @@ public class FormNoConformidad : Form
 
         Multilinea(txtProblema, 90, "Qué se ha detectado: producto, lote, cliente...");
         Multilinea(txtCausa, 70, "Por qué ha pasado");
-        Multilinea(txtAccionInmediata, 70, "Qué se ha hecho al detectarlo");
         Multilinea(txtAnalisis, 70, "Causa de fondo, para que no se repita");
-        Multilinea(txtAccionCorrectora, 70, "Qué se va a cambiar");
         Multilinea(txtSeguimiento, 90, "Comprobaciones posteriores, con su fecha. Ej. 20/06/2026 Todos los palets correctos.");
 
         txtCoste.PlaceholderText = "Ej. 180,50";
         txtHoras.PlaceholderText = "Ej. 1,5";
+
+        var personas = (listas.GetValueOrDefault(ListaCalidad.Persona) ?? new()).Select(o => o.Valor).ToList();
+        tablaInmediatas = new TablaAcciones(ClaseAccion.Inmediata, personas, "Todavía no hay acciones inmediatas.");
+        tablaCorrectoras = new TablaAcciones(ClaseAccion.Correctora, personas, "Todavía no hay acciones correctoras.");
     }
 
     // Botones pegados (No conformidad · Incidencia · Acción de mejora); el elegido, en morado.
@@ -219,14 +227,16 @@ public class FormNoConformidad : Form
     }
 
     // Desplegable con las opciones de una lista; si el valor guardado ya no está en la
-    // lista (una opción antigua o desactivada), se añade para no perderlo
-    private void LlenarLista(ComboBox combo, string lista, string? valor)
+    // lista (una opción antigua o desactivada), se añade para no perderlo.
+    // Con filtro, solo se ponen las opciones que lo cumplen.
+    private void LlenarLista(ComboBox combo, string lista, string? valor, Func<OpcionLista, bool>? filtro = null)
     {
         combo.DropDownStyle = ComboBoxStyle.DropDownList;
         combo.Items.Clear();
         combo.Items.Add(SinIndicar);
         foreach (var opcion in listas.GetValueOrDefault(lista) ?? new())
-            combo.Items.Add(opcion);
+            if (filtro == null || filtro(opcion))
+                combo.Items.Add(opcion);
 
         Elegir(combo, valor);
 
@@ -306,7 +316,7 @@ public class FormNoConformidad : Form
         var rejilla = Componentes.Rejilla(3);
         var problema = campos.Campo("Problema", txtProblema);
         var causa = campos.Campo("Descripción de la causa", txtCausa);
-        var accion = campos.Campo("Acción inmediata", txtAccionInmediata);
+        var accion = campos.Campo("Acciones inmediatas", tablaInmediatas);
         rejilla.Controls.Add(problema, 0, 0);
         rejilla.Controls.Add(causa, 0, 1);
         rejilla.Controls.Add(accion, 0, 2);
@@ -341,10 +351,9 @@ public class FormNoConformidad : Form
 
         var rejilla = Componentes.Rejilla(2);
         rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 0, 0);
-        rejilla.Controls.Add(campos.Campo("Responsable de la acción correctora", cmbResponsableAccion), 1, 0);
 
         var analisis = campos.Campo("Análisis de la causa raíz", txtAnalisis);
-        var accion = campos.Campo("Acción correctora", txtAccionCorrectora);
+        var accion = campos.Campo("Acciones correctoras", tablaCorrectoras);
         rejilla.Controls.Add(analisis, 0, 1);
         rejilla.Controls.Add(accion, 0, 2);
         rejilla.SetColumnSpan(analisis, 2);
@@ -395,20 +404,20 @@ public class FormNoConformidad : Form
         LlenarLista(cmbParametro, ListaCalidad.Parametro, nc?.Parametro);
         LlenarLista(cmbOperario, ListaCalidad.Operario, nc?.Operario);
         LlenarLista(cmbCapitulo, ListaCalidad.CapituloNorma, nc?.CapituloNorma);
-        LlenarLista(cmbResponsableAccion, ListaCalidad.Persona, nc?.ResponsableAccionCorrectora);
 
         txtCliente.Text = nc?.Cliente ?? "";
         txtProveedor.Text = nc?.Proveedor ?? "";
         txtProblema.Text = nc?.Problema ?? "";
         txtCausa.Text = nc?.DescripcionCausa ?? "";
-        txtAccionInmediata.Text = nc?.AccionInmediata ?? "";
         PonerFecha(dtpPrevista, nc?.FechaPrevista);
         PonerFecha(dtpFin, nc?.FechaFin);
         txtAnalisis.Text = nc?.AnalisisCausaRaiz ?? "";
-        txtAccionCorrectora.Text = nc?.AccionCorrectora ?? "";
         txtCoste.Text = nc?.CosteEconomico?.ToString("0.##", Componentes.Es) ?? "";
         txtHoras.Text = nc?.HorasManoObra?.ToString("0.##", Componentes.Es) ?? "";
         txtSeguimiento.Text = nc?.Seguimiento ?? "";
+
+        tablaInmediatas.Cargar(acciones);
+        tablaCorrectoras.Cargar(acciones);
     }
 
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
@@ -434,7 +443,21 @@ public class FormNoConformidad : Form
     {
         campoTipo.Visible = TipoElegido == TipoRegistro.NoConformidad;
         tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
+        ActualizarSecciones();
         ActualizarNumero();
+    }
+
+    // En una NC de auditoría solo se ofrecen las secciones de auditoría (interna,
+    // externa, cliente). Si la sección elegida no es una de ellas, se quita.
+    private void ActualizarSecciones()
+    {
+        bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(TipoElegido, Valor(cmbOrigen));
+        string? seccion = Valor(cmbSeccion);
+        if (soloAuditoria && !NoConformidadServicio.SeccionesAuditoria.Contains(seccion))
+            seccion = null;
+
+        LlenarLista(cmbSeccion, ListaCalidad.Seccion, seccion,
+            soloAuditoria ? o => NoConformidadServicio.SeccionesAuditoria.Contains(o.Valor) : null);
     }
 
     // El número es automático: depende del tipo, la sección (auditorías) y la fecha
@@ -468,7 +491,7 @@ public class FormNoConformidad : Form
     // Registro en blanco para calcular el número de uno nuevo
     private static readonly NoConformidad Vacio = new(
         0, TipoRegistro.Incidencia, null, DateTime.Today, null, null, null, "",
-        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     private void ActualizarEstado()
     {
@@ -517,7 +540,6 @@ public class FormNoConformidad : Form
             Tipo: Valor(cmbTipo),
             Problema: txtProblema.Text,
             DescripcionCausa: txtCausa.Text,
-            AccionInmediata: txtAccionInmediata.Text,
             Responsable: Valor(cmbResponsable),
             FechaPrevista: LeerFecha(dtpPrevista),
             FechaFin: LeerFecha(dtpFin),
@@ -528,8 +550,6 @@ public class FormNoConformidad : Form
             Operario: Valor(cmbOperario),
             CapituloNorma: Valor(cmbCapitulo),
             AnalisisCausaRaiz: txtAnalisis.Text,
-            AccionCorrectora: txtAccionCorrectora.Text,
-            ResponsableAccionCorrectora: Valor(cmbResponsableAccion),
             CosteEconomico: coste,
             HorasManoObra: horas,
             Seguimiento: txtSeguimiento.Text);
@@ -569,7 +589,13 @@ public class FormNoConformidad : Form
             }
         }
 
-        if (primerError != null || leido == null)
+        // Las acciones marcan sus errores en la propia tabla
+        var inmediatas = tablaInmediatas.Leer(dtpDetectado.Value);
+        var correctoras = tablaCorrectoras.Leer(dtpDetectado.Value);
+        if (inmediatas == null) primerError ??= tablaInmediatas;
+        if (correctoras == null) primerError ??= tablaCorrectoras;
+
+        if (primerError != null || leido == null || inmediatas == null || correctoras == null)
         {
             primerError?.Focus();
             return;
@@ -580,7 +606,7 @@ public class FormNoConformidad : Form
         // 2. Guardar en la base de datos (el número lo pone el servicio)
         try
         {
-            IdGuardado = servicio.Guardar(registro);
+            IdGuardado = servicio.Guardar(registro, inmediatas.Concat(correctoras));
         }
         catch (ReglaNegocioException ex)
         {

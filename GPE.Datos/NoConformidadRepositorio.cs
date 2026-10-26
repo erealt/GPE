@@ -2,7 +2,7 @@ using Microsoft.Data.SqlClient;
 
 namespace GPE.Datos;
 
-// Incidencias, no conformidades y acciones de mejora (tablas NO_CONFORMIDAD y CALIDAD_LISTA)
+// Incidencias, no conformidades y acciones de mejora (tablas NO_CONFORMIDAD, NC_ACCION y CALIDAD_LISTA)
 public class NoConformidadRepositorio
 {
     // ---------- Lectura ----------
@@ -10,10 +10,10 @@ public class NoConformidadRepositorio
     // En el mismo orden que el record NoConformidad
     private const string SqlRegistros = @"
             SELECT id, tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
-                   problema, descripcion_causa, accion_inmediata, responsable,
+                   problema, descripcion_causa, responsable,
                    fecha_prevista, fecha_fin, cliente, proveedor,
                    mc_pcc_bpm, parametro, operario,
-                   capitulo_norma, analisis_causa_raiz, accion_correctora, responsable_accion_correctora,
+                   capitulo_norma, analisis_causa_raiz,
                    coste_economico, horas_mano_obra, seguimiento
             FROM NO_CONFORMIDAD";
 
@@ -50,25 +50,53 @@ public class NoConformidadRepositorio
                 Tipo: Texto(6),
                 Problema: lector.GetString(7),
                 DescripcionCausa: Texto(8),
-                AccionInmediata: Texto(9),
-                Responsable: Texto(10),
-                FechaPrevista: Fecha(11),
-                FechaFin: Fecha(12),
-                Cliente: Texto(13),
-                Proveedor: Texto(14),
-                McPccBpm: Texto(15),
-                Parametro: Texto(16),
-                Operario: Texto(17),
-                CapituloNorma: Texto(18),
-                AnalisisCausaRaiz: Texto(19),
-                AccionCorrectora: Texto(20),
-                ResponsableAccionCorrectora: Texto(21),
-                CosteEconomico: Numero(22),
-                HorasManoObra: Numero(23),
-                Seguimiento: Texto(24)));
+                Responsable: Texto(9),
+                FechaPrevista: Fecha(10),
+                FechaFin: Fecha(11),
+                Cliente: Texto(12),
+                Proveedor: Texto(13),
+                McPccBpm: Texto(14),
+                Parametro: Texto(15),
+                Operario: Texto(16),
+                CapituloNorma: Texto(17),
+                AnalisisCausaRaiz: Texto(18),
+                CosteEconomico: Numero(19),
+                HorasManoObra: Numero(20),
+                Seguimiento: Texto(21)));
         }
 
         return lista;
+    }
+
+    // Acciones inmediatas y correctoras de un registro, en su orden
+    public List<AccionNc> ObtenerAcciones(int noConformidadId)
+    {
+        const string sql = @"
+            SELECT id, clase, accion, fecha, responsable, observaciones, hecha
+            FROM NC_ACCION
+            WHERE no_conformidad_id = @id
+            ORDER BY clase, orden, id;";
+
+        var acciones = new List<AccionNc>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@id", noConformidadId);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            acciones.Add(new AccionNc(
+                Id: lector.GetInt32(0),
+                Clase: lector.GetString(1),
+                Accion: lector.GetString(2),
+                Fecha: lector.IsDBNull(3) ? null : lector.GetDateTime(3),
+                Responsable: lector.IsDBNull(4) ? null : lector.GetString(4),
+                Observaciones: lector.IsDBNull(5) ? null : lector.GetString(5),
+                Hecha: lector.GetBoolean(6)));
+        }
+
+        return acciones;
     }
 
     // Opciones activas de todos los desplegables, agrupadas por lista y en su orden
@@ -144,23 +172,23 @@ public class NoConformidadRepositorio
 
     // ---------- Escritura ----------
 
-    // Crea el registro numerándolo en su serie (sin serie, sin número). Devuelve el id.
-    public int Insertar(NoConformidad nc, SerieNumero? serie, int usuarioId)
+    // Crea el registro numerándolo en su serie (sin serie, sin número), con sus acciones. Devuelve el id.
+    public int Insertar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? serie, int usuarioId)
     {
         const string sql = @"
             INSERT INTO NO_CONFORMIDAD
                 (tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
-                 problema, descripcion_causa, accion_inmediata, responsable,
+                 problema, descripcion_causa, responsable,
                  fecha_prevista, fecha_fin, cliente, proveedor,
                  mc_pcc_bpm, parametro, operario,
-                 capitulo_norma, analisis_causa_raiz, accion_correctora, responsable_accion_correctora,
+                 capitulo_norma, analisis_causa_raiz,
                  coste_economico, horas_mano_obra, seguimiento, creado_por)
             VALUES
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
-                 @problema, @descripcion_causa, @accion_inmediata, @responsable,
+                 @problema, @descripcion_causa, @responsable,
                  @fecha_prevista, @fecha_fin, @cliente, @proveedor,
                  @mc_pcc_bpm, @parametro, @operario,
-                 @capitulo_norma, @analisis_causa_raiz, @accion_correctora, @responsable_accion_correctora,
+                 @capitulo_norma, @analisis_causa_raiz,
                  @coste_economico, @horas_mano_obra, @seguimiento, @usuario);
 
             -- Como en DEVOLUCION: con trigger no se puede usar OUTPUT INSERTED.id
@@ -179,27 +207,26 @@ public class NoConformidadRepositorio
             comando.Parameters.AddWithValue("@usuario", usuarioId);
             id = (int)comando.ExecuteScalar();
         }
+        GuardarAcciones(id, acciones, conexion, transaccion);
 
         transaccion.Commit();
         return id;
     }
 
-    // Guarda los cambios. Con serie, se le da un número nuevo de esa serie; sin ella,
+    // Guarda los cambios y las acciones. Con serie, se le da un número nuevo de esa serie; sin ella,
     // se guarda el número que trae. false si el registro ya no existe (otro usuario lo ha borrado).
-    public bool Actualizar(NoConformidad nc, SerieNumero? numerarEn)
+    public bool Actualizar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? numerarEn)
     {
         const string sql = @"
             UPDATE NO_CONFORMIDAD SET
                 tipo_registro = @tipo_registro, numero = @numero, fecha_detectado = @fecha_detectado,
                 origen = @origen, seccion = @seccion, tipo = @tipo,
                 problema = @problema, descripcion_causa = @descripcion_causa,
-                accion_inmediata = @accion_inmediata, responsable = @responsable,
+                responsable = @responsable,
                 fecha_prevista = @fecha_prevista, fecha_fin = @fecha_fin,
                 cliente = @cliente, proveedor = @proveedor,
                 mc_pcc_bpm = @mc_pcc_bpm, parametro = @parametro, operario = @operario,
                 capitulo_norma = @capitulo_norma, analisis_causa_raiz = @analisis_causa_raiz,
-                accion_correctora = @accion_correctora,
-                responsable_accion_correctora = @responsable_accion_correctora,
                 coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra,
                 seguimiento = @seguimiento
             WHERE id = @id;";
@@ -217,9 +244,67 @@ public class NoConformidadRepositorio
             comando.Parameters.AddWithValue("@id", nc.Id);
             filas = comando.ExecuteNonQuery();
         }
+        if (filas == 0) return false;
+        GuardarAcciones(nc.Id, acciones, conexion, transaccion);
 
         transaccion.Commit();
-        return filas > 0;
+        return true;
+    }
+
+    // Deja en NC_ACCION justo estas acciones: borra las que se han quitado, actualiza
+    // las que ya estaban (Id > 0) y añade las nuevas. El orden es el de la lista.
+    private static void GuardarAcciones(int noConformidadId, IReadOnlyList<AccionNc> acciones,
+        SqlConnection conexion, SqlTransaction transaccion)
+    {
+        var guardadas = new List<int>();
+        using (var consulta = new SqlCommand(
+            "SELECT id FROM NC_ACCION WHERE no_conformidad_id = @nc;", conexion, transaccion))
+        {
+            consulta.Parameters.AddWithValue("@nc", noConformidadId);
+            using var lector = consulta.ExecuteReader();
+            while (lector.Read())
+                guardadas.Add(lector.GetInt32(0));
+        }
+
+        foreach (int id in guardadas.Except(acciones.Select(a => a.Id)))
+        {
+            using var borrar = new SqlCommand("DELETE FROM NC_ACCION WHERE id = @id;", conexion, transaccion);
+            borrar.Parameters.AddWithValue("@id", id);
+            borrar.ExecuteNonQuery();
+        }
+
+        const string sqlInsertar = @"
+            INSERT INTO NC_ACCION (no_conformidad_id, clase, orden, accion, fecha, responsable, observaciones, hecha)
+            VALUES (@nc, @clase, @orden, @accion, @fecha, @responsable, @observaciones, @hecha);";
+        const string sqlActualizar = @"
+            UPDATE NC_ACCION SET
+                clase = @clase, orden = @orden, accion = @accion, fecha = @fecha,
+                responsable = @responsable, observaciones = @observaciones, hecha = @hecha
+            WHERE id = @id AND no_conformidad_id = @nc;";
+
+        // El orden cuenta dentro de cada tabla (inmediatas 1, 2...; correctoras 1, 2...)
+        foreach (var grupo in acciones.GroupBy(a => a.Clase))
+        {
+            int orden = 0;
+            foreach (var accion in grupo)
+            {
+                bool nueva = accion.Id == 0 || !guardadas.Contains(accion.Id);
+                using var comando = new SqlCommand(nueva ? sqlInsertar : sqlActualizar, conexion, transaccion);
+                void Valor(string nombre, object? valor) =>
+                    comando.Parameters.AddWithValue(nombre, valor ?? DBNull.Value);
+
+                Valor("@nc", noConformidadId);
+                Valor("@clase", accion.Clase);
+                Valor("@orden", ++orden);
+                Valor("@accion", accion.Accion);
+                Valor("@fecha", accion.Fecha?.Date);
+                Valor("@responsable", accion.Responsable);
+                Valor("@observaciones", accion.Observaciones);
+                Valor("@hecha", accion.Hecha);
+                if (!nueva) Valor("@id", accion.Id);
+                comando.ExecuteNonQuery();
+            }
+        }
     }
 
     private static void AnadirParametros(SqlCommand comando, NoConformidad nc)
@@ -235,7 +320,6 @@ public class NoConformidadRepositorio
         Valor("@tipo", nc.Tipo);
         Valor("@problema", nc.Problema);
         Valor("@descripcion_causa", nc.DescripcionCausa);
-        Valor("@accion_inmediata", nc.AccionInmediata);
         Valor("@responsable", nc.Responsable);
         Valor("@fecha_prevista", nc.FechaPrevista?.Date);
         Valor("@fecha_fin", nc.FechaFin?.Date);
@@ -246,8 +330,6 @@ public class NoConformidadRepositorio
         Valor("@operario", nc.Operario);
         Valor("@capitulo_norma", nc.CapituloNorma);
         Valor("@analisis_causa_raiz", nc.AnalisisCausaRaiz);
-        Valor("@accion_correctora", nc.AccionCorrectora);
-        Valor("@responsable_accion_correctora", nc.ResponsableAccionCorrectora);
         Valor("@coste_economico", nc.CosteEconomico);
         Valor("@horas_mano_obra", nc.HorasManoObra);
         Valor("@seguimiento", nc.Seguimiento);

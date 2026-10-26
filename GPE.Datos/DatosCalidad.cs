@@ -53,7 +53,6 @@ public record NoConformidad(
     string? Tipo,
     string Problema,
     string? DescripcionCausa,
-    string? AccionInmediata,
     string? Responsable,
     DateTime? FechaPrevista,
     DateTime? FechaFin,
@@ -64,8 +63,23 @@ public record NoConformidad(
     string? Operario,
     string? CapituloNorma,
     string? AnalisisCausaRaiz,
-    string? AccionCorrectora,
-    string? ResponsableAccionCorrectora,
     decimal? CosteEconomico,
     decimal? HorasManoObra,
     string? Seguimiento);
+
+// Columna NC_ACCION.clase: en qué tabla de la ficha va la acción
+public static class ClaseAccion
+{
+    public const string Inmediata = "INMEDIATA";
+    public const string Correctora = "CORRECTORA";
+}
+
+// Una acción inmediata o correctora de un registro (tabla NC_ACCION). Id = 0 si es nueva.
+public record AccionNc(
+    int Id,
+    string Clase,
+    string Accion,
+    DateTime? Fecha,
+    string? Responsable,
+    string? Observaciones,
+    bool Hecha);

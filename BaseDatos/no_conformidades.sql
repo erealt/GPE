@@ -36,7 +36,6 @@ CREATE TABLE NO_CONFORMIDAD (
     tipo NVARCHAR(150) NULL,                      -- solo NC
     problema NVARCHAR(MAX) NOT NULL,
     descripcion_causa NVARCHAR(MAX) NULL,
-    accion_inmediata NVARCHAR(MAX) NULL,
     responsable NVARCHAR(150) NULL,
     fecha_prevista DATE NULL,
     fecha_fin DATE NULL,
@@ -47,8 +46,6 @@ CREATE TABLE NO_CONFORMIDAD (
     operario NVARCHAR(150) NULL,                  -- solo incidencias
     capitulo_norma NVARCHAR(150) NULL,
     analisis_causa_raiz NVARCHAR(MAX) NULL,
-    accion_correctora NVARCHAR(MAX) NULL,
-    responsable_accion_correctora NVARCHAR(150) NULL,
     coste_economico DECIMAL(10,2) NULL,
     horas_mano_obra DECIMAL(7,2) NULL,
     seguimiento NVARCHAR(MAX) NULL,
@@ -61,6 +58,25 @@ CREATE TABLE NO_CONFORMIDAD (
 );
 
 CREATE INDEX IX_no_conformidad_fecha ON NO_CONFORMIDAD (fecha_detectado);
+
+-- Acciones inmediatas y correctoras de un registro: una fila por acción, en el
+-- orden en que se ven en la ficha. Se borran con el registro.
+CREATE TABLE NC_ACCION (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    no_conformidad_id INT NOT NULL,
+    clase NVARCHAR(10) NOT NULL,                  -- INMEDIATA o CORRECTORA
+    orden INT NOT NULL,
+    accion NVARCHAR(MAX) NOT NULL,
+    fecha DATE NULL,
+    responsable NVARCHAR(150) NULL,
+    observaciones NVARCHAR(MAX) NULL,
+    hecha BIT NOT NULL CONSTRAINT DF_nc_accion_hecha DEFAULT 0,
+    CONSTRAINT CK_nc_accion_clase CHECK (clase IN ('INMEDIATA', 'CORRECTORA')),
+    CONSTRAINT FK_nc_accion_no_conformidad FOREIGN KEY (no_conformidad_id)
+        REFERENCES NO_CONFORMIDAD(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IX_nc_accion_no_conformidad ON NC_ACCION (no_conformidad_id, clase, orden);
 GO
 
 -- Historial: igual que los de devoluciones, con devolucion_id NULL.
@@ -79,6 +95,35 @@ BEGIN
     INSERT INTO HISTORIAL_CAMBIOS
         (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
     SELECT NULL, @usuario, 'NO_CONFORMIDAD', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+-- Igual para las acciones (registro_id es el id de la acción; el JSON lleva no_conformidad_id)
+CREATE OR ALTER TRIGGER TR_NC_ACCION_HISTORIAL ON NC_ACCION
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT NULL, @usuario, 'NC_ACCION', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT
