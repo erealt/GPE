@@ -8,6 +8,9 @@ namespace GPE.Escritorio;
 // Alta y edición de una incidencia, no conformidad o acción de mejora: una fila de la
 // hoja INCIDENCIAS del Excel. Los campos "solo para NC" y "solo para incidencias" se
 // muestran u ocultan según el tipo de registro elegido.
+// Hay una tarjeta por fase (registro, acción inmediata, análisis, corrección, cierre) y solo se
+// ve la de la fase elegida. Arriba, la barra de fases hace de pestañas: marca las hechas
+// y al pulsar una se pasa a ella.
 public class FormNoConformidad : Form
 {
     private readonly NoConformidadServicio servicio = new();
@@ -53,17 +56,26 @@ public class FormNoConformidad : Form
     private readonly TextBox txtCoste = new();
     private readonly TextBox txtHoras = new();
 
-    // Acciones inmediatas y correctoras: una tabla cada una
+    // Acciones inmediatas, correctoras y seguimientos: una tabla cada uno
     private TablaAcciones tablaInmediatas = null!;
     private TablaAcciones tablaCorrectoras = null!;
+    private TablaAcciones tablaSeguimientos = null!;
     private List<AccionNc> acciones = new();
 
-    private readonly TextBox txtSeguimiento = new();
     private readonly Label lblEstado = new();
 
     private readonly CamposFormulario campos = new();
     private Control campoTipo = null!;
     private Control tarjetaIncidencia = null!;
+
+    // Fases del registro según lo que hay escrito ahora, la tarjeta de cada una y la
+    // que se está viendo (-1 mientras se monta la ficha: se ven todas)
+    private readonly BarraFasesCalidad barraFases = new();
+    private List<EstadoFase> fases = new();
+    private readonly Dictionary<string, Control> tarjetasFase = new();
+    private int faseElegida = -1;
+    private Panel scroll = null!;
+    private TableLayoutPanel pila = null!;
 
     public FormNoConformidad(NoConformidad? registro = null)
     {
@@ -78,6 +90,7 @@ public class FormNoConformidad : Form
 
         PrepararControles();
         Controls.Add(CrearContenido());
+        Controls.Add(CrearFranjaFases());   // después: así se coloca arriba y el contenido debajo
         CargarValores();
         ActualizarSegunTipo();
         ActualizarEstado();
@@ -100,7 +113,19 @@ public class FormNoConformidad : Form
         }
         tablaInmediatas.Cambiado += (s, e) => hayCambios = true;
         tablaCorrectoras.Cambiado += (s, e) => hayCambios = true;
+        tablaSeguimientos.Cambiado += (s, e) => hayCambios = true;
         FormClosing += AvisarCambiosSinGuardar;
+
+        // La barra de fases se pone al día con lo que decide cada fase
+        foreach (var texto in new[] { txtProblema, txtCausa, txtAnalisis })
+            texto.TextChanged += (s, e) => ActualizarFases();
+        dtpFin.ValueChanged += (s, e) => ActualizarFases();
+        tablaInmediatas.Cambiado += (s, e) => ActualizarFases();
+        tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
+        barraFases.FasePulsada += IrAFase;
+
+        // Uno nuevo empieza por el registro; uno ya guardado, por la fase en curso
+        MostrarFase(original == null ? 0 : NoConformidadServicio.FaseEnCurso(fases) ?? 0);
     }
 
     private static string Titulo(NoConformidad nc) =>
@@ -156,7 +181,6 @@ public class FormNoConformidad : Form
         Multilinea(txtProblema, 90, "Qué se ha detectado: producto, lote, cliente...");
         Multilinea(txtCausa, 70, "Por qué ha pasado");
         Multilinea(txtAnalisis, 70, "Causa de fondo, para que no se repita");
-        Multilinea(txtSeguimiento, 90, "Comprobaciones posteriores, con su fecha. Ej. 20/06/2026 Todos los palets correctos.");
 
         txtCoste.PlaceholderText = "Ej. 180,50";
         txtHoras.PlaceholderText = "Ej. 1,5";
@@ -164,6 +188,8 @@ public class FormNoConformidad : Form
         var personas = (listas.GetValueOrDefault(ListaCalidad.Persona) ?? new()).Select(o => o.Valor).ToList();
         tablaInmediatas = new TablaAcciones(ClaseAccion.Inmediata, personas, "Todavía no hay acciones inmediatas.");
         tablaCorrectoras = new TablaAcciones(ClaseAccion.Correctora, personas, "Todavía no hay acciones correctoras.");
+        tablaSeguimientos = new TablaAcciones(ClaseAccion.Seguimiento, personas,
+            "Todavía no hay seguimientos. Añade uno cada vez que se compruebe si las acciones han funcionado.");
     }
 
     // Botones pegados (No conformidad · Incidencia · Acción de mejora); el elegido, en morado.
@@ -269,27 +295,59 @@ public class FormNoConformidad : Form
 
     private Panel CrearContenido()
     {
-        var (scroll, pila) = Componentes.Pagina();
+        (scroll, pila) = Componentes.Pagina();
 
         pila.Controls.Add(Componentes.Cabecera(
             original == null ? "CALIDAD / NUEVO REGISTRO" : "CALIDAD / " + Titulo(original).ToUpper(Componentes.Es),
             original == null ? "Nuevo registro" : Titulo(original),
             original == null
-                ? "Anota una incidencia, una no conformidad o una acción de mejora."
+                ? "Para darlo de alta basta con el registro; el resto de fases se pueden completar después."
                 : "Completa o corrige los datos del registro."));
-        pila.Controls.Add(CrearTarjetaIdentificacion());
-        pila.Controls.Add(CrearTarjetaDescripcion());
+
+        var registro = CrearTarjetaRegistro();
+        var inmediata = CrearTarjetaAccionInmediata();
+        var analisis = CrearTarjetaAnalisis();
+        var correctora = CrearTarjetaAccionCorrectora();
+        var cierre = CrearTarjetaCierre();
+
+        pila.Controls.Add(registro);
         pila.Controls.Add(tarjetaIncidencia = CrearTarjetaIncidencia());
-        pila.Controls.Add(CrearTarjetaAccionCorrectora());
-        pila.Controls.Add(CrearTarjetaSeguimiento());
+        pila.Controls.Add(inmediata);
+        pila.Controls.Add(analisis);
+        pila.Controls.Add(correctora);
+        pila.Controls.Add(cierre);
         pila.Controls.Add(CrearAcciones());
+
+        tarjetasFase[FaseCalidad.Registro] = registro;
+        tarjetasFase[FaseCalidad.AccionInmediata] = inmediata;
+        tarjetasFase[FaseCalidad.Analisis] = analisis;
+        tarjetasFase[FaseCalidad.Correccion] = correctora;
+        tarjetasFase[FaseCalidad.Acciones] = correctora;
+        tarjetasFase[FaseCalidad.Cierre] = cierre;
 
         return scroll;
     }
 
-    private Control CrearTarjetaIdentificacion()
+    // Franja blanca fija con la barra de fases: no se mueve al bajar por la ficha
+    private Control CrearFranjaFases()
     {
-        var tarjeta = Componentes.Tarjeta("Identificación", "Qué es, cuándo se detectó y de dónde viene");
+        var franja = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 65,
+            BackColor = Color.White,
+            Padding = new Padding(40, 12, 40, 0)
+        };
+        barraFases.Dock = DockStyle.Fill;
+
+        franja.Controls.Add(barraFases);
+        franja.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Tema.Linea });
+        return franja;
+    }
+
+    private Control CrearTarjetaRegistro()
+    {
+        var tarjeta = Componentes.Tarjeta("Registro", "Qué es, cuándo se detectó, de dónde viene y quién se encarga");
 
         // Los tres botones del tipo no caben en una columna: ocupan dos
         var rejilla = Componentes.Rejilla(3);
@@ -302,30 +360,39 @@ public class FormNoConformidad : Form
         rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 2, 1);
         rejilla.Controls.Add(campos.Campo("Cliente", txtCliente), 0, 2);
         rejilla.Controls.Add(campos.Campo("Proveedor", txtProveedor), 1, 2);
-        // Al final, para que al ocultarse (no es NC) no deje un hueco en medio
+        // Al final de su fila, para que al ocultarse (no es NC) no deje un hueco en medio
         rejilla.Controls.Add(campoTipo = campos.Campo("Tipo de no conformidad", cmbTipo), 2, 2);
+
+        var problema = campos.Campo("Problema", txtProblema);
+        rejilla.Controls.Add(problema, 0, 3);
+        rejilla.SetColumnSpan(problema, 3);
+
+        rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 4);
+        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 4);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
 
-    private Control CrearTarjetaDescripcion()
+    private Control CrearTarjetaAccionInmediata()
     {
-        var tarjeta = Componentes.Tarjeta("Problema y acción inmediata", "Lo que ha pasado y cómo se ha resuelto en el momento");
+        var tarjeta = Componentes.Tarjeta("Acción inmediata", "Lo que se ha hecho en el momento para frenar el problema");
+        tarjeta.Controls.Add(campos.Campo("Acciones inmediatas", tablaInmediatas));
+        return tarjeta;
+    }
 
-        var rejilla = Componentes.Rejilla(3);
-        var problema = campos.Campo("Problema", txtProblema);
+    private Control CrearTarjetaAnalisis()
+    {
+        var tarjeta = Componentes.Tarjeta("Análisis de la causa", "Por qué ha pasado");
+
+        var rejilla = Componentes.Rejilla(2);
         var causa = campos.Campo("Descripción de la causa", txtCausa);
-        var accion = campos.Campo("Acciones inmediatas", tablaInmediatas);
-        rejilla.Controls.Add(problema, 0, 0);
-        rejilla.Controls.Add(causa, 0, 1);
-        rejilla.Controls.Add(accion, 0, 2);
-        foreach (var campo in new[] { problema, causa, accion })
-            rejilla.SetColumnSpan(campo, 3);
-
-        rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 3);
-        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 3);
-        rejilla.Controls.Add(campos.Campo("Fecha fin", dtpFin), 2, 3);
+        var analisis = campos.Campo("Análisis de la causa raíz", txtAnalisis);
+        rejilla.Controls.Add(causa, 0, 0);
+        rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 0, 1);
+        rejilla.Controls.Add(analisis, 0, 2);
+        rejilla.SetColumnSpan(causa, 2);
+        rejilla.SetColumnSpan(analisis, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -347,29 +414,33 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaAccionCorrectora()
     {
-        var tarjeta = Componentes.Tarjeta("Análisis y acción correctora", "Para que no vuelva a pasar");
+        var tarjeta = Componentes.Tarjeta("Acción correctora",
+            "Para que no vuelva a pasar. La fase queda hecha cuando todas las acciones están hechas");
 
         var rejilla = Componentes.Rejilla(2);
-        rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 0, 0);
-
-        var analisis = campos.Campo("Análisis de la causa raíz", txtAnalisis);
         var accion = campos.Campo("Acciones correctoras", tablaCorrectoras);
-        rejilla.Controls.Add(analisis, 0, 1);
-        rejilla.Controls.Add(accion, 0, 2);
-        rejilla.SetColumnSpan(analisis, 2);
+        rejilla.Controls.Add(accion, 0, 0);
         rejilla.SetColumnSpan(accion, 2);
 
-        rejilla.Controls.Add(campos.Campo("Coste económico (€)", txtCoste), 0, 3);
-        rejilla.Controls.Add(campos.Campo("Horas de mano de obra", txtHoras), 1, 3);
+        rejilla.Controls.Add(campos.Campo("Coste económico (€)", txtCoste), 0, 1);
+        rejilla.Controls.Add(campos.Campo("Horas de mano de obra", txtHoras), 1, 1);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
 
-    private Control CrearTarjetaSeguimiento()
+    // Con la fecha fin el registro queda cerrado
+    private Control CrearTarjetaCierre()
     {
-        var tarjeta = Componentes.Tarjeta("Seguimiento", "", etiquetaSubtitulo: lblEstado);
-        tarjeta.Controls.Add(campos.Campo("Seguimiento", txtSeguimiento));
+        var tarjeta = Componentes.Tarjeta("Verificación y cierre", "", etiquetaSubtitulo: lblEstado);
+
+        var rejilla = Componentes.Rejilla(3);
+        var seguimiento = campos.Campo("Seguimientos", tablaSeguimientos);
+        rejilla.Controls.Add(seguimiento, 0, 0);
+        rejilla.SetColumnSpan(seguimiento, 3);
+        rejilla.Controls.Add(campos.Campo("Fecha fin", dtpFin), 0, 1);
+
+        tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
 
@@ -414,10 +485,10 @@ public class FormNoConformidad : Form
         txtAnalisis.Text = nc?.AnalisisCausaRaiz ?? "";
         txtCoste.Text = nc?.CosteEconomico?.ToString("0.##", Componentes.Es) ?? "";
         txtHoras.Text = nc?.HorasManoObra?.ToString("0.##", Componentes.Es) ?? "";
-        txtSeguimiento.Text = nc?.Seguimiento ?? "";
 
         tablaInmediatas.Cargar(acciones);
         tablaCorrectoras.Cargar(acciones);
+        tablaSeguimientos.Cargar(acciones);
     }
 
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
@@ -442,9 +513,80 @@ public class FormNoConformidad : Form
     private void ActualizarSegunTipo()
     {
         campoTipo.Visible = TipoElegido == TipoRegistro.NoConformidad;
-        tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
         ActualizarSecciones();
         ActualizarNumero();
+        ActualizarFases();
+        if (faseElegida >= 0) MostrarFase(faseElegida);   // la tarjeta de incidencia va y viene
+    }
+
+    // ---------- Fases ----------
+
+    private void ActualizarFases()
+    {
+        var actual = (original ?? Vacio) with
+        {
+            TipoRegistro = TipoElegido,
+            Problema = txtProblema.Text,
+            DescripcionCausa = txtCausa.Text,
+            AnalisisCausaRaiz = txtAnalisis.Text,
+            FechaFin = LeerFecha(dtpFin)
+        };
+        fases = NoConformidadServicio.Fases(actual, tablaInmediatas.Borrador().Concat(tablaCorrectoras.Borrador()));
+        barraFases.Mostrar(fases.Select(f => (TextoFase(f.Fase), f.Hecha, f.Opcional)));
+    }
+
+    // Cortos: tienen que caber en el botón con el ✓ o "(opcional)"
+    private static string TextoFase(string fase) => fase switch
+    {
+        FaseCalidad.Registro => "Registro",
+        FaseCalidad.AccionInmediata => "Acción inmediata",
+        FaseCalidad.Analisis => "Análisis",
+        FaseCalidad.Correccion => "Corrección",
+        FaseCalidad.Acciones => "Acciones de mejora",
+        _ => "Verificación y cierre"
+    };
+
+    // Enseña solo la tarjeta de la fase (en el registro, también la de clasificación
+    // si es una incidencia) y vuelve arriba de la página
+    private void MostrarFase(int indice)
+    {
+        faseElegida = indice;
+        var tarjeta = tarjetasFase[fases[indice].Fase];
+
+        pila.SuspendLayout();
+        foreach (var otra in tarjetasFase.Values.Distinct())
+            otra.Visible = otra == tarjeta;
+        tarjetaIncidencia.Visible = fases[indice].Fase == FaseCalidad.Registro
+            && TipoElegido == TipoRegistro.Incidencia;
+        pila.ResumeLayout();
+
+        barraFases.Elegir(indice);
+        scroll.AutoScrollPosition = Point.Empty;
+    }
+
+    // Al pasar a otra fase, el cursor va a su primer campo, al final del texto (sin
+    // seleccionarlo, para no borrarlo al escribir)
+    private void IrAFase(int indice)
+    {
+        MostrarFase(indice);
+        var campo = Entradas(tarjetasFase[fases[indice].Fase]).FirstOrDefault(c => c.Visible && c.Enabled);
+        campo?.Focus();
+        if (campo is TextBox texto)
+            texto.Select(texto.TextLength, 0);
+        scroll.AutoScrollPosition = Point.Empty;
+    }
+
+    // Con un error en otra fase, se pasa a esa fase antes de llevar el cursor al campo
+    private void IrAlError(Control control)
+    {
+        for (Control? padre = control; padre != null; padre = padre.Parent)
+        {
+            int indice = padre == tarjetaIncidencia ? 0 : fases.FindIndex(f => tarjetasFase[f.Fase] == padre);
+            if (indice < 0) continue;
+            if (indice != faseElegida) MostrarFase(indice);
+            break;
+        }
+        control.Focus();
     }
 
     // En una NC de auditoría solo se ofrecen las secciones de auditoría (interna,
@@ -491,7 +633,7 @@ public class FormNoConformidad : Form
     // Registro en blanco para calcular el número de uno nuevo
     private static readonly NoConformidad Vacio = new(
         0, TipoRegistro.Incidencia, null, DateTime.Today, null, null, null, "",
-        null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     private void ActualizarEstado()
     {
@@ -551,8 +693,7 @@ public class FormNoConformidad : Form
             CapituloNorma: Valor(cmbCapitulo),
             AnalisisCausaRaiz: txtAnalisis.Text,
             CosteEconomico: coste,
-            HorasManoObra: horas,
-            Seguimiento: txtSeguimiento.Text);
+            HorasManoObra: horas);
     }
 
     // ---------- Guardado ----------
@@ -592,12 +733,14 @@ public class FormNoConformidad : Form
         // Las acciones marcan sus errores en la propia tabla
         var inmediatas = tablaInmediatas.Leer(dtpDetectado.Value);
         var correctoras = tablaCorrectoras.Leer(dtpDetectado.Value);
+        var seguimientos = tablaSeguimientos.Leer(dtpDetectado.Value);
         if (inmediatas == null) primerError ??= tablaInmediatas;
         if (correctoras == null) primerError ??= tablaCorrectoras;
+        if (seguimientos == null) primerError ??= tablaSeguimientos;
 
-        if (primerError != null || leido == null || inmediatas == null || correctoras == null)
+        if (primerError != null || leido == null || inmediatas == null || correctoras == null || seguimientos == null)
         {
-            primerError?.Focus();
+            if (primerError != null) IrAlError(primerError);
             return;
         }
 
@@ -606,7 +749,7 @@ public class FormNoConformidad : Form
         // 2. Guardar en la base de datos (el número lo pone el servicio)
         try
         {
-            IdGuardado = servicio.Guardar(registro, inmediatas.Concat(correctoras));
+            IdGuardado = servicio.Guardar(registro, inmediatas.Concat(correctoras).Concat(seguimientos));
         }
         catch (ReglaNegocioException ex)
         {

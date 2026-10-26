@@ -64,17 +64,19 @@ public record NoConformidad(
     string? CapituloNorma,
     string? AnalisisCausaRaiz,
     decimal? CosteEconomico,
-    decimal? HorasManoObra,
-    string? Seguimiento);
+    decimal? HorasManoObra);
 
 // Columna NC_ACCION.clase: en qué tabla de la ficha va la acción
 public static class ClaseAccion
 {
     public const string Inmediata = "INMEDIATA";
     public const string Correctora = "CORRECTORA";
+    // Comprobaciones antes del cierre: cada una con su fecha. En ellas Hecha no se usa.
+    public const string Seguimiento = "SEGUIMIENTO";
 }
 
-// Una acción inmediata o correctora de un registro (tabla NC_ACCION). Id = 0 si es nueva.
+// Una acción inmediata o correctora, o un seguimiento, de un registro (tabla NC_ACCION).
+// Id = 0 si es nueva.
 public record AccionNc(
     int Id,
     string Clase,

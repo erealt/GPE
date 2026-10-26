@@ -2,7 +2,8 @@ using Microsoft.Data.SqlClient;
 
 namespace GPE.Datos;
 
-// Incidencias, no conformidades y acciones de mejora (tablas NO_CONFORMIDAD, NC_ACCION y CALIDAD_LISTA)
+// Incidencias, no conformidades y acciones de mejora (tablas NO_CONFORMIDAD, NC_ACCION y CALIDAD_LISTA).
+// NC_ACCION guarda las acciones inmediatas, las correctoras y los seguimientos.
 public class NoConformidadRepositorio
 {
     // ---------- Lectura ----------
@@ -14,7 +15,7 @@ public class NoConformidadRepositorio
                    fecha_prevista, fecha_fin, cliente, proveedor,
                    mc_pcc_bpm, parametro, operario,
                    capitulo_norma, analisis_causa_raiz,
-                   coste_economico, horas_mano_obra, seguimiento
+                   coste_economico, horas_mano_obra
             FROM NO_CONFORMIDAD";
 
     public List<NoConformidad> ObtenerRegistros() =>
@@ -61,14 +62,13 @@ public class NoConformidadRepositorio
                 CapituloNorma: Texto(17),
                 AnalisisCausaRaiz: Texto(18),
                 CosteEconomico: Numero(19),
-                HorasManoObra: Numero(20),
-                Seguimiento: Texto(21)));
+                HorasManoObra: Numero(20)));
         }
 
         return lista;
     }
 
-    // Acciones inmediatas y correctoras de un registro, en su orden
+    // Acciones inmediatas, correctoras y seguimientos de un registro, en su orden
     public List<AccionNc> ObtenerAcciones(int noConformidadId)
     {
         const string sql = @"
@@ -182,14 +182,14 @@ public class NoConformidadRepositorio
                  fecha_prevista, fecha_fin, cliente, proveedor,
                  mc_pcc_bpm, parametro, operario,
                  capitulo_norma, analisis_causa_raiz,
-                 coste_economico, horas_mano_obra, seguimiento, creado_por)
+                 coste_economico, horas_mano_obra, creado_por)
             VALUES
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
                  @problema, @descripcion_causa, @responsable,
                  @fecha_prevista, @fecha_fin, @cliente, @proveedor,
                  @mc_pcc_bpm, @parametro, @operario,
                  @capitulo_norma, @analisis_causa_raiz,
-                 @coste_economico, @horas_mano_obra, @seguimiento, @usuario);
+                 @coste_economico, @horas_mano_obra, @usuario);
 
             -- Como en DEVOLUCION: con trigger no se puede usar OUTPUT INSERTED.id
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
@@ -227,8 +227,7 @@ public class NoConformidadRepositorio
                 cliente = @cliente, proveedor = @proveedor,
                 mc_pcc_bpm = @mc_pcc_bpm, parametro = @parametro, operario = @operario,
                 capitulo_norma = @capitulo_norma, analisis_causa_raiz = @analisis_causa_raiz,
-                coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra,
-                seguimiento = @seguimiento
+                coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra
             WHERE id = @id;";
 
         using var conexion = Conexion.Abrir();
@@ -282,7 +281,7 @@ public class NoConformidadRepositorio
                 responsable = @responsable, observaciones = @observaciones, hecha = @hecha
             WHERE id = @id AND no_conformidad_id = @nc;";
 
-        // El orden cuenta dentro de cada tabla (inmediatas 1, 2...; correctoras 1, 2...)
+        // El orden cuenta dentro de cada tabla (inmediatas 1, 2...; correctoras 1, 2...; seguimientos 1, 2...)
         foreach (var grupo in acciones.GroupBy(a => a.Clase))
         {
             int orden = 0;
@@ -332,6 +331,5 @@ public class NoConformidadRepositorio
         Valor("@analisis_causa_raiz", nc.AnalisisCausaRaiz);
         Valor("@coste_economico", nc.CosteEconomico);
         Valor("@horas_mano_obra", nc.HorasManoObra);
-        Valor("@seguimiento", nc.Seguimiento);
     }
 }

@@ -6,10 +6,6 @@ GO
    Sustituye al Excel "INCIDENCIAS Y NO CONFORMIDADES - CALIDAD" (MT-RG09).
    Se ejecuta una vez, después de crear_tablas.sql.
    ============================================================ */
-
--- Opciones de los desplegables (la hoja LISTAS del Excel). Los registros guardan
--- el texto elegido, no el id: así cambiar o desactivar una opción no altera lo
--- que ya está registrado. Para quitar una opción de los desplegables: activo = 0.
 CREATE TABLE CALIDAD_LISTA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     lista NVARCHAR(20) NOT NULL,
@@ -48,7 +44,6 @@ CREATE TABLE NO_CONFORMIDAD (
     analisis_causa_raiz NVARCHAR(MAX) NULL,
     coste_economico DECIMAL(10,2) NULL,
     horas_mano_obra DECIMAL(7,2) NULL,
-    seguimiento NVARCHAR(MAX) NULL,
     creado_por INT NOT NULL,
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_no_conformidad_creado DEFAULT SYSDATETIME(),
     CONSTRAINT CK_no_conformidad_tipo CHECK (tipo_registro IN ('NC', 'INCIDENCIA', 'MEJORA')),
@@ -59,19 +54,20 @@ CREATE TABLE NO_CONFORMIDAD (
 
 CREATE INDEX IX_no_conformidad_fecha ON NO_CONFORMIDAD (fecha_detectado);
 
--- Acciones inmediatas y correctoras de un registro: una fila por acción, en el
--- orden en que se ven en la ficha. Se borran con el registro.
+-- Acciones inmediatas, correctoras y seguimientos de un registro: una fila por acción
+-- o comprobación, en el orden en que se ven en la ficha. Se borran con el registro.
+-- En los seguimientos, hecha no se usa y la fecha es la de la comprobación.
 CREATE TABLE NC_ACCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
     no_conformidad_id INT NOT NULL,
-    clase NVARCHAR(10) NOT NULL,                  -- INMEDIATA o CORRECTORA
+    clase NVARCHAR(15) NOT NULL,                  -- INMEDIATA, CORRECTORA o SEGUIMIENTO
     orden INT NOT NULL,
     accion NVARCHAR(MAX) NOT NULL,
     fecha DATE NULL,
     responsable NVARCHAR(150) NULL,
     observaciones NVARCHAR(MAX) NULL,
     hecha BIT NOT NULL CONSTRAINT DF_nc_accion_hecha DEFAULT 0,
-    CONSTRAINT CK_nc_accion_clase CHECK (clase IN ('INMEDIATA', 'CORRECTORA')),
+    CONSTRAINT CK_nc_accion_clase CHECK (clase IN ('INMEDIATA', 'CORRECTORA', 'SEGUIMIENTO')),
     CONSTRAINT FK_nc_accion_no_conformidad FOREIGN KEY (no_conformidad_id)
         REFERENCES NO_CONFORMIDAD(id) ON DELETE CASCADE
 );

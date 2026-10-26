@@ -13,6 +13,21 @@ public static class EstadoRegistro
     public static readonly string[] Todos = { EnPlazo, FueraPlazo, SinPlazo, Cerrada };
 }
 
+// Fases de un registro. Tampoco se guardan: cada una está hecha o no según lo rellenado,
+// y se pueden completar en cualquier orden.
+public static class FaseCalidad
+{
+    public const string Registro = "Registro";
+    public const string AccionInmediata = "Acción inmediata";
+    public const string Analisis = "Análisis";
+    public const string Correccion = "Corrección";
+    public const string Acciones = "Acciones";   // las de una acción de mejora
+    public const string Cierre = "Cierre";
+}
+
+// Opcional: la fase se puede rellenar, pero este tipo de registro no la necesita
+public record EstadoFase(string Fase, bool Hecha, bool Opcional = false);
+
 public class NoConformidadServicio
 {
     private readonly NoConformidadRepositorio repositorio = new();
@@ -97,6 +112,35 @@ public class NoConformidadServicio
     public static int? DiasFueraPlazo(NoConformidad nc) =>
         Estado(nc) == EstadoRegistro.FueraPlazo ? (DateTime.Today - nc.FechaPrevista!.Value.Date).Days : null;
 
+    // ---------- Fases ----------
+
+    // Fases del registro y si están hechas. Todos los tipos tienen las cinco, pero una NC
+    // las necesita todas; una incidencia se resuelve con la acción inmediata (análisis y
+    // corrección, opcionales) y una acción de mejora, con sus acciones (acción inmediata y
+    // análisis, opcionales).
+    public static List<EstadoFase> Fases(NoConformidad nc, IEnumerable<AccionNc> acciones)
+    {
+        var lista = acciones.ToList();
+        var correctoras = lista.Where(a => a.Clase == ClaseAccion.Correctora).ToList();
+        bool esIncidencia = nc.TipoRegistro == TipoRegistro.Incidencia;
+        bool esMejora = nc.TipoRegistro == TipoRegistro.Mejora;
+
+        return new()
+        {
+            new(FaseCalidad.Registro, !string.IsNullOrWhiteSpace(nc.Problema)),
+            new(FaseCalidad.AccionInmediata, lista.Any(a => a.Clase == ClaseAccion.Inmediata), esMejora),
+            new(FaseCalidad.Analisis, !string.IsNullOrWhiteSpace(nc.DescripcionCausa)
+                || !string.IsNullOrWhiteSpace(nc.AnalisisCausaRaiz), esIncidencia || esMejora),
+            new(esMejora ? FaseCalidad.Acciones : FaseCalidad.Correccion,
+                correctoras.Count > 0 && correctoras.All(a => a.Hecha), esIncidencia),
+            new(FaseCalidad.Cierre, nc.FechaFin != null)
+        };
+    }
+
+    // Posición de la primera fase necesaria sin hacer; null si el registro está cerrado
+    public static int? FaseEnCurso(List<EstadoFase> fases) =>
+        fases[^1].Hecha ? null : fases.FindIndex(f => !f.Hecha && !f.Opcional);
+
     // ---------- Validación ----------
 
     // Quita espacios, deja en null lo vacío y borra los campos que no son de este tipo
@@ -123,8 +167,7 @@ public class NoConformidadServicio
             Parametro = esIncidencia ? Limpio(nc.Parametro) : null,
             Operario = esIncidencia ? Limpio(nc.Operario) : null,
             CapituloNorma = Limpio(nc.CapituloNorma),
-            AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz),
-            Seguimiento = Limpio(nc.Seguimiento)
+            AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz)
         };
     }
 
@@ -189,11 +232,16 @@ public class NoConformidadServicio
         };
     }
 
-    // Error de una acción ya normalizada (null si está bien)
+    // Error de una acción o seguimiento ya normalizado (null si está bien).
+    // Un seguimiento nuevo sin fecha no sirve: es lo que se comprobó en un día concreto.
+    // Los ya guardados pueden no tenerla: vienen del texto antiguo (nc_seguimientos.sql).
     public static string? ErrorAccion(AccionNc accion, DateTime fechaDetectado)
     {
+        bool esSeguimiento = accion.Clase == ClaseAccion.Seguimiento;
         if (accion.Accion == "")
-            return "Describe la acción.";
+            return esSeguimiento ? "Describe lo que se ha comprobado." : "Describe la acción.";
+        if (esSeguimiento && accion.Fecha == null && accion.Id == 0)
+            return "Pon la fecha de la comprobación.";
         if (accion.Fecha < fechaDetectado.Date)
             return "La fecha no puede ser anterior a la detección.";
         return null;

@@ -4,8 +4,9 @@ using System.Globalization;
 
 namespace GPE.Escritorio;
 
-// Tabla editable de las acciones inmediatas o correctoras de la ficha de calidad:
+// Tabla editable de las acciones inmediatas o correctoras, o de los seguimientos, de la ficha de calidad:
 // una fila por acción con si está hecha, la acción, fecha, responsable y observaciones.
+// En los seguimientos no hay "hecha" (cada fila ya es algo hecho) y la fecha es obligatoria.
 // Se añaden filas con el botón de debajo y se quitan con "Quitar" en cada fila.
 public class TablaAcciones : TableLayoutPanel
 {
@@ -13,6 +14,7 @@ public class TablaAcciones : TableLayoutPanel
     private static readonly string[] FormatosFecha = { "d/M/yyyy", "d/M/yy", "d-M-yyyy", "d-M-yy" };
 
     private readonly string clase;
+    private bool EsSeguimiento => clase == ClaseAccion.Seguimiento;
     private readonly DataGridView grid = new();
     private readonly DataGridViewComboBoxColumn colResponsable = new();
     private readonly Label lblVacia = new();
@@ -40,7 +42,7 @@ public class TablaAcciones : TableLayoutPanel
         lblVacia.ForeColor = Tema.Suave;
         lblVacia.Margin = new Padding(6, 10, 0, 0);
 
-        var btnAnadir = Tema.BotonSecundario("+ Añadir acción", 170);
+        var btnAnadir = Tema.BotonSecundario(EsSeguimiento ? "+ Añadir seguimiento" : "+ Añadir acción", 210);
         btnAnadir.Margin = new Padding(0, 10, 0, 0);
         btnAnadir.Click += (s, e) => AnadirFila();
 
@@ -71,7 +73,8 @@ public class TablaAcciones : TableLayoutPanel
             Width = 70,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
-        grid.Columns.Add(ColumnaTexto("ACCIÓN", 40, 1000));
+        grid.Columns[ColHecha].Visible = !EsSeguimiento;
+        grid.Columns.Add(ColumnaTexto(EsSeguimiento ? "COMPROBACIÓN" : "ACCIÓN", 40, 1000));
         grid.Columns.Add(ColumnaTexto("FECHA", 13, 10));
 
         colResponsable.HeaderText = "RESPONSABLE";
@@ -158,7 +161,9 @@ public class TablaAcciones : TableLayoutPanel
     private void AnadirFila()
     {
         grid.EndEdit();
-        int i = grid.Rows.Add(false, "", "", "", "");
+        // Un seguimiento casi siempre se apunta el mismo día en que se hace
+        string fecha = EsSeguimiento ? DateTime.Today.ToString("dd/MM/yyyy") : "";
+        int i = grid.Rows.Add(false, "", fecha, "", "");
         grid.Rows[i].Tag = 0;
         AjustarAlto();
         AvisarCambio();
@@ -183,14 +188,14 @@ public class TablaAcciones : TableLayoutPanel
             foreach (DataGridViewCell celda in fila.Cells)
                 celda.ErrorText = "";
 
+            if (FilaVacia(fila))
+                continue;
+
             string accion = Texto(fila, ColAccion);
             string fechaTexto = Texto(fila, ColFecha);
             string responsable = Texto(fila, ColResponsable);
             string observaciones = Texto(fila, ColObservaciones);
             bool hecha = fila.Cells[ColHecha].Value is true;
-
-            if (accion == "" && fechaTexto == "" && responsable == "" && observaciones == "" && !hecha)
-                continue;
 
             DateTime? fecha = null;
             if (fechaTexto != "")
@@ -225,6 +230,19 @@ public class TablaAcciones : TableLayoutPanel
         }
         return acciones;
     }
+
+    // Las acciones tal como están escritas, sin comprobar nada: para ver en qué fase va
+    // el registro mientras se rellena. Solo llevan la acción y si está hecha.
+    public List<AccionNc> Borrador() =>
+        grid.Rows.Cast<DataGridViewRow>()
+            .Where(fila => !FilaVacia(fila))
+            .Select(fila => new AccionNc(0, clase, Texto(fila, ColAccion), null, null, null,
+                fila.Cells[ColHecha].Value is true))
+            .ToList();
+
+    private static bool FilaVacia(DataGridViewRow fila) =>
+        fila.Cells[ColHecha].Value is not true
+        && new[] { ColAccion, ColFecha, ColResponsable, ColObservaciones }.All(col => Texto(fila, col) == "");
 
     private static string Texto(DataGridViewRow fila, int col) =>
         (fila.Cells[col].Value?.ToString() ?? "").Trim();
