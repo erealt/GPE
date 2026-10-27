@@ -24,7 +24,7 @@ public class FormAvisoAbonos : Form
         StartPosition = FormStartPosition.CenterParent;
         ShowInTaskbar = false;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         int n = retrasadas.Count;
         var lblTitulo = new Label

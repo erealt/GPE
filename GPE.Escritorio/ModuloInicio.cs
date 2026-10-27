@@ -54,7 +54,7 @@ public class ModuloInicio : UserControl
         {
             AutoSize = true,
             ForeColor = Tema.Acento,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Font = Tema.FuenteNegrita,
             Margin = new Padding(0, 0, 0, 8)
         };
         resumenes.Add((lblResumen, resumen));

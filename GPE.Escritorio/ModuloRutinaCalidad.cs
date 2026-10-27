@@ -114,7 +114,7 @@ public class ModuloRutinaCalidad : UserControl
             Text = "Rutina supervisor de calidad",
             Dock = DockStyle.Top,
             Height = 50,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
+            Font = Tema.FuenteTitulo,
             ForeColor = Tema.Texto
         });
 
@@ -179,7 +179,7 @@ public class ModuloRutinaCalidad : UserControl
         };
         lblRonda.AutoSize = true;
         lblRonda.ForeColor = Tema.Texto;
-        lblRonda.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        lblRonda.Font = Tema.FuenteNegrita;
         lblProgreso.AutoSize = true;
         lblProgreso.ForeColor = Tema.Suave;
         lblProgreso.Margin = new Padding(0, 4, 0, 0);
@@ -221,7 +221,7 @@ public class ModuloRutinaCalidad : UserControl
                 AutoSize = true,
                 BackColor = fondo,
                 ForeColor = texto,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                Font = Tema.FuenteEtiqueta,
                 Padding = new Padding(6, 3, 6, 3),
                 Margin = new Padding(0, 0, 8, 0)
             });
@@ -232,7 +232,7 @@ public class ModuloRutinaCalidad : UserControl
             AutoSize = true,
             BackColor = Tema.FondoNoRevisa,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            Font = Tema.FuenteEtiqueta,
             Padding = new Padding(6, 3, 6, 3),
             Margin = new Padding(0, 0, 8, 0)
         };
@@ -244,7 +244,7 @@ public class ModuloRutinaCalidad : UserControl
                    "y pulsa su letra. En PESOS se escribe el número.",
             AutoSize = true,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 9),
+            Font = Tema.FuentePequena,
             Margin = new Padding(0, 6, 0, 0)
         });
         return leyenda;
@@ -425,7 +425,7 @@ public class ModuloRutinaCalidad : UserControl
         columnaPunto.DefaultCellStyle.Padding = new Padding(10, 0, 4, 0);
         columnaPunto.DefaultCellStyle.BackColor = Tema.CabeceraTabla;
         columnaPunto.DefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
-        columnaPunto.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+        columnaPunto.DefaultCellStyle.Font = Tema.FuentePequenaNegrita;
         columnaPunto.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
         grid.Columns.Add(columnaPunto);
 
@@ -838,7 +838,7 @@ public class ModuloRutinaCalidad : UserControl
         var seleccion = Seleccionadas();
         var casilla = casillas.GetValueOrDefault((punto.Id, seccion.Id));
 
-        var menu = new ContextMenuStrip { Font = new Font("Segoe UI", 10) };
+        var menu = new ContextMenuStrip { Font = Tema.Fuente };
         if (!punto.Numerico)
         {
             foreach (string estado in EstadoCasilla.Todos)
@@ -851,7 +851,7 @@ public class ModuloRutinaCalidad : UserControl
                 {
                     BackColor = fondo,
                     ForeColor = texto,
-                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                    Font = Tema.FuenteNegrita,
                     Checked = seleccion.Count == 1 && casilla?.Estado == estado
                 };
                 menu.Items.Add(opcion);
@@ -917,8 +917,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo cargar la incidencia.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar la incidencia.", ex);
             return;
         }
         if (nc == null)
@@ -948,8 +947,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo cargar la rutina de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar la rutina de la base de datos.", ex);
             return;
         }
 
@@ -1000,8 +998,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo guardar la ronda.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar la ronda.", ex);
             return false;
         }
 

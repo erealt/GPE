@@ -51,7 +51,7 @@ public static class Componentes
             Text = titulo,
             Dock = DockStyle.Top,
             Height = 50,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
+            Font = Tema.FuenteTitulo,
             ForeColor = Tema.Texto
         };
         var lblRuta = new Label
@@ -60,7 +60,7 @@ public static class Componentes
             Dock = DockStyle.Top,
             Height = 25,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            Font = Tema.FuenteEtiqueta
         };
 
         // El último añadido queda arriba
@@ -108,7 +108,7 @@ public static class Componentes
                 Text = etiqueta,
                 AutoSize = true,
                 ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+                Font = Tema.FuenteEtiqueta
             });
             dato.Controls.Add(new Label
             {
@@ -152,7 +152,7 @@ public static class Componentes
         lblSubtitulo.Text = subtitulo;
         lblSubtitulo.AutoSize = true;
         lblSubtitulo.ForeColor = Tema.Suave;
-        lblSubtitulo.Font = new Font("Segoe UI", 9);
+        lblSubtitulo.Font = Tema.FuentePequena;
         lblSubtitulo.Margin = new Padding(0, 2, 0, 15);
 
         if (accion == null)
@@ -217,7 +217,7 @@ public static class Componentes
         cabecera.SelectionBackColor = Tema.CabeceraTabla;
         cabecera.ForeColor = Tema.Suave;
         cabecera.SelectionForeColor = Tema.Suave;
-        cabecera.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        cabecera.Font = Tema.FuenteEtiqueta;
 
         grid.DefaultCellStyle.ForeColor = Tema.Texto;
         grid.DefaultCellStyle.SelectionBackColor = Color.White;
@@ -242,7 +242,7 @@ public static class Componentes
             Dock = DockStyle.Top,
             Height = 22,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 9)
+            Font = Tema.FuentePequena
         };
         control.Dock = DockStyle.Top;
         campo.Controls.Add(control);

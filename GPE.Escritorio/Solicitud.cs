@@ -32,7 +32,7 @@ public class FormSolicitud : PantallaFase
         MinimumSize = new Size(900, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         var (scroll, pila) = Componentes.Pagina();
 
@@ -93,8 +93,7 @@ public class FormSolicitud : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo cargar la solicitud.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar la solicitud.", ex);
         }
 
         Componentes.AjustarAltoTabla(grid);

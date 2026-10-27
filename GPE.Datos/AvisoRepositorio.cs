@@ -11,20 +11,20 @@ public class AvisoRepositorio
     // Apunta un aviso para cada usuario con el rol responsable de la fase indicada
     // en la fábrica de la devolución. Va dentro de la transacción del cambio que lo provoca.
     public static void Apuntar(SqlConnection conexion, SqlTransaction transaccion,
-        int devolucionId, int fabricaId, string tipo, int faseResponsable)
+        int devolucionId, string tipo, int faseResponsable)
     {
         const string sql = @"
             INSERT INTO AVISO_CORREO (devolucion_id, tipo, destinatario)
-            SELECT DISTINCT @devolucion, @tipo, u.email
-            FROM ESTADO_DEVOLUCION e
-            JOIN USUARIO_ROL ur ON ur.rol_id = e.rol_responsable_id AND ur.fabrica_id = @fabrica
+            SELECT DISTINCT d.id, @tipo, u.email
+            FROM DEVOLUCION d
+            JOIN ESTADO_DEVOLUCION e ON e.fase = @fase
+            JOIN USUARIO_ROL ur ON ur.rol_id = e.rol_responsable_id AND ur.fabrica_id = d.fabrica_id
             JOIN USUARIO u ON u.id = ur.usuario_id
-            WHERE e.fase = @fase;";
+            WHERE d.id = @devolucion;";
 
         using var comando = new SqlCommand(sql, conexion, transaccion);
         comando.Parameters.AddWithValue("@devolucion", devolucionId);
         comando.Parameters.AddWithValue("@tipo", tipo);
-        comando.Parameters.AddWithValue("@fabrica", fabricaId);
         comando.Parameters.AddWithValue("@fase", faseResponsable);
         comando.ExecuteNonQuery();
     }

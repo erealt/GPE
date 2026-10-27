@@ -18,6 +18,14 @@ public static class Tema
     public static readonly Color AvisoFondo = Color.FromArgb(255, 241, 214);
     public static readonly Color Aviso = Color.FromArgb(150, 90, 0);
 
+    // Fuentes compartidas: no se deben liberar con Dispose, las usan todas las pantallas
+    public static readonly Font Fuente = new("Segoe UI", 10);
+    public static readonly Font FuenteNegrita = new("Segoe UI", 10, FontStyle.Bold);
+    public static readonly Font FuentePequena = new("Segoe UI", 9);
+    public static readonly Font FuentePequenaNegrita = new("Segoe UI", 9, FontStyle.Bold);
+    public static readonly Font FuenteEtiqueta = new("Segoe UI", 8.5f, FontStyle.Bold);   // cabeceras de tabla y etiquetas
+    public static readonly Font FuenteTitulo = new("Segoe UI", 22, FontStyle.Bold);       // título de cada módulo
+
     // Celdas de las tablas: columna que no se edita, valor distinto del esperado, valor con error
     public static readonly Color FondoSoloLectura = Color.FromArgb(247, 248, 246);
     public static readonly Color FondoDiferencia = AvisoFondo;
@@ -78,7 +86,7 @@ public static class Tema
             FlatAppearance = { BorderSize = 0 },
             BackColor = Acento,
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Font = FuenteNegrita,
             Cursor = Cursors.Hand
         };
     
@@ -97,7 +105,7 @@ public static class Tema
             FlatAppearance = { BorderColor = Borde },
             BackColor = Color.White,
             ForeColor = Texto,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Font = FuenteNegrita,
             Cursor = Cursors.Hand
         };
         boton.EnabledChanged += (s, e) =>

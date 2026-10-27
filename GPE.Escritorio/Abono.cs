@@ -40,7 +40,7 @@ public class FormAbono : PantallaFase
         MinimumSize = new Size(950, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         FormClosing += AvisarCambiosSinGuardar;
 
@@ -63,8 +63,7 @@ public class FormAbono : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudieron cargar los datos de la devolución.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los datos de la devolución.", ex);
         }
 
         var (scroll, pila) = Componentes.Pagina();
@@ -143,7 +142,7 @@ public class FormAbono : PantallaFase
             {
                 Text = "Observaciones del almacén",
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Font = Tema.FuentePequenaNegrita,
                 Margin = new Padding(0, 15, 0, 4)
             });
             tarjeta.Controls.Add(new Label
@@ -159,7 +158,7 @@ public class FormAbono : PantallaFase
         {
             Text = "Fotos de la revisión (doble clic para verlas)",
             AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Font = Tema.FuentePequenaNegrita,
             Margin = new Padding(0, 15, 0, 4)
         });
         tarjeta.Controls.Add(new ControlAdjuntos(devolucion.Id, TipoAdjunto.Foto, "Añadir foto")
@@ -209,7 +208,7 @@ public class FormAbono : PantallaFase
         int noAptas = lineas.Where(l => !l.Apto).Sum(l => l.Cantidad);
         int total = grid.Rows.Add("Total", "", "", "", "", aptas + noAptas, $"{aptas} sí · {noAptas} no");
         grid.Rows[total].DefaultCellStyle.BackColor = Tema.FondoSoloLectura;
-        grid.Rows[total].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        grid.Rows[total].DefaultCellStyle.Font = Tema.FuenteNegrita;
 
         Componentes.AjustarAltoTabla(grid);
         grid.ClearSelection();
@@ -427,8 +426,7 @@ public class FormAbono : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo reabrir.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo reabrir.", ex);
             return;
         }
 
@@ -539,8 +537,7 @@ public class FormAbono : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo registrar el abono.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo registrar el abono.", ex);
             return;
         }
 

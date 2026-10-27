@@ -97,7 +97,7 @@ public class FormNoConformidad : Form
         MinimumSize = new Size(1100, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         PrepararControles();
         Controls.Add(CrearContenido());
@@ -205,7 +205,7 @@ public class FormNoConformidad : Form
             Text = NoConformidadServicio.DescribirBloqueo(bloqueo!) + " Solo puedes consultarla.",
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Tema.Aviso,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Font = Tema.FuenteNegrita,
             AutoEllipsis = true
         });
         return franja;
@@ -249,9 +249,7 @@ public class FormNoConformidad : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar las listas de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar las listas de la base de datos.", ex);
         }
 
         PrepararSelectorTipo();
@@ -861,9 +859,7 @@ public class FormNoConformidad : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudo guardar el registro.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar el registro.", ex);
             return;
         }
 

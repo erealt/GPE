@@ -21,7 +21,7 @@ public class CamposFormulario
         {
             Text = etiqueta,
             AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Font = Tema.FuentePequenaNegrita,
             Margin = new Padding(0, 0, 0, 4)
         });
 
@@ -64,7 +64,7 @@ public class CamposFormulario
     {
         AutoSize = true,
         ForeColor = Tema.Error,
-        Font = new Font("Segoe UI", 9),
+        Font = Tema.FuentePequena,
         Margin = new Padding(0, 4, 0, 0),
         Visible = false
     };

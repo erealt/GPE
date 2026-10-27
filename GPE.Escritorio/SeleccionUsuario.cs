@@ -23,7 +23,7 @@ public class FormSeleccionUsuario : Form
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         var lblTitulo = new Label
         {
@@ -64,9 +64,7 @@ public class FormSeleccionUsuario : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar los usuarios de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los usuarios de la base de datos.", ex);
             Close();
             return;
         }
@@ -92,9 +90,7 @@ public class FormSeleccionUsuario : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar los permisos del usuario.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los permisos del usuario.", ex);
             return;
         }
 

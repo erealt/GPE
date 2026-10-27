@@ -66,7 +66,7 @@ public class PantallaFase : Form
             MinimizeBox = false,
             StartPosition = FormStartPosition.CenterParent,
             BackColor = Tema.Fondo,
-            Font = new Font("Segoe UI", 10)
+            Font = Tema.Fuente
         };
 
         var lblExplicacion = new Label

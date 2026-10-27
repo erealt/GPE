@@ -106,7 +106,7 @@ public class ModuloDevoluciones : UserControl
             Text = "Devoluciones",
             Dock = DockStyle.Top,
             Height = 50,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
+            Font = Tema.FuenteTitulo,
             ForeColor = Tema.Texto
         };
         titulos.Controls.Add(lblSubtitulo);
@@ -143,7 +143,7 @@ public class ModuloDevoluciones : UserControl
         lblAviso.Dock = DockStyle.Fill;
         lblAviso.TextAlign = ContentAlignment.MiddleLeft;
         lblAviso.ForeColor = Tema.Aviso;
-        lblAviso.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        lblAviso.Font = Tema.FuenteNegrita;
         lblAviso.AutoEllipsis = true;
 
         btnVerRetrasadas.Dock = DockStyle.Right;
@@ -361,7 +361,7 @@ public class ModuloDevoluciones : UserControl
             grid.Columns.Add(nombre, nombre);
 
         grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
-        grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        grid.Columns[0].DefaultCellStyle.Font = Tema.FuenteNegrita;
         // El número entero, sin cortar: la columna mide lo que ocupa el número. Con un ancho
         // mínimo y "Fill", al maximizar la ventana esta columna se quedaba con todo el sobrante.
         grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
@@ -401,9 +401,7 @@ public class ModuloDevoluciones : UserControl
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar las devoluciones de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar las devoluciones de la base de datos.", ex);
             return;
         }
 
@@ -485,8 +483,7 @@ public class ModuloDevoluciones : UserControl
             }
             catch (DbException ex)
             {
-                MessageBox.Show(this, "No se pudo cargar la devolución.\n\n" + ex.Message,
-                    "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensajes.ErrorBaseDatos(this, "No se pudo cargar la devolución.", ex);
                 break;
             }
 

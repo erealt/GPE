@@ -22,7 +22,7 @@ public class FormHistorial : Form
         MinimumSize = new Size(650, 450);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         var titulo = new Label
         {
@@ -70,9 +70,7 @@ public class FormHistorial : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudo cargar el historial de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar el historial de la base de datos.", ex);
             return;
         }
 
@@ -138,7 +136,7 @@ public class FormHistorial : Form
             Text = $"{entrada.Usuario} · {entrada.Fecha.ToString("d 'de' MMMM 'de' yyyy, HH:mm", Componentes.Es)}",
             AutoSize = true,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 9),
+            Font = Tema.FuentePequena,
             Margin = new Padding(0, 2, 0, 0)
         });
 
@@ -180,7 +178,7 @@ public class FormHistorial : Form
                 Text = "→",
                 AutoSize = true,
                 ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Font = Tema.FuenteNegrita,
                 Margin = new Padding(6, 3, 6, 0)
             });
         }
@@ -196,7 +194,7 @@ public class FormHistorial : Form
                 AutoSize = true,
                 BackColor = fondo,
                 ForeColor = color,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                Font = Tema.FuenteEtiqueta,
                 Padding = new Padding(10, 4, 10, 4),
                 Margin = new Padding(0)
             };

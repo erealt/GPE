@@ -36,7 +36,7 @@ public class Recogida : PantallaFase
         MinimumSize = new Size(900, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         PrepararControles();
         if (SoloLectura) BloquearCampos();
@@ -55,7 +55,7 @@ public class Recogida : PantallaFase
 
         lblTelefonoTransportista.AutoSize = true;
         lblTelefonoTransportista.ForeColor = Tema.Suave;
-        lblTelefonoTransportista.Font = new Font("Segoe UI", 9);
+        lblTelefonoTransportista.Font = Tema.FuentePequena;
         lblTelefonoTransportista.Margin = new Padding(0, 4, 0, 0);
 
         txtFechaRegistro.ReadOnly = true;
@@ -84,9 +84,7 @@ public class Recogida : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar los datos de la recogida.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los datos de la recogida.", ex);
         }
 
         if (existente is { } guardada)
@@ -237,9 +235,7 @@ public class Recogida : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudo guardar la recogida.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar la recogida.", ex);
             return;
         }
 

@@ -2,11 +2,6 @@
 
 namespace GPE.Logica;
 
-public class ReglaNegocioException : Exception
-{
-    public ReglaNegocioException(string mensaje) : base(mensaje) { }
-}
-
 public class DevolucionServicio
 {
     private readonly DevolucionRepositorio repositorio = new();

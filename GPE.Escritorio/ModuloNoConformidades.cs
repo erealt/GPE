@@ -96,7 +96,7 @@ public class ModuloNoConformidades : UserControl
             Text = "Incidencias y no conformidades",
             Dock = DockStyle.Top,
             Height = 50,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
+            Font = Tema.FuenteTitulo,
             ForeColor = Tema.Texto
         };
         titulos.Controls.Add(lblSubtitulo);
@@ -256,7 +256,7 @@ public class ModuloNoConformidades : UserControl
         }
 
         grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
-        grid.Columns[0].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        grid.Columns[0].DefaultCellStyle.Font = Tema.FuenteNegrita;
         grid.Columns[ColumnaProblema].MinimumWidth = 200;
         grid.Columns[ColumnaProblema].DefaultCellStyle.WrapMode = DataGridViewTriState.False;
 
@@ -299,9 +299,7 @@ public class ModuloNoConformidades : UserControl
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar las incidencias y no conformidades de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar las incidencias y no conformidades de la base de datos.", ex);
             return;
         }
 
@@ -437,8 +435,7 @@ public class ModuloNoConformidades : UserControl
             }
             catch (DbException ex)
             {
-                MessageBox.Show(this, "No se pudo cargar el registro.\n\n" + ex.Message,
-                    "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensajes.ErrorBaseDatos(this, "No se pudo cargar el registro.", ex);
                 return;
             }
             if (nc == null)

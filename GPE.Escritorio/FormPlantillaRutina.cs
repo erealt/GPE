@@ -22,7 +22,7 @@ public class FormPlantillaRutina : Form
         MinimumSize = new Size(900, 500);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         var layout = new TableLayoutPanel
         {
@@ -119,8 +119,7 @@ public class FormPlantillaRutina : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo cargar la plantilla.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar la plantilla.", ex);
             return;
         }
         aplica.UnionWith(plantilla.Aplica);
@@ -135,7 +134,7 @@ public class FormPlantillaRutina : Form
         columnaPunto.DefaultCellStyle.Padding = new Padding(10, 0, 4, 0);
         columnaPunto.DefaultCellStyle.BackColor = Tema.CabeceraTabla;
         columnaPunto.DefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
-        columnaPunto.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+        columnaPunto.DefaultCellStyle.Font = Tema.FuentePequenaNegrita;
         grid.Columns.Add(columnaPunto);
 
         foreach (var seccion in plantilla.Secciones)
@@ -193,8 +192,7 @@ public class FormPlantillaRutina : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo guardar la plantilla.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar la plantilla.", ex);
             return;
         }
         DialogResult = DialogResult.OK;

@@ -33,7 +33,7 @@ public class FormPrincipal : Form
         MinimumSize = new Size(1350, 650);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         modulos = CrearModulos();
 
@@ -231,7 +231,7 @@ public class FormPrincipal : Form
         {
             Dock = DockStyle.Right,
             Width = 50,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold)
+            Font = Tema.FuenteNegrita
         };
         lblUsuario.Paint += (s, e) =>
         {

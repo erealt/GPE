@@ -297,7 +297,7 @@ public class DevolucionRepositorio
         }
 
         // Aviso por correo a quien gestiona la recogida (el siguiente paso)
-        AvisoRepositorio.Apuntar(conexion, transaccion, idDevolucion, datos.FabricaId,
+        AvisoRepositorio.Apuntar(conexion, transaccion, idDevolucion,
             TipoAviso.NuevaDevolucion, Fase.RecogidaSolicitada);
 
         transaccion.Commit();
@@ -517,12 +517,8 @@ public class DevolucionRepositorio
         }
 
         // Aviso a quien registra el abono (el siguiente paso)
-        using (var fabrica = new SqlCommand("SELECT fabrica_id FROM DEVOLUCION WHERE id = @devolucion;", conexion, transaccion))
-        {
-            fabrica.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
-            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId, (int)fabrica.ExecuteScalar()!,
-                TipoAviso.RevisionFinalizada, Fase.AbonoRealizado);
-        }
+        AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId,
+            TipoAviso.RevisionFinalizada, Fase.AbonoRealizado);
 
         transaccion.Commit();
         return true;
@@ -608,12 +604,8 @@ public class DevolucionRepositorio
         }
 
         // Aviso al almacén (el responsable de la revisión) de cómo ha quedado el abono
-        using (var fabrica = new SqlCommand("SELECT fabrica_id FROM DEVOLUCION WHERE id = @devolucion;", conexion, transaccion))
-        {
-            fabrica.Parameters.AddWithValue("@devolucion", datos.DevolucionId);
-            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId, (int)fabrica.ExecuteScalar()!,
-                TipoAviso.AbonoRegistrado, Fase.RevisadaAlmacen);
-        }
+        AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId,
+            TipoAviso.AbonoRegistrado, Fase.RevisadaAlmacen);
 
         transaccion.Commit();
         return true;
@@ -732,9 +724,9 @@ public class DevolucionRepositorio
         using var transaccion = conexion.BeginTransaction();
 
         // UPDLOCK: bloquea la devolución hasta el final para que nadie cambie la fase entretanto
-        int faseActual, fabricaId;
+        int faseActual;
         using (var fase = new SqlCommand(@"
-            SELECT e.fase, d.fabrica_id FROM DEVOLUCION d WITH (UPDLOCK)
+            SELECT e.fase FROM DEVOLUCION d WITH (UPDLOCK)
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id
             WHERE d.id = @devolucion;", conexion, transaccion))
         {
@@ -742,7 +734,6 @@ public class DevolucionRepositorio
             using var lector = fase.ExecuteReader();
             if (!lector.Read()) return false;
             faseActual = lector.GetInt32(0);
-            fabricaId = lector.GetInt32(1);
         }
         if (faseActual > Fase.RecogidaSolicitada)
             return false;
@@ -770,7 +761,7 @@ public class DevolucionRepositorio
         // Solo la primera vez (al pasar a "Recogida solicitada"), no al modificar la recogida:
         // aviso a quien recibe la mercancía (el siguiente paso)
         if (faseActual == Fase.SolicitudRecibida)
-            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId, fabricaId,
+            AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId,
                 TipoAviso.RecogidaSolicitada, Fase.MercanciaRecibida);
 
         transaccion.Commit();

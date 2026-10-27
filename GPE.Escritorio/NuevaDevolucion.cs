@@ -43,7 +43,7 @@ public class FormNuevaDevolucion : Form
         MinimumSize = new Size(1150, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         PrepararControles();
 
@@ -67,9 +67,7 @@ public class FormNuevaDevolucion : Form
         }
         catch (DbException ex)   
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar los clientes y productos de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los clientes y productos de la base de datos.", ex);
         }
 
         cmbMotivo.Items.AddRange(new object[]
@@ -246,9 +244,7 @@ public class FormNuevaDevolucion : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudo guardar la devolución.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar la devolución.", ex);
             return;
         }
 
@@ -295,7 +291,7 @@ public class FormNuevaDevolucion : Form
                 Height = 40,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+                Font = Tema.FuenteEtiqueta
             }, i, 0);
         }
         return encabezado;

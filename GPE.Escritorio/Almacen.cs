@@ -46,7 +46,7 @@ public class FormAlmacen : PantallaFase
         MinimumSize = new Size(950, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         FormClosing += AvisarCambiosSinGuardar;
 
@@ -151,8 +151,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo comprobar el recibo de la agencia.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo comprobar el recibo de la agencia.", ex);
             return;
         }
 
@@ -233,8 +232,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo reabrir.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo reabrir.", ex);
             return;
         }
 
@@ -264,8 +262,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo cargar la lista de productos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar la lista de productos.", ex);
         }
     }
 
@@ -521,8 +518,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo cargar la revisión de la devolución.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo cargar la revisión de la devolución.", ex);
         }
 
         Componentes.AjustarAltoTabla(grid);
@@ -663,8 +659,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo guardar la revisión.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar la revisión.", ex);
             return;
         }
 

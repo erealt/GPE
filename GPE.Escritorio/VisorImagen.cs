@@ -28,7 +28,7 @@ public class FormVisorImagen : Form
         MinimumSize = new Size(600, 450);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Color.FromArgb(30, 30, 30);
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
         KeyPreview = true;
 
         imagen.Dock = DockStyle.Fill;
