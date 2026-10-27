@@ -21,6 +21,7 @@ public class FormPrincipal : Form
 
     private readonly Panel zonaModulo = new() { Dock = DockStyle.Fill };
     private readonly FlowLayoutPanel menu = new();
+    private Control menuLateral = null!;
     private readonly List<Modulo> modulos;
     private readonly ModuloDevoluciones devoluciones = new();
     private Modulo? actual;
@@ -38,7 +39,7 @@ public class FormPrincipal : Form
 
         Controls.Add(zonaModulo);
         Controls.Add(CrearBarraSuperior());
-        Controls.Add(CrearMenuLateral());
+        Controls.Add(menuLateral = CrearMenuLateral());
 
         // Las devoluciones se meten en la ventana desde el principio (ocultas) para que el
         // aviso de abonos retrasados funcione aunque no se haya entrado en el módulo
@@ -71,6 +72,11 @@ public class FormPrincipal : Form
             "Incidencias, no conformidades y acciones de mejora de calidad.",
             ModuloInicio.ResumenNoConformidades,
             () => new ModuloNoConformidades()));
+
+        lista.Add(new Modulo("Rutina de calidad",
+            "Chequeos diarios y PCC del supervisor de calidad al recorrer la fábrica.",
+            ModuloInicio.ResumenRutina,
+            () => new ModuloRutinaCalidad()));
 
         return lista;
     }
@@ -188,6 +194,27 @@ public class FormPrincipal : Form
             BackColor = Color.White,
             Padding = new Padding(0, 0, 30, 0)
         };
+
+        // ☰ oculta o muestra el menú lateral, para dejar más sitio a tablas anchas como la rutina de calidad
+        var btnMenu = new Button
+        {
+            Text = "☰",
+            Dock = DockStyle.Left,
+            Width = 60,
+            FlatStyle = FlatStyle.Flat,
+            FlatAppearance = { BorderSize = 0, MouseOverBackColor = Tema.CabeceraTabla },
+            Font = new Font("Segoe UI", 16),
+            ForeColor = Tema.Texto,
+            Cursor = Cursors.Hand
+        };
+        var ayuda = new ToolTip();
+        ayuda.SetToolTip(btnMenu, "Ocultar el menú");
+        btnMenu.Click += (s, e) =>
+        {
+            menuLateral.Visible = !menuLateral.Visible;
+            ayuda.SetToolTip(btnMenu, menuLateral.Visible ? "Ocultar el menú" : "Mostrar el menú");
+        };
+        barra.Controls.Add(btnMenu);
 
         var lblFecha = new Label
         {

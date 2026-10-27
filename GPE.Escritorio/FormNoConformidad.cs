@@ -15,6 +15,7 @@ public class FormNoConformidad : Form
 {
     private readonly NoConformidadServicio servicio = new();
     private readonly NoConformidad? original;   // null si es nuevo
+    private readonly NoConformidad? borrador;
 
     // Quién tiene abierta la ficha si es otro GPE: entonces solo se consulta.
     // Si no, este GPE la bloquea y renueva el bloqueo cada minuto hasta cerrarla.
@@ -83,9 +84,11 @@ public class FormNoConformidad : Form
     private Panel scroll = null!;
     private TableLayoutPanel pila = null!;
 
-    public FormNoConformidad(NoConformidad? registro = null)
+    // borrador: valores con los que empieza uno nuevo (una incidencia abierta desde la rutina de calidad)
+    public FormNoConformidad(NoConformidad? registro = null, NoConformidad? borrador = null)
     {
         original = registro;
+        this.borrador = registro == null ? borrador : null;
         if (registro != null)
             bloqueo = Bloquear(registro.Id);
 
@@ -124,6 +127,8 @@ public class FormNoConformidad : Form
         tablaCorrectoras.Cambiado += (s, e) => hayCambios = true;
         tablaSeguimientos.Cambiado += (s, e) => hayCambios = true;
         FormClosing += AvisarCambiosSinGuardar;
+        // Lo que trae el borrador también se pierde si se cierra sin guardar
+        hayCambios = borrador != null;
 
         // La barra de fases se pone al día con lo que decide cada fase
         foreach (var texto in new[] { txtProblema, txtCausa, txtAnalisis })
@@ -558,7 +563,7 @@ public class FormNoConformidad : Form
 
     private void CargarValores()
     {
-        var nc = original;
+        var nc = original ?? borrador;
 
         botonesTipo[nc?.TipoRegistro ?? TipoRegistro.Incidencia].Checked = true;
         // Un registro antiguo puede tener una fecha que ya no cabe en MaxDate (no pasa, pero por si acaso)

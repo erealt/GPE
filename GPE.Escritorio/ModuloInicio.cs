@@ -147,4 +147,16 @@ public class ModuloInicio : UserControl
             return null;
         }
     }
+
+    public static string? ResumenRutina()
+    {
+        try
+        {
+            return new RutinaServicio().ResumenHoy();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
 }

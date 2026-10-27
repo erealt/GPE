@@ -14,6 +14,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
 1. **Base de datos**: en una base de datos llamada `GPE`, ejecutar:
    - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones. Ya da de alta la fábrica, los tres roles y los seis estados (apartado 3).
    - [`no_conformidades.sql`](BaseDatos/no_conformidades.sql): tablas de calidad y opciones de los desplegables (la hoja LISTAS del Excel).
+   - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
 
    Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-f 65001`, por las tildes.
@@ -129,6 +130,22 @@ Lo que no es evidente al leer el código:
 - **Acciones inmediatas, correctoras y seguimientos**: van en `NC_ACCION`, una fila por acción, distinguidas por `clase`.
 - **Historial**: lo apuntan triggers igual que en devoluciones. Todavía no hay pantalla para verlo.
 - **Dos personas en la misma ficha**: al abrir una ficha, GPE lo apunta en `NC_BLOQUEO` y renueva el apunte cada minuto. Si otra persona la abre mientras tanto, le sale *"María tiene abierta esta ficha desde las 10:42 en el equipo PC-CALIDAD"* y la ve en solo lectura. Un bloqueo que lleva 3 minutos sin renovarse (GPE se cerró de golpe, se fue la luz...) deja de contar. Por si aun así dos guardan a la vez, `NO_CONFORMIDAD.version` (`ROWVERSION`) hace que el segundo no pueda sobrescribir los cambios del primero.
+
+### Rutina del supervisor de calidad
+
+Sustituye a la hoja de Google Sheets "CHEQUEOS DIARIOS - PCC" que calidad rellena cada día al recorrer la fábrica. Es una tabla con los puntos de control en filas y las máquinas o secciones en columnas, y hay una ronda por día.
+
+| Pieza | Archivo |
+|---|---|
+| Datos | [`DatosRutina.cs`](GPE.Datos/DatosRutina.cs), [`RutinaRepositorio.cs`](GPE.Datos/RutinaRepositorio.cs) |
+| Reglas | [`RutinaServicio.cs`](GPE.Logica/RutinaServicio.cs) |
+| Pantallas | [`ModuloRutinaCalidad.cs`](GPE.Escritorio/ModuloRutinaCalidad.cs), [`FormPlantillaRutina.cs`](GPE.Escritorio/FormPlantillaRutina.cs) |
+
+- **Plantilla**: las máquinas (`RUTINA_SECCION`), los puntos de control (`RUTINA_PUNTO`) y qué se revisa en cada máquina (`RUTINA_APLICA`). Lo último se cambia desde el botón "Plantilla"; las máquinas y los puntos, de momento, en la base de datos.
+- **Casillas**: en `RUTINA_RESULTADO` solo se guardan las rellenas. Cada una tiene un estado (correcto, no correcto, no aplica o mantenimiento) o, en los puntos numéricos como PESOS, un valor, y puede llevar un comentario. Al guardar solo se escriben las casillas que han cambiado, para no llenar el historial.
+- **Incidencias**: desde una casilla "no correcta" se abre la ficha de una incidencia nueva ya rellenada (fecha, sección, MC/PCC/BPM y problema), y al guardarla queda apuntada en la casilla (`no_conformidad_id`). La sección y el MC/PCC/BPM que se proponen salen de `RUTINA_SECCION.seccion_calidad` y `RUTINA_PUNTO.mc_pcc_bpm`.
+- **Dos personas en la misma ronda**: `RUTINA.version` hace que el segundo en guardar no pise al primero; tiene que recargar.
+- **Historial**: lo apuntan triggers, como en las incidencias.
 
 ---
 
