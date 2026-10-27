@@ -814,7 +814,7 @@ public class ModuloRutinaCalidad : UserControl
         return decimal.TryParse(texto, NumberStyles.Number, Componentes.Es, out decimal valor) ? valor : null;
     }
 
-    // ---------- Comentarios e incidencias ----------
+    // ---------- Opciones e incidencias ----------
 
     private void BotonDerecho(object? sender, DataGridViewCellMouseEventArgs e)
     {
@@ -830,7 +830,7 @@ public class ModuloRutinaCalidad : UserControl
     }
 
     // Menú con los estados de la leyenda (con sus colores) para las casillas seleccionadas y,
-    // si es una sola, su comentario y su incidencia
+    // si es una sola, su incidencia. Pulsar el estado que ya tiene la casilla la vacía.
     private void MostrarOpciones(int fila, int columna, Point donde)
     {
         if (Casilla(fila, columna) is not var (punto, seccion) || !Editable(punto, seccion)) return;
@@ -847,7 +847,7 @@ public class ModuloRutinaCalidad : UserControl
                 var (fondo, texto) = Tema.ColorEstadoCasilla(estado);
                 var opcion = new ToolStripMenuItem(
                     $"{Simbolo(estado)}   {EstadoCasilla.Nombre(estado)}   ({Tecla(estado)})", null,
-                    (s2, e2) => Marcar(seleccion, elegido))
+                    (s2, e2) => Marcar(seleccion, seleccion.Count == 1 && casilla?.Estado == elegido ? null : elegido))
                 {
                     BackColor = fondo,
                     ForeColor = texto,
@@ -857,72 +857,22 @@ public class ModuloRutinaCalidad : UserControl
                 menu.Items.Add(opcion);
             }
         }
-        menu.Items.Add("Vaciar", null, (s2, e2) => Marcar(seleccion, null));
+        else
+            menu.Items.Add("Vaciar", null, (s2, e2) => Marcar(seleccion, null));
 
-        if (seleccion.Count == 1)
+        if (seleccion.Count == 1 && casilla?.NoConformidadId is int ncId)
         {
             menu.Items.Add(new ToolStripSeparator());
-            if (!punto.Numerico)
-                menu.Items.Add(casilla?.Comentario == null ? "Añadir comentario…" : "Editar comentario…", null,
-                    (s2, e2) => EditarComentario(punto, seccion));
-
-            if (casilla?.NoConformidadId is int ncId)
-                menu.Items.Add($"Ver incidencia {casilla.NumeroIncidencia}", null, (s2, e2) => VerIncidencia(ncId));
-            else if (casilla?.Estado == EstadoCasilla.NoCorrecto)
-                menu.Items.Add("Abrir incidencia…", null, (s2, e2) => AbrirIncidencia(punto, seccion));
+            menu.Items.Add($"Ver incidencia {casilla.NumeroIncidencia}", null, (s2, e2) => VerIncidencia(ncId));
+        }
+        else if (seleccion.Count == 1 && casilla?.Estado == EstadoCasilla.NoCorrecto)
+        {
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Abrir incidencia…", null, (s2, e2) => AbrirIncidencia(punto, seccion));
         }
 
         menu.Closed += (s2, e2) => BeginInvoke(menu.Dispose);
         menu.Show(grid, donde);
-    }
-
-    private void EditarComentario(RutinaPunto punto, RutinaSeccion seccion)
-    {
-        var casilla = casillas.GetValueOrDefault((punto.Id, seccion.Id))
-            ?? new ResultadoRutina(punto.Id, seccion.Id, null, null, null);
-
-        using var dialogo = new Form
-        {
-            Text = $"{punto.Nombre} · {seccion.Nombre}",
-            ClientSize = new Size(480, 260),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            StartPosition = FormStartPosition.CenterParent,
-            BackColor = Tema.Fondo,
-            Font = new Font("Segoe UI", 10)
-        };
-        var lblExplicacion = new Label
-        {
-            Text = "Lo que se ha visto, por ejemplo: \"El nº8 está a 40 (rango: 42-48)\".",
-            Location = new Point(20, 15),
-            Size = new Size(440, 45),
-            ForeColor = Tema.Texto
-        };
-        var txtComentario = new TextBox
-        {
-            Multiline = true,
-            MaxLength = RutinaServicio.LargoComentario,
-            Location = new Point(20, 65),
-            Size = new Size(440, 110),
-            Text = casilla.Comentario ?? ""
-        };
-        var btnAceptar = Tema.BotonPrincipal("Aceptar", 120);
-        btnAceptar.Location = new Point(340, 200);
-        btnAceptar.DialogResult = DialogResult.OK;
-        var btnCancelar = Tema.BotonSecundario("Cancelar", 120);
-        btnCancelar.Location = new Point(210, 200);
-        btnCancelar.DialogResult = DialogResult.Cancel;
-
-        dialogo.Controls.AddRange(new Control[] { lblExplicacion, txtComentario, btnAceptar, btnCancelar });
-        dialogo.CancelButton = btnCancelar;   // sin AcceptButton: Enter hace salto de línea
-        if (dialogo.ShowDialog(this) != DialogResult.OK) return;
-
-        var nueva = RutinaServicio.Normalizar(casilla with { Comentario = txtComentario.Text });
-        if (nueva == casilla) return;
-        Poner(nueva);
-        grid.Invalidate();
-        MarcarCambios();
     }
 
     // La incidencia se apunta en la casilla, así que la ronda tiene que estar guardada antes
