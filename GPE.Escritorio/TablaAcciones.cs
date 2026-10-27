@@ -154,7 +154,7 @@ public class TablaAcciones : TableLayoutPanel
         SortMode = DataGridViewColumnSortMode.NotSortable
     };
 
-    // ---------- Filas ----------
+    // Filas
 
     public void Cargar(IEnumerable<AccionNc> acciones)
     {

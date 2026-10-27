@@ -282,7 +282,7 @@ public class ModuloNoConformidades : UserControl
         }
     }
 
-    // ---------- Datos y filtros ----------
+    // Datos y filtros
 
     private void CargarDatos()
     {

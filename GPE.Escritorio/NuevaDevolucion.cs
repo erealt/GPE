@@ -28,7 +28,6 @@ public class FormNuevaDevolucion : Form
         NumericUpDown Cantidad,
         TextBox Lote);
 
-    // Mensajes de error que aparecen debajo de cada campo
     private readonly CamposFormulario campos = new();
     private readonly Label lblErrorProductos = CamposFormulario.EtiquetaError();
 

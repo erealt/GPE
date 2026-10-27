@@ -1,11 +1,11 @@
 USE GPE;
 GO
 
-/* ============================================================
+/*
    CALIDAD: INCIDENCIAS Y NO CONFORMIDADES
    Sustituye al Excel "INCIDENCIAS Y NO CONFORMIDADES - CALIDAD" (MT-RG09).
    Se ejecuta una vez, después de crear_tablas.sql.
-   ============================================================ */
+*/
 CREATE TABLE CALIDAD_LISTA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     lista NVARCHAR(20) NOT NULL,
@@ -156,9 +156,9 @@ BEGIN
 END;
 GO
 
-/* ------------------------------------------------------------
+/*
    Opciones iniciales: copiadas tal cual de la hoja LISTAS
-   ------------------------------------------------------------ */
+*/
 INSERT INTO CALIDAD_LISTA (lista, valor, descripcion, orden) VALUES
     (N'ORIGEN', N'I', N'Interna', 1),
     (N'ORIGEN', N'R', N'Reclamación de cliente', 2),

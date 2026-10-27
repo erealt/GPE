@@ -160,7 +160,7 @@ public class FormNoConformidad : Form
         }
     }
 
-    // ---------- Ficha abierta por otra persona ----------
+    // Ficha abierta por otra persona
 
     // Si falla la base de datos, se deja editar: al guardar, la versión del registro
     // sigue impidiendo que se pisen los cambios de otro
@@ -234,7 +234,7 @@ public class FormNoConformidad : Form
             ? $"{TipoRegistro.Nombre(nc.TipoRegistro)} del {Componentes.Fecha(nc.FechaDetectado)}"
             : $"{TipoRegistro.Nombre(nc.TipoRegistro)} {nc.Numero}";
 
-    // ---------- Preparación de controles ----------
+    // Preparación de controles
 
     private void PrepararControles()
     {
@@ -390,7 +390,7 @@ public class FormNoConformidad : Form
     private static string? Valor(ComboBox combo) =>
         combo.SelectedItem is OpcionLista opcion && opcion != SinIndicar ? opcion.Valor : null;
 
-    // ---------- Estructura general ----------
+    // Estructura general
 
     private Panel CrearContenido()
     {
@@ -557,7 +557,7 @@ public class FormNoConformidad : Form
         return SoloLectura ? Componentes.Acciones(btnCancelar) : Componentes.Acciones(btnGuardar, btnCancelar);
     }
 
-    // ---------- Valores ----------
+    // Valores
 
     private void CargarValores()
     {
@@ -619,7 +619,7 @@ public class FormNoConformidad : Form
         if (faseElegida >= 0) MostrarFase(faseElegida);   // la tarjeta de incidencia va y viene
     }
 
-    // ---------- Fases ----------
+    // Fases
 
     private void ActualizarFases()
     {
@@ -797,11 +797,11 @@ public class FormNoConformidad : Form
             Version: original?.Version);
     }
 
-    // ---------- Guardado ----------
+    // Guardado
 
     private void Guardar()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         campos.LimpiarErrores();
 
         var leido = LeerRegistro(out Control? primerError);
@@ -847,7 +847,7 @@ public class FormNoConformidad : Form
 
         var registro = NoConformidadServicio.Normalizar(leido);
 
-        // 2. Guardar en la base de datos (el número lo pone el servicio)
+        // El número lo pone el servicio
         try
         {
             IdGuardado = servicio.Guardar(registro, inmediatas.Concat(correctoras).Concat(seguimientos));

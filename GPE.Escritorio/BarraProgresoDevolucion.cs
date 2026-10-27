@@ -87,7 +87,6 @@ namespace GPE.Escritorio
             using var lapiz = new Pen(gris, 3);
             using var lapizAcento = new Pen(acento, 3);
 
-            // Línea de progreso
             g.DrawLine(lapiz, margen, centroY,
                 ancho - margen, centroY);
 

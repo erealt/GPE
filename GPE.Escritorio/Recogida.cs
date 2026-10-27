@@ -24,7 +24,6 @@ public class Recogida : PantallaFase
     private readonly TextBox txtTelefono = new();
     private readonly TextBox txtObservaciones = new();
 
-    // Mensajes de error que aparecen debajo de cada campo
     private readonly CamposFormulario campos = new();
 
     public Recogida(DevolucionFila devolucion)

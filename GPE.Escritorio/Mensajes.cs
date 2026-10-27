@@ -1,6 +1,5 @@
 namespace GPE.Escritorio;
 
-// Mensajes comunes a todas las pantallas
 public static class Mensajes
 {
     // Fallo al leer o guardar en SQL Server: qué se intentaba y el motivo que da SQL Server

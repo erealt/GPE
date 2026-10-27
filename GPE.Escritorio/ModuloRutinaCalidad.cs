@@ -356,7 +356,7 @@ public class ModuloRutinaCalidad : UserControl
         grid.Visible = !ver;
     }
 
-    // ---------- Tabla ----------
+    // Tabla
 
     private Control ConfigurarGrid()
     {
@@ -689,7 +689,7 @@ public class ModuloRutinaCalidad : UserControl
         return string.Join("\n", lineas);
     }
 
-    // ---------- Marcar casillas ----------
+    // Marcar casillas
 
     private void SeleccionarFila(int fila)
     {
@@ -813,7 +813,7 @@ public class ModuloRutinaCalidad : UserControl
         return decimal.TryParse(texto, NumberStyles.Number, Componentes.Es, out decimal valor) ? valor : null;
     }
 
-    // ---------- Opciones e incidencias ----------
+    // Opciones e incidencias
 
     private void BotonDerecho(object? sender, DataGridViewCellMouseEventArgs e)
     {
@@ -932,7 +932,7 @@ public class ModuloRutinaCalidad : UserControl
         if (!hayCambios) Cargar(rutina.Fecha, recargarPlantilla: false);
     }
 
-    // ---------- Cargar y guardar ----------
+    // Cargar y guardar
 
     private void Cargar(DateTime fecha, bool recargarPlantilla)
     {

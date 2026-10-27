@@ -1,12 +1,12 @@
 USE GPE;
 GO
 
-/* ============================================================
+/*
    CALIDAD: RUTINA DEL SUPERVISOR (CHEQUEOS DIARIOS - PCC)
    Sustituye a la hoja de Google Sheets que calidad rellena cada día al recorrer la
    fábrica: una columna por máquina o sección, una fila por punto de control.
    Se ejecuta una vez, después de no_conformidades.sql.
-   ============================================================ */
+*/
 
 -- Columnas de la hoja: máquinas y secciones que se recorren, por planta.
 -- seccion_calidad es la sección de CALIDAD_LISTA que se propone al abrir una incidencia
@@ -181,11 +181,11 @@ BEGIN
 END;
 GO
 
-/* ------------------------------------------------------------
+/*
    Plantilla inicial: copiada de la hoja "CHEQUEOS DIARIOS - PCC" (01/10).
    La sección de calidad es una propuesta: hay que revisarla con calidad
    (las que no tienen equivalente claro se dejan en NULL).
-   ------------------------------------------------------------ */
+*/
 INSERT INTO RUTINA_SECCION (nombre, planta, seccion_calidad, orden) VALUES
     (N'L1', 'BAJA', N'L1', 1),
     (N'L2', 'BAJA', N'L2', 2),

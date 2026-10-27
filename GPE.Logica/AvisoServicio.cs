@@ -227,7 +227,7 @@ public static class AvisoServicio
         _ => throw new InvalidOperationException($"Tipo de aviso desconocido: {aviso.Tipo}")
     };
 
-    // Primero las que más tiempo llevan esperando
+    // pendientes llega ordenado por fecha de llegada: primero las que más llevan esperando
     private static (string Asunto, string Cuerpo) RedactarResumen(string tipo, List<DevolucionPendiente> pendientes)
     {
         int n = pendientes.Count;

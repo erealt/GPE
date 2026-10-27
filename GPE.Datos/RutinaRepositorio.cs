@@ -6,7 +6,7 @@ namespace GPE.Datos;
 // RUTINA_APLICA, RUTINA y RUTINA_RESULTADO)
 public class RutinaRepositorio
 {
-    // ---------- Plantilla ----------
+    // Plantilla
 
     public PlantillaRutina ObtenerPlantilla()
     {
@@ -67,7 +67,7 @@ public class RutinaRepositorio
         }
     }
 
-    // ---------- Rondas ----------
+    // Rondas
 
     // La ronda de ese día, o null si aún no se ha guardado ninguna
     public Rutina? ObtenerRutina(DateTime fecha)

@@ -9,7 +9,7 @@ public class RutinaServicio
 {
     private readonly RutinaRepositorio repositorio = new();
 
-    // ---------- Consultas ----------
+    // Consultas
 
     public PlantillaRutina ObtenerPlantilla() => repositorio.ObtenerPlantilla();
 
@@ -26,7 +26,7 @@ public class RutinaServicio
     public string ResumenHoy() =>
         repositorio.ObtenerRutina(DateTime.Today) == null ? "Hoy: sin empezar" : "Hoy: empezada";
 
-    // ---------- Validación ----------
+    // Validación
 
     public const int LargoComentario = 1000;
     public const int LargoCaja = 100;   // operario y estado de la caja de herramientas
@@ -59,7 +59,7 @@ public class RutinaServicio
         return null;
     }
 
-    // ---------- Guardado ----------
+    // Guardado
 
     private const string MensajeModificado =
         "Otra persona ha guardado esta ronda mientras la tenías abierta. " +
@@ -116,7 +116,7 @@ public class RutinaServicio
     public void GuardarPlantilla(IReadOnlyCollection<(int PuntoId, int SeccionId)> aplica) =>
         repositorio.GuardarPlantilla(aplica);
 
-    // ---------- Incidencias ----------
+    // Incidencias
 
     // Incidencia en blanco con lo que ya se sabe de la casilla, para completarla en su ficha
     public static NoConformidad BorradorIncidencia(DateTime fecha, RutinaPunto punto, RutinaSeccion seccion,

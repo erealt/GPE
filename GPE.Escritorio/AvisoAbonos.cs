@@ -61,7 +61,6 @@ public class FormAvisoAbonos : Form
         lista.Columns.Add("Llegó hace", 90);
         lista.Columns.Add("Pendiente de", 180);
 
-        // Primero las que más llevan esperando
         foreach (var d in retrasadas.OrderByDescending(d => DevolucionServicio.DiasSinAbono(d)))
         {
             int dias = DevolucionServicio.DiasSinAbono(d) ?? 0;

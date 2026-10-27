@@ -6,7 +6,7 @@ namespace GPE.Datos;
 // NC_ACCION guarda las acciones inmediatas, las correctoras y los seguimientos.
 public class NoConformidadRepositorio
 {
-    // ---------- Lectura ----------
+    // Lectura
 
     // En el mismo orden que el record NoConformidad
     private const string SqlRegistros = @"
@@ -171,7 +171,7 @@ public class NoConformidadRepositorio
         return serie.Prefijo + (int)comando.ExecuteScalar();
     }
 
-    // ---------- Escritura ----------
+    // Escritura
 
     // Crea el registro numerándolo en su serie (sin serie, sin número), con sus acciones. Devuelve el id.
     public int Insertar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? serie, int usuarioId)
@@ -338,7 +338,7 @@ public class NoConformidadRepositorio
         Valor("@horas_mano_obra", nc.HorasManoObra);
     }
 
-    // ---------- Bloqueos (quién tiene abierta cada ficha) ----------
+    // Bloqueos (quién tiene abierta cada ficha)
 
     // Apunta que este GPE (sesion) tiene abierta la ficha, o renueva su ultimo_aviso si ya
     // la tenía. Se la queda también si el bloqueo de otro lleva más de caducidadSegundos

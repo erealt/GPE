@@ -26,7 +26,7 @@ $COL = @{
 $PRIMERA_FILA = 3
 $ULTIMA_COLUMNA = 24
 
-# ---------- Conversión de celdas ----------
+# Conversión de celdas
 
 function Texto($v) {
     if ($null -eq $v) { return $null }
@@ -70,7 +70,7 @@ function TipoRegistro($v, $fila) {
     }
 }
 
-# ---------- Lectura del Excel ----------
+# Lectura del Excel
 
 $Excel = (Resolve-Path $Excel).Path
 Write-Host "Leyendo $Excel ..."
@@ -148,7 +148,7 @@ Write-Host ("Filas leídas: {0} ({1} NC, {2} incidencias, {3} acciones de mejora
     @($registros | Where-Object TipoRegistro -eq 'INCIDENCIA').Count,
     @($registros | Where-Object TipoRegistro -eq 'MEJORA').Count)
 
-# ---------- Escritura en la base de datos ----------
+# Escritura en la base de datos
 
 function Valor($v) { if ($null -eq $v) { [DBNull]::Value } else { $v } }
 

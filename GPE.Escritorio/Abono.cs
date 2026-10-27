@@ -203,7 +203,6 @@ public class FormAbono : PantallaFase
                 grid.Rows[i].Cells[6].Style.BackColor = Tema.FondoDiferencia;
         }
 
-        // Totales: unidades aptas y no aptas
         int aptas = lineas.Where(l => l.Apto).Sum(l => l.Cantidad);
         int noAptas = lineas.Where(l => !l.Apto).Sum(l => l.Cantidad);
         int total = grid.Rows.Add("Total", "", "", "", "", aptas + noAptas, $"{aptas} sí · {noAptas} no");

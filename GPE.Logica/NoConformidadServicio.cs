@@ -32,7 +32,7 @@ public class NoConformidadServicio
 {
     private readonly NoConformidadRepositorio repositorio = new();
 
-    // ---------- Consultas ----------
+    // Consultas
 
     public List<NoConformidad> ObtenerRegistros() => repositorio.ObtenerRegistros();
 
@@ -46,7 +46,7 @@ public class NoConformidadServicio
 
     public List<string> ObtenerProveedores() => repositorio.ObtenerProveedores();
 
-    // ---------- Numeración ----------
+    // Numeración
 
     // Secciones de las NC de auditoría, que llevan su propia numeración
     private const string AuditoriaExterna = "A. EXTERNA";
@@ -112,7 +112,7 @@ public class NoConformidadServicio
     public static int? DiasFueraPlazo(NoConformidad nc) =>
         Estado(nc) == EstadoRegistro.FueraPlazo ? (DateTime.Today - nc.FechaPrevista!.Value.Date).Days : null;
 
-    // ---------- Fases ----------
+    // Fases
 
     // Fases del registro y si están hechas. Todos los tipos tienen las cinco, pero una NC
     // las necesita todas; una incidencia se resuelve con la acción inmediata (análisis y
@@ -141,7 +141,7 @@ public class NoConformidadServicio
     public static int? FaseEnCurso(List<EstadoFase> fases) =>
         fases[^1].Hecha ? null : fases.FindIndex(f => !f.Hecha && !f.Opcional);
 
-    // ---------- Validación ----------
+    // Validación
 
     // Quita espacios, deja en null lo vacío y borra los campos que no son de este tipo
     // (Tipo es solo de las NC; MC/PCC/BPM, parámetro y operario, solo de las incidencias)
@@ -247,7 +247,7 @@ public class NoConformidadServicio
         return null;
     }
 
-    // ---------- Guardado ----------
+    // Guardado
 
     private const string MensajeBorrado = "Este registro ya no existe: puede que otro usuario lo haya borrado.";
     private const string MensajeModificado =
@@ -289,7 +289,7 @@ public class NoConformidadServicio
         return nc.Id;
     }
 
-    // ---------- Fichas abiertas ----------
+    // Fichas abiertas
 
     // Mientras una ficha está abierta, la pantalla renueva el bloqueo cada minuto. Si pasan
     // estos segundos sin renovarlo (GPE se cerró de golpe, se cortó la red...), deja de contar.
