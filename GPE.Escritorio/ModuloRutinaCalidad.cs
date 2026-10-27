@@ -47,7 +47,7 @@ public class ModuloRutinaCalidad : UserControl
     private readonly RadioButton pestanaObservaciones = new();
     private Control panelObservaciones = null!;
     private readonly ComboBox cmbCajaOperario = new();
-    private readonly ComboBox cmbCajaEstado = new();
+    private readonly CheckBox btnCajaOk = new(), btnCajaNoOk = new();   // estado de la caja: uno, otro o ninguno
     private readonly TextBox txtDepositos = new();
     private readonly DataGridView gridObservaciones = new();
     private readonly DataGridViewComboBoxColumn columnaSeccion = new();
@@ -257,7 +257,7 @@ public class ModuloRutinaCalidad : UserControl
         scroll.Padding = new Padding(0, 0, 10, 0);
         var campos = new CamposFormulario();
 
-        foreach (var combo in new[] { cmbCajaOperario, cmbCajaEstado })
+        foreach (var combo in new[] { cmbCajaOperario })
         {
             combo.DropDownStyle = ComboBoxStyle.DropDown;   // se elige de la lista o se escribe
             combo.MaxLength = RutinaServicio.LargoCaja;
@@ -265,12 +265,11 @@ public class ModuloRutinaCalidad : UserControl
             combo.AutoCompleteSource = AutoCompleteSource.ListItems;
             combo.TextChanged += (s, e) => { if (!cargando) MarcarCambios(); };
         }
-        cmbCajaEstado.Items.AddRange(new object[] { "OK", "No OK" });
 
         var caja = Componentes.Tarjeta("Caja de herramientas", "Quién la tiene hoy y cómo está.");
         var rejilla = Componentes.Rejilla(2);
         rejilla.Controls.Add(campos.Campo("Operario", cmbCajaOperario));
-        rejilla.Controls.Add(campos.Campo("Estado", cmbCajaEstado));
+        rejilla.Controls.Add(campos.Campo("Estado", CrearEstadoCaja()));
         caja.Controls.Add(rejilla);
         pila.Controls.Add(caja);
 
@@ -512,6 +511,51 @@ public class ModuloRutinaCalidad : UserControl
         PintarPestana(pestanaObservaciones);
         pestanas.Controls.Add(pestanaObservaciones);
         return pestanas;
+    }
+
+    // Dos botones en vez de una lista: se pulsa uno y, si se vuelve a pulsar, se desmarca
+    private Control CrearEstadoCaja()
+    {
+        var botones = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        foreach (var (boton, texto) in new[] { (btnCajaOk, "✓  OK"), (btnCajaNoOk, "✗  No OK") })
+        {
+            boton.Text = texto;
+            boton.Appearance = Appearance.Button;
+            boton.FlatStyle = FlatStyle.Flat;
+            boton.TextAlign = ContentAlignment.MiddleCenter;
+            boton.Size = new Size(130, 34);
+            boton.Margin = new Padding(0, 0, 10, 0);
+            boton.Cursor = Cursors.Hand;
+            boton.CheckedChanged += (s, e) =>
+            {
+                var otro = boton == btnCajaOk ? btnCajaNoOk : btnCajaOk;
+                if (boton.Checked) otro.Checked = false;
+                PintarEstadoCaja(boton);
+                if (!cargando) MarcarCambios();
+            };
+            PintarEstadoCaja(boton);
+            botones.Controls.Add(boton);
+        }
+        return botones;
+    }
+
+    private void PintarEstadoCaja(CheckBox boton)
+    {
+        var (fondo, texto) = Tema.ColorEstadoCasilla(boton == btnCajaOk ? EstadoCasilla.Correcto : EstadoCasilla.NoCorrecto);
+        boton.BackColor = boton.Checked ? fondo : Color.White;
+        boton.ForeColor = boton.Checked ? texto : Tema.Texto;
+        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.FlatAppearance.BorderColor = boton.Checked ? texto : Tema.Borde;
+        boton.FlatAppearance.CheckedBackColor = fondo;
+        boton.FlatAppearance.MouseOverBackColor = boton.Checked ? fondo : Tema.AcentoSuave;
+    }
+
+    private string? EstadoCaja() => btnCajaOk.Checked ? "OK" : btnCajaNoOk.Checked ? "No OK" : null;
+
+    private void PonerEstadoCaja(string? estado)
+    {
+        btnCajaOk.Checked = estado == "OK";
+        btnCajaNoOk.Checked = estado == "No OK";
     }
 
     private static void PintarPestana(RadioButton boton)
@@ -963,7 +1007,7 @@ public class ModuloRutinaCalidad : UserControl
         dtpFecha.MaxDate = DateTime.Today;   // por si GPE lleva abierto desde ayer
         dtpFecha.Value = rutina.Fecha;
         cmbCajaOperario.Text = rutina.CajaOperario ?? "";
-        cmbCajaEstado.Text = rutina.CajaEstado ?? "";
+        PonerEstadoCaja(rutina.CajaEstado);
         txtDepositos.Text = rutina.Depositos ?? "";
         columnaSeccion.DataSource = plantilla.Secciones;
         gridObservaciones.Rows.Clear();
@@ -996,7 +1040,7 @@ public class ModuloRutinaCalidad : UserControl
         gridObservaciones.EndEdit();
         try
         {
-            var fijas = rutina with { CajaOperario = cmbCajaOperario.Text, CajaEstado = cmbCajaEstado.Text, Depositos = txtDepositos.Text };
+            var fijas = rutina with { CajaOperario = cmbCajaOperario.Text, CajaEstado = EstadoCaja(), Depositos = txtDepositos.Text };
             servicio.Guardar(fijas, casillas.Values, LeerObservaciones(), plantilla);
         }
         catch (ReglaNegocioException ex)
