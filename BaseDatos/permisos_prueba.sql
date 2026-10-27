@@ -7,12 +7,14 @@
    - Transporte:     programa la recogida. Ve las recién creadas.
    - Almacén:        marca la llegada de la mercancía y la revisa.
                      Ve las que tienen la recogida programada y las recibidas sin revisar.
+   - Calidad:        no ve las devoluciones, solo las no conformidades y la rutina de calidad.
 
    Usuarios de la prueba, uno por rol (en la fábrica 1, la que usa la aplicación de momento).
-   Los tres correos llegan al mismo buzón: Gmail entrega "nombre+loquesea@gmail.com" en "nombre@gmail.com".
+   Los cuatro correos llegan al mismo buzón: Gmail entrega "nombre+loquesea@gmail.com" en "nombre@gmail.com".
    - Administrador: el usuario que antes se llamaba Estela
    - Almacén:       el que antes era Usuario Prueba
    - Transporte:    nuevo
+   - Calidad:       nuevo
 
    Se puede ejecutar varias veces: deja a cada usuario exactamente con su rol. */
 
@@ -25,7 +27,12 @@ DECLARE @usuarios TABLE (email_antiguo NVARCHAR(150) NULL, email NVARCHAR(150), 
 INSERT INTO @usuarios (email_antiguo, email, nombre, rol) VALUES
     (NULL,                N'estelaretin10@gmail.com',            N'Administrador', N'Administración'),
     (N'prueba@gpe.local', N'estelaretin10+almacen@gmail.com',    N'Almacén',       N'Almacén'),
-    (NULL,                N'estelaretin10+transporte@gmail.com', N'Transporte',    N'Transporte');
+    (NULL,                N'estelaretin10+transporte@gmail.com', N'Transporte',    N'Transporte'),
+    (NULL,                N'estelaretin10+calidad@gmail.com',    N'Calidad',       N'Calidad');
+
+-- El rol Calidad se añadió después: en las bases de datos anteriores no existe todavía
+IF NOT EXISTS (SELECT 1 FROM ROL WHERE nombre = N'Calidad')
+    INSERT INTO ROL (nombre) VALUES (N'Calidad');
 
 -- Si algún rol no coincide con la tabla ROL (pasa si el archivo se lee sin UTF-8), no se toca nada
 IF EXISTS (SELECT 1 FROM @usuarios u WHERE NOT EXISTS (SELECT 1 FROM ROL r WHERE r.nombre = u.rol))

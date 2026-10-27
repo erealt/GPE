@@ -406,8 +406,9 @@ GO
 
 INSERT INTO FABRICA (nombre) VALUES (N'Fábrica Principal');
 
--- Administración da de alta las devoluciones y registra los abonos
-INSERT INTO ROL (nombre) VALUES (N'Administración'), (N'Transporte'), (N'Almacén');
+-- Administración da de alta las devoluciones y registra los abonos.
+-- Calidad no interviene en las devoluciones: solo ve las no conformidades y la rutina.
+INSERT INTO ROL (nombre) VALUES (N'Administración'), (N'Transporte'), (N'Almacén'), (N'Calidad');
 
 -- rol_responsable_id: quién hace el paso que lleva a esa fase (recibe los avisos por correo)
 INSERT INTO ESTADO_DEVOLUCION (nombre, fase, rol_responsable_id) VALUES

@@ -5,7 +5,7 @@ namespace GPE.Escritorio;
 
 // Ventana principal: menú lateral con los módulos, barra superior con el usuario y,
 // a la derecha, el módulo elegido. Al arrancar se ve el inicio.
-// Para añadir un módulo: una entrada más en CrearModulos.
+// Para añadir un módulo: una entrada más en CrearModulos. Cada usuario ve los de sus roles.
 public class FormPrincipal : Form
 {
     // Un módulo de la aplicación: su opción del menú y, la primera vez que se elige, su contenido
@@ -23,7 +23,8 @@ public class FormPrincipal : Form
     private readonly FlowLayoutPanel menu = new();
     private Control menuLateral = null!;
     private readonly List<Modulo> modulos;
-    private readonly ModuloDevoluciones devoluciones = new();
+    // null si el usuario no ve las devoluciones (rol Calidad)
+    private readonly ModuloDevoluciones? devoluciones = Sesion.VeDevoluciones ? new() : null;
     private Modulo? actual;
 
     public FormPrincipal()
@@ -41,13 +42,18 @@ public class FormPrincipal : Form
         Controls.Add(CrearBarraSuperior());
         Controls.Add(menuLateral = CrearMenuLateral());
 
-        // Las devoluciones se meten en la ventana desde el principio (ocultas) para que el
-        // aviso de abonos retrasados funcione aunque no se haya entrado en el módulo
+        Mostrar(modulos[0]);
+
+        if (devoluciones != null) PrepararAvisoAbonos(devoluciones);
+    }
+
+    // Las devoluciones se meten en la ventana desde el principio (ocultas) para que el
+    // aviso de abonos retrasados funcione aunque no se haya entrado en el módulo
+    private void PrepararAvisoAbonos(ModuloDevoluciones devoluciones)
+    {
         var moduloDevoluciones = modulos.First(m => m.Contenido == devoluciones);
         devoluciones.Visible = false;
         zonaModulo.Controls.Add(devoluciones);
-
-        Mostrar(modulos[0]);
 
         devoluciones.PideMostrarse += () => Mostrar(moduloDevoluciones);
         Shown += (s, e) => devoluciones.MostrarAvisoAbonos();
@@ -63,20 +69,24 @@ public class FormPrincipal : Form
             () => new ModuloInicio(lista.Skip(1).Select(m => (m.Nombre, m.Descripcion, m.Resumen,
                 (Action)(() => Mostrar(m)))).ToList())));
 
-        lista.Add(new Modulo("Devoluciones",
-            "Seguimiento de las devoluciones de clientes, de la solicitud al abono.",
-            ModuloInicio.ResumenDevoluciones,
-            () => devoluciones) { Contenido = devoluciones });
+        if (devoluciones != null)
+            lista.Add(new Modulo("Devoluciones",
+                "Seguimiento de las devoluciones de clientes, de la solicitud al abono.",
+                ModuloInicio.ResumenDevoluciones,
+                () => devoluciones) { Contenido = devoluciones });
 
-        lista.Add(new Modulo("No conformidades",
-            "Incidencias, no conformidades y acciones de mejora de calidad.",
-            ModuloInicio.ResumenNoConformidades,
-            () => new ModuloNoConformidades()));
+        if (Sesion.VeCalidad)
+        {
+            lista.Add(new Modulo("No conformidades",
+                "Incidencias, no conformidades y acciones de mejora de calidad.",
+                ModuloInicio.ResumenNoConformidades,
+                () => new ModuloNoConformidades()));
 
-        lista.Add(new Modulo("Rutina de calidad",
-            "Chequeos diarios y PCC del supervisor de calidad al recorrer la fábrica.",
-            ModuloInicio.ResumenRutina,
-            () => new ModuloRutinaCalidad()));
+            lista.Add(new Modulo("Rutina de calidad",
+                "Chequeos diarios y PCC del supervisor de calidad al recorrer la fábrica.",
+                ModuloInicio.ResumenRutina,
+                () => new ModuloRutinaCalidad()));
+        }
 
         return lista;
     }

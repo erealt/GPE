@@ -22,28 +22,9 @@ public class RutinaServicio
         return (rutina, repositorio.ObtenerResultados(rutina.Id), repositorio.ObtenerObservaciones(rutina.Id));
     }
 
-    // Casillas que tocan revisar (las de la plantilla), cuántas están rellenas y cuántas no son correctas
-    public static (int Rellenas, int Total, int NoCorrectas) Progreso(PlantillaRutina plantilla,
-        IEnumerable<ResultadoRutina> resultados)
-    {
-        var lista = resultados.Where(r => plantilla.Aplica.Contains((r.PuntoId, r.SeccionId))).ToList();
-        return (lista.Count(r => r.Estado != null || r.Valor != null),
-                plantilla.Aplica.Count(a => plantilla.Puntos.Any(p => p.Id == a.PuntoId)
-                                            && plantilla.Secciones.Any(s => s.Id == a.SeccionId)),
-                lista.Count(r => r.Estado == EstadoCasilla.NoCorrecto));
-    }
-
-    // "Hoy: 120 de 700 casillas · 3 no correctas", para la tarjeta del inicio
-    public string ResumenHoy()
-    {
-        var plantilla = ObtenerPlantilla();
-        var (rutina, resultados, _) = ObtenerRutina(DateTime.Today);
-        if (rutina.Id == 0) return "Hoy: sin empezar";
-
-        var (rellenas, total, no) = Progreso(plantilla, resultados);
-        return $"Hoy: {rellenas} de {total} casillas"
-            + (no > 0 ? $"  ·  ⚠ {no} {(no == 1 ? "no correcta" : "no correctas")}" : "");
-    }
+    // "Hoy: sin empezar" o "Hoy: empezada", para la tarjeta del inicio
+    public string ResumenHoy() =>
+        repositorio.ObtenerRutina(DateTime.Today) == null ? "Hoy: sin empezar" : "Hoy: empezada";
 
     // ---------- Validación ----------
 

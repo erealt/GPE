@@ -12,7 +12,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
 ## 1. Puesta en marcha
 
 1. **Base de datos**: en una base de datos llamada `GPE`, ejecutar:
-   - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones. Ya da de alta la fábrica, los tres roles y los seis estados (apartado 3).
+   - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones. Ya da de alta la fábrica, los cuatro roles (los tres de devoluciones y Calidad) y los seis estados (apartado 3).
    - [`no_conformidades.sql`](BaseDatos/no_conformidades.sql): tablas de calidad y opciones de los desplegables (la hoja LISTAS del Excel).
    - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
@@ -94,6 +94,8 @@ flowchart LR
 - Los cambios de fase son `UPDATE ... WHERE fase = <la esperada>`: si no actualiza nada, otro usuario la cambió antes y se avisa.
 
 ### Permisos por rol
+
+El menú enseña los módulos de los roles del usuario (`Sesion.VeDevoluciones` y `Sesion.VeCalidad`): las devoluciones, a Administración, Transporte y Almacén (y en consulta a quien no tiene ningún rol); las no conformidades y la rutina, al rol Calidad. Quien tenga varios roles ve los módulos de todos.
 
 Cada paso lo hace un rol (tabla del apartado 3); quien no lo tiene lo ve en solo consulta. La lista de devoluciones solo enseña las que esperan algo de los roles del usuario (`DevolucionServicio.FasesPorRol`); las cerradas las puede consultar cualquiera filtrando o buscando.
 

@@ -32,8 +32,7 @@ public class ModuloRutinaCalidad : UserControl
     private bool cargando;
 
     private readonly DateTimePicker dtpFecha = new();
-    // Cada planta se ve por separado: una pestaña por planta, con lo que lleva rellenado
-    private readonly Dictionary<string, RadioButton> pestanasPlanta = new();
+    // Cada planta se ve por separado: una pestaña por planta
     private string plantaElegida = Planta.Baja;
     private readonly Label lblRonda = new();
     private readonly Label lblProgreso = new();
@@ -475,6 +474,7 @@ public class ModuloRutinaCalidad : UserControl
         {
             var boton = new RadioButton
             {
+                Text = Planta.Nombre(planta),
                 Appearance = Appearance.Button,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -492,7 +492,6 @@ public class ModuloRutinaCalidad : UserControl
                 Construir();
             };
             PintarPestana(boton);
-            pestanasPlanta[planta] = boton;
             pestanas.Controls.Add(boton);
         }
 
@@ -1021,21 +1020,12 @@ public class ModuloRutinaCalidad : UserControl
             ? $"Ronda de {dia}"
             : $"Ronda de {dia} · {rutina.CreadoPor}";
 
-        var (rellenas, total, no) = RutinaServicio.Progreso(plantilla, casillas.Values);
-        lblProgreso.Text = (rutina.Id == 0 ? "Sin empezar  ·  " : "") + $"{rellenas} de {total} casillas"
-            + (no > 0 ? $"  ·  {no} {(no == 1 ? "no correcta" : "no correctas")}" : "")
-            + (hayCambios ? "  ·  cambios sin guardar" : "");
-        lblProgreso.ForeColor = hayCambios ? Tema.Aviso : Tema.Suave;
-
-        // Cada pestaña dice cómo va su planta: "Planta baja · 120 de 200 · 2 NO"
-        foreach (var (planta, boton) in pestanasPlanta)
+        lblProgreso.Text = string.Join("  ·  ", new[]
         {
-            var secciones = SeccionesDe(planta).Select(s => s.Id).ToHashSet();
-            var (r, t, n) = RutinaServicio.Progreso(
-                plantilla with { Secciones = plantilla.Secciones.Where(s => secciones.Contains(s.Id)).ToList() },
-                casillas.Values.Where(c => secciones.Contains(c.SeccionId)));
-            boton.Text = $"{Planta.Nombre(planta)}  ·  {r} de {t}" + (n > 0 ? $"  ·  {n} NO" : "");
-        }
+            rutina.Id == 0 ? "Sin empezar" : null,
+            hayCambios ? "Cambios sin guardar" : null
+        }.OfType<string>());
+        lblProgreso.ForeColor = hayCambios ? Tema.Aviso : Tema.Suave;
 
         int escritas = LeerObservaciones().Count(o => !string.IsNullOrWhiteSpace(o.Texto))
             + (string.IsNullOrWhiteSpace(txtDepositos.Text) ? 0 : 1);

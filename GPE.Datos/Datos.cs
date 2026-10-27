@@ -79,6 +79,10 @@ public static class Sesion
     public static HashSet<string> Roles { get; set; } = new();
 
     public static bool TieneRol(string rol) => Roles.Contains(rol);
+
+    // Módulos del menú. Quien no tiene ningún rol puede consultar las devoluciones.
+    public static bool VeDevoluciones => Roles.Count == 0 || Roles.Overlaps(Rol.Devoluciones);
+    public static bool VeCalidad => TieneRol(Rol.Calidad);
 }
 
 // Nombres de la tabla ROL. Cada rol hace unos pasos de la devolución;
@@ -88,6 +92,9 @@ public static class Rol
     public const string Administracion = "Administración";   // nueva devolución, abono y cierre
     public const string Transporte = "Transporte";           // recogida
     public const string Almacen = "Almacén";                 // llegada y revisión de la mercancía
+    public const string Calidad = "Calidad";                 // no conformidades y rutina del supervisor
+
+    public static readonly string[] Devoluciones = { Administracion, Transporte, Almacen };
 }
 
 public record Transportista(int Id, string Nombre, string? Telefono)
