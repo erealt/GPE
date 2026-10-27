@@ -45,7 +45,18 @@ public record PlantillaRutina(
 
 // La ronda de un día. Id = 0 si todavía no se ha guardado nada ese día.
 // Version: la de RUTINA tal como se leyó, para no pisar lo que haya guardado otro.
-public record Rutina(int Id, DateTime Fecha, string? Observaciones, string? CreadoPor, byte[]? Version = null);
+// CajaOperario, CajaEstado y Depositos son las observaciones fijas del pie de la hoja.
+public record Rutina(
+    int Id,
+    DateTime Fecha,
+    string? CajaOperario,
+    string? CajaEstado,
+    string? Depositos,
+    string? CreadoPor,
+    byte[]? Version = null);
+
+// Observación de una sección en el pie de la hoja ("EMB2 · Sigue dando el fallo de envío")
+public record ObservacionRutina(int SeccionId, string Texto);
 
 // Una casilla rellenada. Los puntos normales llevan Estado y los numéricos, Valor.
 // NoConformidadId: incidencia abierta desde la casilla (NumeroIncidencia, su número, solo para enseñarlo).

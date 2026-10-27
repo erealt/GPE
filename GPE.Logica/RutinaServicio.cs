@@ -13,13 +13,13 @@ public class RutinaServicio
 
     public PlantillaRutina ObtenerPlantilla() => repositorio.ObtenerPlantilla();
 
-    // La ronda del día con sus casillas. Si aún no hay, una en blanco (Id = 0).
-    public (Rutina Rutina, List<ResultadoRutina> Resultados) ObtenerRutina(DateTime fecha)
+    // La ronda del día con sus casillas y sus observaciones por sección. Si aún no hay, una en blanco (Id = 0).
+    public (Rutina Rutina, List<ResultadoRutina> Resultados, List<ObservacionRutina> Observaciones) ObtenerRutina(DateTime fecha)
     {
         var rutina = repositorio.ObtenerRutina(fecha.Date);
         if (rutina == null)
-            return (new Rutina(0, fecha.Date, null, null), new List<ResultadoRutina>());
-        return (rutina, repositorio.ObtenerResultados(rutina.Id));
+            return (new Rutina(0, fecha.Date, null, null, null, null), new(), new());
+        return (rutina, repositorio.ObtenerResultados(rutina.Id), repositorio.ObtenerObservaciones(rutina.Id));
     }
 
     // Casillas que tocan revisar (las de la plantilla), cuántas están rellenas y cuántas no son correctas
@@ -37,7 +37,7 @@ public class RutinaServicio
     public string ResumenHoy()
     {
         var plantilla = ObtenerPlantilla();
-        var (rutina, resultados) = ObtenerRutina(DateTime.Today);
+        var (rutina, resultados, _) = ObtenerRutina(DateTime.Today);
         if (rutina.Id == 0) return "Hoy: sin empezar";
 
         var (rellenas, total, no) = Progreso(plantilla, resultados);
@@ -48,6 +48,7 @@ public class RutinaServicio
     // ---------- Validación ----------
 
     public const int LargoComentario = 1000;
+    public const int LargoCaja = 100;   // operario y estado de la caja de herramientas
 
     // Quita espacios y deja en null lo vacío
     public static ResultadoRutina Normalizar(ResultadoRutina resultado) => resultado with
@@ -84,8 +85,10 @@ public class RutinaServicio
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
         "Apunta lo que hayas marcado y pulsa \"Recargar\" para ver lo último.";
 
-    // Crea la ronda o guarda sus cambios con todas sus casillas. Devuelve su id.
-    public int Guardar(Rutina rutina, IEnumerable<ResultadoRutina> resultados, PlantillaRutina plantilla)
+    // Crea la ronda o guarda sus cambios con todas sus casillas y observaciones. Devuelve su id.
+    // Las observaciones sin texto no se guardan.
+    public int Guardar(Rutina rutina, IEnumerable<ResultadoRutina> resultados,
+        IEnumerable<ObservacionRutina> observaciones, PlantillaRutina plantilla)
     {
         if (Sesion.UsuarioActual is not Usuario usuario)
             throw new ReglaNegocioException("No hay ningún usuario elegido.");
@@ -102,8 +105,30 @@ public class RutinaServicio
             lista.Add(resultado);
         }
 
-        string? observaciones = string.IsNullOrWhiteSpace(rutina.Observaciones) ? null : rutina.Observaciones.Trim();
-        return repositorio.Guardar(rutina with { Observaciones = observaciones }, lista, usuario.Id)
+        static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+        rutina = rutina with
+        {
+            CajaOperario = Limpio(rutina.CajaOperario),
+            CajaEstado = Limpio(rutina.CajaEstado),
+            Depositos = Limpio(rutina.Depositos)
+        };
+        if (rutina.CajaOperario?.Length > LargoCaja || rutina.CajaEstado?.Length > LargoCaja)
+            throw new ReglaNegocioException($"El operario y el estado de la caja de herramientas no pueden pasar de {LargoCaja} caracteres.");
+        if (rutina.Depositos?.Length > LargoComentario)
+            throw new ReglaNegocioException($"La observación de depósitos no puede pasar de {LargoComentario} caracteres.");
+
+        var notas = new List<ObservacionRutina>();
+        foreach (var observacion in observaciones)
+        {
+            if (Limpio(observacion.Texto) is not string texto) continue;
+            if (!plantilla.Secciones.Any(s => s.Id == observacion.SeccionId))
+                throw new ReglaNegocioException("Elige la sección de cada observación.");
+            if (texto.Length > LargoComentario)
+                throw new ReglaNegocioException($"Una observación no puede pasar de {LargoComentario} caracteres.");
+            notas.Add(new ObservacionRutina(observacion.SeccionId, texto));
+        }
+
+        return repositorio.Guardar(rutina, lista, notas, usuario.Id)
             ?? throw new ReglaNegocioException(MensajeModificado);
     }
 

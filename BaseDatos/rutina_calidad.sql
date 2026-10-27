@@ -43,11 +43,14 @@ CREATE TABLE RUTINA_APLICA (
     CONSTRAINT FK_rutina_aplica_seccion FOREIGN KEY (seccion_id) REFERENCES RUTINA_SECCION(id)
 );
 
--- Una ronda por día, como la hoja (una por fecha)
+-- Una ronda por día, como la hoja (una por fecha). Lleva las observaciones fijas del pie
+-- de la hoja: la caja de herramientas (operario y estado) y los depósitos.
 CREATE TABLE RUTINA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     fecha DATE NOT NULL,
-    observaciones NVARCHAR(MAX) NULL,
+    caja_operario NVARCHAR(100) NULL,
+    caja_estado NVARCHAR(100) NULL,
+    depositos NVARCHAR(1000) NULL,
     creado_por INT NOT NULL,
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_rutina_creado DEFAULT SYSDATETIME(),
     -- Igual que en NO_CONFORMIDAD: al guardar se comprueba que nadie haya guardado
@@ -76,6 +79,18 @@ CREATE TABLE RUTINA_RESULTADO (
     CONSTRAINT FK_rutina_resultado_seccion FOREIGN KEY (seccion_id) REFERENCES RUTINA_SECCION(id),
     CONSTRAINT FK_rutina_resultado_nc FOREIGN KEY (no_conformidad_id)
         REFERENCES NO_CONFORMIDAD(id) ON DELETE SET NULL
+);
+
+-- Observaciones por sección del pie de la hoja ("Sección: EMB2 · Sigue dando el fallo..."),
+-- en el orden en que se escribieron
+CREATE TABLE RUTINA_OBSERVACION (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    rutina_id INT NOT NULL,
+    seccion_id INT NOT NULL,
+    texto NVARCHAR(1000) NOT NULL,
+    orden INT NOT NULL,
+    CONSTRAINT FK_rutina_observacion_rutina FOREIGN KEY (rutina_id) REFERENCES RUTINA(id) ON DELETE CASCADE,
+    CONSTRAINT FK_rutina_observacion_seccion FOREIGN KEY (seccion_id) REFERENCES RUTINA_SECCION(id)
 );
 GO
 
@@ -123,6 +138,35 @@ BEGIN
     INSERT INTO HISTORIAL_CAMBIOS
         (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
     SELECT NULL, @usuario, 'RUTINA_RESULTADO', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+-- Igual para las observaciones por sección (el JSON lleva rutina_id)
+CREATE OR ALTER TRIGGER TR_RUTINA_OBSERVACION_HISTORIAL ON RUTINA_OBSERVACION
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT NULL, @usuario, 'RUTINA_OBSERVACION', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT

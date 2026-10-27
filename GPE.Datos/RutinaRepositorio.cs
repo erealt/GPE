@@ -73,7 +73,7 @@ public class RutinaRepositorio
     public Rutina? ObtenerRutina(DateTime fecha)
     {
         const string sql = @"
-            SELECT r.id, r.fecha, r.observaciones, u.nombre, r.version
+            SELECT r.id, r.fecha, r.caja_operario, r.caja_estado, r.depositos, u.nombre, r.version
             FROM RUTINA r
             JOIN USUARIO u ON u.id = r.creado_por
             WHERE r.fecha = @fecha;";
@@ -84,12 +84,33 @@ public class RutinaRepositorio
 
         using var lector = comando.ExecuteReader();
         if (!lector.Read()) return null;
+        string? Texto(int i) => lector.IsDBNull(i) ? null : lector.GetString(i);
         return new Rutina(
             Id: lector.GetInt32(0),
             Fecha: lector.GetDateTime(1),
-            Observaciones: lector.IsDBNull(2) ? null : lector.GetString(2),
-            CreadoPor: lector.GetString(3),
-            Version: (byte[])lector[4]);
+            CajaOperario: Texto(2),
+            CajaEstado: Texto(3),
+            Depositos: Texto(4),
+            CreadoPor: lector.GetString(5),
+            Version: (byte[])lector[6]);
+    }
+
+    public List<ObservacionRutina> ObtenerObservaciones(int rutinaId)
+    {
+        const string sql = @"
+            SELECT seccion_id, texto FROM RUTINA_OBSERVACION
+            WHERE rutina_id = @rutina ORDER BY orden, id;";
+
+        var observaciones = new List<ObservacionRutina>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@rutina", rutinaId);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+            observaciones.Add(new ObservacionRutina(lector.GetInt32(0), lector.GetString(1)));
+        return observaciones;
     }
 
     public List<ResultadoRutina> ObtenerResultados(int rutinaId)
@@ -121,24 +142,33 @@ public class RutinaRepositorio
         return resultados;
     }
 
-    // Crea la ronda (Id = 0) o guarda sus cambios, y deja en RUTINA_RESULTADO justo estas
-    // casillas. Devuelve el id, o null si otro la ha guardado mientras tanto (su versión
-    // ya no es la que trae rutina, o ya creó la de ese día).
+    // Crea la ronda (Id = 0) o guarda sus cambios, y deja en RUTINA_RESULTADO y RUTINA_OBSERVACION
+    // justo estas casillas y observaciones. Devuelve el id, o null si otro la ha guardado
+    // mientras tanto (su versión ya no es la que trae rutina, o ya creó la de ese día).
     // La incidencia de cada casilla no se toca aquí: la apunta Vincular.
-    public int? Guardar(Rutina rutina, IReadOnlyList<ResultadoRutina> resultados, int usuarioId)
+    public int? Guardar(Rutina rutina, IReadOnlyList<ResultadoRutina> resultados,
+        IReadOnlyList<ObservacionRutina> observaciones, int usuarioId)
     {
         using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
+
+        void Fijas(SqlCommand comando)
+        {
+            comando.Parameters.AddWithValue("@caja_operario", (object?)rutina.CajaOperario ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@caja_estado", (object?)rutina.CajaEstado ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@depositos", (object?)rutina.Depositos ?? DBNull.Value);
+        }
 
         int id;
         if (rutina.Id == 0)
         {
             const string sqlInsertar = @"
-                INSERT INTO RUTINA (fecha, observaciones, creado_por) VALUES (@fecha, @observaciones, @usuario);
+                INSERT INTO RUTINA (fecha, caja_operario, caja_estado, depositos, creado_por)
+                VALUES (@fecha, @caja_operario, @caja_estado, @depositos, @usuario);
                 SELECT CAST(SCOPE_IDENTITY() AS INT);";
             using var comando = new SqlCommand(sqlInsertar, conexion, transaccion);
             comando.Parameters.AddWithValue("@fecha", rutina.Fecha.Date);
-            comando.Parameters.AddWithValue("@observaciones", (object?)rutina.Observaciones ?? DBNull.Value);
+            Fijas(comando);
             comando.Parameters.AddWithValue("@usuario", usuarioId);
             try
             {
@@ -154,9 +184,10 @@ public class RutinaRepositorio
             // Se actualiza aunque las observaciones no cambien: así la versión cambia y
             // quien tenga la ronda abierta no pisa estas casillas
             const string sqlActualizar = @"
-                UPDATE RUTINA SET observaciones = @observaciones WHERE id = @id AND version = @version;";
+                UPDATE RUTINA SET caja_operario = @caja_operario, caja_estado = @caja_estado, depositos = @depositos
+                WHERE id = @id AND version = @version;";
             using var comando = new SqlCommand(sqlActualizar, conexion, transaccion);
-            comando.Parameters.AddWithValue("@observaciones", (object?)rutina.Observaciones ?? DBNull.Value);
+            Fijas(comando);
             comando.Parameters.AddWithValue("@id", rutina.Id);
             comando.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value =
                 (object?)rutina.Version ?? DBNull.Value;
@@ -165,6 +196,7 @@ public class RutinaRepositorio
         }
 
         GuardarResultados(id, resultados, conexion, transaccion);
+        GuardarObservaciones(id, observaciones, conexion, transaccion);
         transaccion.Commit();
         return id;
     }
@@ -229,6 +261,42 @@ public class RutinaRepositorio
             Valor("@estado", resultado.Estado);
             Valor("@valor", resultado.Valor);
             Valor("@comentario", resultado.Comentario);
+            comando.ExecuteNonQuery();
+        }
+    }
+
+    // Son pocas al día: si algo cambia, se borran y se vuelven a escribir en su orden
+    private static void GuardarObservaciones(int rutinaId, IReadOnlyList<ObservacionRutina> observaciones,
+        SqlConnection conexion, SqlTransaction transaccion)
+    {
+        var guardadas = new List<ObservacionRutina>();
+        using (var consulta = new SqlCommand(
+            "SELECT seccion_id, texto FROM RUTINA_OBSERVACION WHERE rutina_id = @rutina ORDER BY orden, id;",
+            conexion, transaccion))
+        {
+            consulta.Parameters.AddWithValue("@rutina", rutinaId);
+            using var lector = consulta.ExecuteReader();
+            while (lector.Read())
+                guardadas.Add(new ObservacionRutina(lector.GetInt32(0), lector.GetString(1)));
+        }
+        if (guardadas.SequenceEqual(observaciones)) return;
+
+        using (var borrar = new SqlCommand("DELETE FROM RUTINA_OBSERVACION WHERE rutina_id = @rutina;", conexion, transaccion))
+        {
+            borrar.Parameters.AddWithValue("@rutina", rutinaId);
+            borrar.ExecuteNonQuery();
+        }
+
+        int orden = 0;
+        foreach (var observacion in observaciones)
+        {
+            using var comando = new SqlCommand(@"
+                INSERT INTO RUTINA_OBSERVACION (rutina_id, seccion_id, texto, orden)
+                VALUES (@rutina, @seccion, @texto, @orden);", conexion, transaccion);
+            comando.Parameters.AddWithValue("@rutina", rutinaId);
+            comando.Parameters.AddWithValue("@seccion", observacion.SeccionId);
+            comando.Parameters.AddWithValue("@texto", observacion.Texto);
+            comando.Parameters.AddWithValue("@orden", ++orden);
             comando.ExecuteNonQuery();
         }
     }

@@ -142,6 +142,8 @@ Sustituye a la hoja de Google Sheets "CHEQUEOS DIARIOS - PCC" que calidad rellen
 | Pantallas | [`ModuloRutinaCalidad.cs`](GPE.Escritorio/ModuloRutinaCalidad.cs), [`FormPlantillaRutina.cs`](GPE.Escritorio/FormPlantillaRutina.cs) |
 
 - **Plantilla**: las máquinas (`RUTINA_SECCION`), los puntos de control (`RUTINA_PUNTO`) y qué se revisa en cada máquina (`RUTINA_APLICA`). Lo último se cambia desde el botón "Plantilla"; las máquinas y los puntos, de momento, en la base de datos.
+- **Pantalla**: tres pestañas, como la hoja: planta baja, planta superior (`RUTINA_SECCION.planta`) y observaciones. Al pulsar una casilla salen las opciones de la leyenda; las grises son las que no se revisan en esa máquina. El botón ☰ de la barra superior oculta el menú lateral para ganar sitio.
+- **Observaciones**: el pie de la hoja. La caja de herramientas (operario y estado) y los depósitos van en `RUTINA`; las observaciones de cada sección, en `RUTINA_OBSERVACION`.
 - **Casillas**: en `RUTINA_RESULTADO` solo se guardan las rellenas. Cada una tiene un estado (correcto, no correcto, no aplica o mantenimiento) o, en los puntos numéricos como PESOS, un valor, y puede llevar un comentario. Al guardar solo se escriben las casillas que han cambiado, para no llenar el historial.
 - **Incidencias**: desde una casilla "no correcta" se abre la ficha de una incidencia nueva ya rellenada (fecha, sección, MC/PCC/BPM y problema), y al guardarla queda apuntada en la casilla (`no_conformidad_id`). La sección y el MC/PCC/BPM que se proponen salen de `RUTINA_SECCION.seccion_calidad` y `RUTINA_PUNTO.mc_pcc_bpm`.
 - **Dos personas en la misma ronda**: `RUTINA.version` hace que el segundo en guardar no pise al primero; tiene que recargar.

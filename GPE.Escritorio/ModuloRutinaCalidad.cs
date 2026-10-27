@@ -24,9 +24,10 @@ public class ModuloRutinaCalidad : UserControl
 
     private readonly RutinaServicio servicio = new();
     private PlantillaRutina plantilla = new(new(), new(), new());
-    private Rutina rutina = new(0, DateTime.Today, null, null);
+    private Rutina rutina = new(0, DateTime.Today, null, null, null, null);
     // Casillas rellenas de la ronda que se está viendo, por (punto, sección)
     private Dictionary<(int PuntoId, int SeccionId), ResultadoRutina> casillas = new();
+    private List<ObservacionRutina> observaciones = new();
     private bool hayCambios;
     private bool cargando;
 
@@ -37,10 +38,19 @@ public class ModuloRutinaCalidad : UserControl
     private readonly Label lblRonda = new();
     private readonly Label lblProgreso = new();
     private readonly DataGridView grid = new();
-    private readonly TextBox txtObservaciones = new();
     private readonly Button btnGuardar = Tema.BotonPrincipal("Guardar ronda", 170);
 
     private static readonly string[] Plantas = { Planta.Baja, Planta.Superior };
+
+    // Observaciones del pie de la hoja, en su propia pestaña: caja de herramientas,
+    // depósitos y una lista de sección + observación
+    private readonly RadioButton pestanaObservaciones = new();
+    private Control panelObservaciones = null!;
+    private readonly ComboBox cmbCajaOperario = new();
+    private readonly ComboBox cmbCajaEstado = new();
+    private readonly TextBox txtDepositos = new();
+    private readonly DataGridView gridObservaciones = new();
+    private readonly DataGridViewComboBoxColumn columnaSeccion = new();
 
     public ModuloRutinaCalidad()
     {
@@ -48,6 +58,7 @@ public class ModuloRutinaCalidad : UserControl
         Controls.Add(CrearContenido());
         Load += (s, e) =>
         {
+            CargarOperarios();
             Cargar(DateTime.Today, recargarPlantilla: true);
             // La ventana principal no sabe de esta ronda: avisa ella al cerrar con cambios
             if (FindForm() is Form ventana) ventana.FormClosing += AvisarAlCerrar;
@@ -60,7 +71,7 @@ public class ModuloRutinaCalidad : UserControl
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 5,
             Padding = new Padding(40, 30, 40, 20)
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
@@ -68,14 +79,19 @@ public class ModuloRutinaCalidad : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 105));
+
+        // La tabla y las observaciones ocupan el mismo sitio: se ve una u otra según la pestaña
+        var zona = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+        panelObservaciones = CrearObservaciones();
+        panelObservaciones.Visible = false;
+        zona.Controls.Add(panelObservaciones);
+        zona.Controls.Add(ConfigurarGrid());
 
         layout.Controls.Add(CrearCabecera(), 0, 0);
         layout.Controls.Add(CrearBarra(), 0, 1);
         layout.Controls.Add(CrearLeyenda(), 0, 2);
         layout.Controls.Add(CrearPestanasPlanta(), 0, 3);
-        layout.Controls.Add(ConfigurarGrid(), 0, 4);
-        layout.Controls.Add(CrearObservaciones(), 0, 5);
+        layout.Controls.Add(zona, 0, 4);
         return layout;
     }
 
@@ -234,24 +250,112 @@ public class ModuloRutinaCalidad : UserControl
         return leyenda;
     }
 
+    // Como el pie de la hoja: caja de herramientas, depósitos y observaciones por sección
     private Control CrearObservaciones()
     {
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 12, 0, 0) };
-        txtObservaciones.Dock = DockStyle.Fill;
-        txtObservaciones.Multiline = true;
-        txtObservaciones.ScrollBars = ScrollBars.Vertical;
-        txtObservaciones.PlaceholderText = "Observaciones de la ronda: caja de herramientas, lo que haya que contar...";
-        txtObservaciones.TextChanged += (s, e) => { if (!cargando) MarcarCambios(); };
-        panel.Controls.Add(txtObservaciones);
-        panel.Controls.Add(new Label
+        var (scroll, pila) = Componentes.Pagina();
+        scroll.Padding = new Padding(0, 0, 10, 0);
+        var campos = new CamposFormulario();
+
+        foreach (var combo in new[] { cmbCajaOperario, cmbCajaEstado })
         {
-            Text = "OBSERVACIONES",
-            Dock = DockStyle.Top,
-            Height = 22,
-            ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            combo.DropDownStyle = ComboBoxStyle.DropDown;   // se elige de la lista o se escribe
+            combo.MaxLength = RutinaServicio.LargoCaja;
+            combo.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            combo.AutoCompleteSource = AutoCompleteSource.ListItems;
+            combo.TextChanged += (s, e) => { if (!cargando) MarcarCambios(); };
+        }
+        cmbCajaEstado.Items.AddRange(new object[] { "OK", "No OK" });
+
+        var caja = Componentes.Tarjeta("Caja de herramientas", "Quién la tiene hoy y cómo está.");
+        var rejilla = Componentes.Rejilla(2);
+        rejilla.Controls.Add(campos.Campo("Operario", cmbCajaOperario));
+        rejilla.Controls.Add(campos.Campo("Estado", cmbCajaEstado));
+        caja.Controls.Add(rejilla);
+        pila.Controls.Add(caja);
+
+        txtDepositos.Multiline = true;
+        txtDepositos.Height = 70;
+        txtDepositos.ScrollBars = ScrollBars.Vertical;
+        txtDepositos.MaxLength = RutinaServicio.LargoComentario;
+        txtDepositos.PlaceholderText = "Por ejemplo: El nº8 está a 40 (rango: 42-48).";
+        txtDepositos.Dock = DockStyle.Top;
+        txtDepositos.TextChanged += (s, e) => { if (!cargando) MarcarCambios(); };
+        var depositos = Componentes.Tarjeta("Depósitos", "Temperaturas fuera de rango y lo que haya que contar de los depósitos.");
+        depositos.Controls.Add(txtDepositos);
+        pila.Controls.Add(depositos);
+
+        var secciones = Componentes.Tarjeta("Observaciones por sección",
+            "Elige la sección en la última fila y escribe la observación. Para quitar una, selecciónala y pulsa Supr.");
+        secciones.Controls.Add(ConfigurarGridObservaciones());
+        pila.Controls.Add(secciones);
+
+        return scroll;
+    }
+
+    private Control ConfigurarGridObservaciones()
+    {
+        Componentes.EstiloTabla(gridObservaciones, altoFila: 36);
+        gridObservaciones.Dock = DockStyle.Top;
+        gridObservaciones.Height = 260;
+        gridObservaciones.AllowUserToAddRows = true;      // la fila en blanco del final es para añadir
+        gridObservaciones.AllowUserToDeleteRows = true;
+        gridObservaciones.EditMode = DataGridViewEditMode.EditOnEnter;
+        gridObservaciones.GridColor = Tema.LineaTabla;
+        gridObservaciones.CellBorderStyle = DataGridViewCellBorderStyle.Single;
+
+        columnaSeccion.HeaderText = "SECCIÓN";
+        columnaSeccion.Width = 200;
+        columnaSeccion.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+        columnaSeccion.FlatStyle = FlatStyle.Flat;
+        columnaSeccion.DisplayMember = nameof(RutinaSeccion.Nombre);
+        columnaSeccion.ValueMember = nameof(RutinaSeccion.Id);
+        gridObservaciones.Columns.Add(columnaSeccion);
+        gridObservaciones.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "OBSERVACIÓN",
+            MaxInputLength = RutinaServicio.LargoComentario
         });
-        return panel;
+
+        // La sección se apunta en cuanto se elige, sin esperar a salir de la celda
+        gridObservaciones.CurrentCellDirtyStateChanged += (s, e) =>
+        {
+            if (gridObservaciones.CurrentCell is DataGridViewComboBoxCell)
+                gridObservaciones.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        };
+        gridObservaciones.CellValueChanged += (s, e) => { if (!cargando) MarcarCambios(); };
+        gridObservaciones.UserDeletedRow += (s, e) => MarcarCambios();
+        // Una sección que ya no está en la plantilla no rompe la tabla: se queda en blanco
+        gridObservaciones.DataError += (s, e) => e.ThrowException = false;
+        return gridObservaciones;
+    }
+
+    // Los operarios de la lista de calidad (los de las incidencias), para elegir el de la caja
+    private void CargarOperarios()
+    {
+        try
+        {
+            var operarios = new NoConformidadServicio().ObtenerListas().GetValueOrDefault(ListaCalidad.Operario) ?? new();
+            cmbCajaOperario.Items.AddRange(operarios.Select(o => (object)o.Valor).ToArray());
+        }
+        catch (DbException)
+        {
+            // Sin la lista se puede escribir el nombre igual
+        }
+    }
+
+    private List<ObservacionRutina> LeerObservaciones() =>
+        gridObservaciones.Rows.Cast<DataGridViewRow>()
+            .Where(f => !f.IsNewRow)
+            .Select(f => new ObservacionRutina(f.Cells[0].Value as int? ?? 0, f.Cells[1].Value as string ?? ""))
+            .ToList();
+
+    private void MostrarObservaciones(bool ver)
+    {
+        grid.EndEdit();
+        gridObservaciones.EndEdit();
+        panelObservaciones.Visible = ver;
+        grid.Visible = !ver;
     }
 
     // ---------- Tabla ----------
@@ -384,7 +488,7 @@ public class ModuloRutinaCalidad : UserControl
             {
                 PintarPestana(boton);
                 if (!boton.Checked) return;
-                grid.EndEdit();
+                MostrarObservaciones(false);
                 plantaElegida = planta;
                 Construir();
             };
@@ -392,6 +496,21 @@ public class ModuloRutinaCalidad : UserControl
             pestanasPlanta[planta] = boton;
             pestanas.Controls.Add(boton);
         }
+
+        pestanaObservaciones.Appearance = Appearance.Button;
+        pestanaObservaciones.FlatStyle = FlatStyle.Flat;
+        pestanaObservaciones.TextAlign = ContentAlignment.MiddleCenter;
+        pestanaObservaciones.Size = new Size(200, 36);
+        pestanaObservaciones.Margin = new Padding(0, 0, 6, 0);
+        pestanaObservaciones.Cursor = Cursors.Hand;
+        pestanaObservaciones.Text = "Observaciones";
+        pestanaObservaciones.CheckedChanged += (s, e) =>
+        {
+            PintarPestana(pestanaObservaciones);
+            if (pestanaObservaciones.Checked) MostrarObservaciones(true);
+        };
+        PintarPestana(pestanaObservaciones);
+        pestanas.Controls.Add(pestanaObservaciones);
         return pestanas;
     }
 
@@ -828,9 +947,10 @@ public class ModuloRutinaCalidad : UserControl
         try
         {
             if (recargarPlantilla) plantilla = servicio.ObtenerPlantilla();
-            var (leida, resultados) = servicio.ObtenerRutina(fecha);
+            var (leida, resultados, leidas) = servicio.ObtenerRutina(fecha);
             rutina = leida;
             casillas = resultados.ToDictionary(r => (r.PuntoId, r.SeccionId));
+            observaciones = leidas;
         }
         catch (DbException ex)
         {
@@ -842,7 +962,13 @@ public class ModuloRutinaCalidad : UserControl
         cargando = true;
         dtpFecha.MaxDate = DateTime.Today;   // por si GPE lleva abierto desde ayer
         dtpFecha.Value = rutina.Fecha;
-        txtObservaciones.Text = rutina.Observaciones ?? "";
+        cmbCajaOperario.Text = rutina.CajaOperario ?? "";
+        cmbCajaEstado.Text = rutina.CajaEstado ?? "";
+        txtDepositos.Text = rutina.Depositos ?? "";
+        columnaSeccion.DataSource = plantilla.Secciones;
+        gridObservaciones.Rows.Clear();
+        foreach (var observacion in observaciones)
+            gridObservaciones.Rows.Add(observacion.SeccionId, observacion.Texto);
         cargando = false;
 
         hayCambios = false;
@@ -867,9 +993,11 @@ public class ModuloRutinaCalidad : UserControl
     private bool Guardar()
     {
         grid.EndEdit();
+        gridObservaciones.EndEdit();
         try
         {
-            servicio.Guardar(rutina with { Observaciones = txtObservaciones.Text }, casillas.Values, plantilla);
+            var fijas = rutina with { CajaOperario = cmbCajaOperario.Text, CajaEstado = cmbCajaEstado.Text, Depositos = txtDepositos.Text };
+            servicio.Guardar(fijas, casillas.Values, LeerObservaciones(), plantilla);
         }
         catch (ReglaNegocioException ex)
         {
@@ -917,6 +1045,10 @@ public class ModuloRutinaCalidad : UserControl
                 casillas.Values.Where(c => secciones.Contains(c.SeccionId)));
             boton.Text = $"{Planta.Nombre(planta)}  ·  {r} de {t}" + (n > 0 ? $"  ·  {n} NO" : "");
         }
+
+        int escritas = LeerObservaciones().Count(o => !string.IsNullOrWhiteSpace(o.Texto))
+            + (string.IsNullOrWhiteSpace(txtDepositos.Text) ? 0 : 1);
+        pestanaObservaciones.Text = "Observaciones" + (escritas > 0 ? $"  ·  {escritas}" : "");
     }
 
     private bool DescartarCambios() =>
