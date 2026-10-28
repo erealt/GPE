@@ -13,14 +13,23 @@ public class RutinaServicio
 
     public PlantillaRutina ObtenerPlantilla() => repositorio.ObtenerPlantilla();
 
-    // La ronda del día con sus casillas y sus observaciones por sección. Si aún no hay, una en blanco (Id = 0).
-    public (Rutina Rutina, List<ResultadoRutina> Resultados, List<ObservacionRutina> Observaciones) ObtenerRutina(DateTime fecha)
+    // La ronda del día con sus revisiones, sus casillas y sus observaciones por sección.
+    // Si aún no hay, una en blanco (Id = 0) con la revisión 1 sin empezar.
+    public (Rutina Rutina, List<RevisionRutina> Revisiones, List<ResultadoRutina> Resultados,
+        List<ObservacionRutina> Observaciones) ObtenerRutina(DateTime fecha)
     {
         var rutina = repositorio.ObtenerRutina(fecha.Date);
         if (rutina == null)
-            return (new Rutina(0, fecha.Date, null, null, null, null), new(), new());
-        return (rutina, repositorio.ObtenerResultados(rutina.Id), repositorio.ObtenerObservaciones(rutina.Id));
+            return (new Rutina(0, fecha.Date, null, null, null, null), new() { new(1, null) }, new(), new());
+
+        var revisiones = repositorio.ObtenerRevisiones(rutina.Id);
+        if (revisiones.Count == 0) revisiones.Add(new(1, null));
+        return (rutina, revisiones, repositorio.ObtenerResultados(rutina.Id), repositorio.ObtenerObservaciones(rutina.Id));
     }
+
+    // "1ª revisión · 08:30"
+    public static string NombreRevision(RevisionRutina revision) =>
+        $"{revision.Numero}ª revisión" + (revision.Hora is TimeSpan hora ? $" · {hora:hh\\:mm}" : "");
 
     // "Hoy: sin empezar" o "Hoy: empezada", para la tarjeta del inicio
     public string ResumenHoy() =>
@@ -66,9 +75,9 @@ public class RutinaServicio
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
         "Apunta lo que hayas marcado y pulsa \"Recargar\" para ver lo último.";
 
-    // Crea la ronda o guarda sus cambios con todas sus casillas y observaciones. Devuelve su id.
-    // Las observaciones sin texto no se guardan.
-    public int Guardar(Rutina rutina, IEnumerable<ResultadoRutina> resultados,
+    // Crea la ronda o guarda sus cambios con todas sus revisiones, casillas y observaciones.
+    // Devuelve su id. Las observaciones sin texto no se guardan.
+    public int Guardar(Rutina rutina, IReadOnlyList<RevisionRutina> revisiones, IEnumerable<ResultadoRutina> resultados,
         IEnumerable<ObservacionRutina> observaciones, PlantillaRutina plantilla)
     {
         if (Sesion.UsuarioActual is not Usuario usuario)
@@ -80,6 +89,8 @@ public class RutinaServicio
         var lista = new List<ResultadoRutina>();
         foreach (var resultado in resultados.Select(Normalizar).Where(r => !Vacia(r)))
         {
+            if (!revisiones.Any(r => r.Numero == resultado.Revision))
+                throw new ReglaNegocioException("Hay casillas de una revisión que no existe.");
             // Un punto desactivado en la plantilla conserva lo que ya tenía
             if (puntos.TryGetValue(resultado.PuntoId, out var punto) && Error(resultado, punto) is string error)
                 throw new ReglaNegocioException(error);
@@ -109,7 +120,7 @@ public class RutinaServicio
             notas.Add(new ObservacionRutina(observacion.SeccionId, texto));
         }
 
-        return repositorio.Guardar(rutina, lista, notas, usuario.Id)
+        return repositorio.Guardar(rutina, revisiones, lista, notas, usuario.Id)
             ?? throw new ReglaNegocioException(MensajeModificado);
     }
 
@@ -119,10 +130,11 @@ public class RutinaServicio
     // Incidencias
 
     // Incidencia en blanco con lo que ya se sabe de la casilla, para completarla en su ficha
-    public static NoConformidad BorradorIncidencia(DateTime fecha, RutinaPunto punto, RutinaSeccion seccion,
-        ResultadoRutina? resultado)
+    public static NoConformidad BorradorIncidencia(DateTime fecha, RevisionRutina revision, RutinaPunto punto,
+        RutinaSeccion seccion, ResultadoRutina? resultado)
     {
-        string problema = $"Rutina de calidad: {punto.Nombre} en {seccion.Nombre} no correcto.";
+        string cuando = revision.Numero == 1 ? "" : $" ({NombreRevision(revision)})";
+        string problema = $"Rutina de calidad{cuando}: {punto.Nombre} en {seccion.Nombre} no correcto.";
         if (resultado?.Comentario != null)
             problema += "\n" + resultado.Comentario;
 
@@ -134,9 +146,9 @@ public class RutinaServicio
             CapituloNorma: null, AnalisisCausaRaiz: null, CosteEconomico: null, HorasManoObra: null);
     }
 
-    public void Vincular(int rutinaId, int puntoId, int seccionId, int noConformidadId)
+    public void Vincular(int rutinaId, int revision, int puntoId, int seccionId, int noConformidadId)
     {
-        if (!repositorio.Vincular(rutinaId, puntoId, seccionId, noConformidadId))
+        if (!repositorio.Vincular(rutinaId, revision, puntoId, seccionId, noConformidadId))
             throw new ReglaNegocioException(
                 "La incidencia se ha guardado, pero la casilla ya no está en la ronda: puede que otra persona la haya vaciado.");
     }

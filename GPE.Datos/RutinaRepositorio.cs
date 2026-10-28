@@ -3,7 +3,7 @@ using Microsoft.Data.SqlClient;
 namespace GPE.Datos;
 
 // Rutina diaria del supervisor de calidad (tablas RUTINA_SECCION, RUTINA_PUNTO,
-// RUTINA_APLICA, RUTINA y RUTINA_RESULTADO)
+// RUTINA_APLICA, RUTINA, RUTINA_REVISION y RUTINA_RESULTADO)
 public class RutinaRepositorio
 {
     // Plantilla
@@ -113,10 +113,30 @@ public class RutinaRepositorio
         return observaciones;
     }
 
+    public List<RevisionRutina> ObtenerRevisiones(int rutinaId)
+    {
+        const string sql = @"
+            SELECT v.numero, v.hora, u.nombre
+            FROM RUTINA_REVISION v
+            JOIN USUARIO u ON u.id = v.creado_por
+            WHERE v.rutina_id = @rutina ORDER BY v.numero;";
+
+        var revisiones = new List<RevisionRutina>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@rutina", rutinaId);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+            revisiones.Add(new RevisionRutina(lector.GetInt32(0), lector.GetTimeSpan(1), lector.GetString(2)));
+        return revisiones;
+    }
+
     public List<ResultadoRutina> ObtenerResultados(int rutinaId)
     {
         const string sql = @"
-            SELECT r.punto_id, r.seccion_id, r.estado, r.valor, r.comentario, r.no_conformidad_id, nc.numero
+            SELECT r.punto_id, r.seccion_id, r.estado, r.valor, r.comentario, r.no_conformidad_id, nc.numero, r.revision
             FROM RUTINA_RESULTADO r
             LEFT JOIN NO_CONFORMIDAD nc ON nc.id = r.no_conformidad_id
             WHERE r.rutina_id = @rutina;";
@@ -137,7 +157,8 @@ public class RutinaRepositorio
                 Valor: lector.IsDBNull(3) ? null : lector.GetDecimal(3),
                 Comentario: lector.IsDBNull(4) ? null : lector.GetString(4),
                 NoConformidadId: lector.IsDBNull(5) ? null : lector.GetInt32(5),
-                NumeroIncidencia: lector.IsDBNull(6) ? null : lector.GetString(6)));
+                NumeroIncidencia: lector.IsDBNull(6) ? null : lector.GetString(6),
+                Revision: lector.GetInt32(7)));
         }
         return resultados;
     }
@@ -146,8 +167,9 @@ public class RutinaRepositorio
     // justo estas casillas y observaciones. Devuelve el id, o null si otro la ha guardado
     // mientras tanto (su versión ya no es la que trae rutina, o ya creó la de ese día).
     // La incidencia de cada casilla no se toca aquí: la apunta Vincular.
-    public int? Guardar(Rutina rutina, IReadOnlyList<ResultadoRutina> resultados,
-        IReadOnlyList<ObservacionRutina> observaciones, int usuarioId)
+    // revisiones: las que hay en pantalla, por si alguna aún no está guardada.
+    public int? Guardar(Rutina rutina, IReadOnlyList<RevisionRutina> revisiones,
+        IReadOnlyList<ResultadoRutina> resultados, IReadOnlyList<ObservacionRutina> observaciones, int usuarioId)
     {
         using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
@@ -195,19 +217,61 @@ public class RutinaRepositorio
             id = rutina.Id;
         }
 
+        // Se guardan las revisiones hasta la última que tiene alguna casilla: una nueva sin
+        // marcar nada no se guarda, y las vacías del final se quitan
+        int ultima = resultados.Select(r => r.Revision).DefaultIfEmpty(1).Max();
+        GuardarRevisiones(id, revisiones, ultima, usuarioId, conexion, transaccion);
         GuardarResultados(id, resultados, conexion, transaccion);
+        using (var borrar = new SqlCommand(
+            "DELETE FROM RUTINA_REVISION WHERE rutina_id = @rutina AND numero > @ultima;", conexion, transaccion))
+        {
+            borrar.Parameters.AddWithValue("@rutina", id);
+            borrar.Parameters.AddWithValue("@ultima", ultima);
+            borrar.ExecuteNonQuery();
+        }
         GuardarObservaciones(id, observaciones, conexion, transaccion);
         transaccion.Commit();
         return id;
+    }
+
+    // Da de alta las revisiones 1 a ultima que aún no están guardadas, con la hora en que se empezaron
+    private static void GuardarRevisiones(int rutinaId, IReadOnlyList<RevisionRutina> revisiones, int ultima,
+        int usuarioId, SqlConnection conexion, SqlTransaction transaccion)
+    {
+        var guardadas = new HashSet<int>();
+        using (var consulta = new SqlCommand("SELECT numero FROM RUTINA_REVISION WHERE rutina_id = @rutina;",
+            conexion, transaccion))
+        {
+            consulta.Parameters.AddWithValue("@rutina", rutinaId);
+            using var lector = consulta.ExecuteReader();
+            while (lector.Read())
+                guardadas.Add(lector.GetInt32(0));
+        }
+
+        for (int numero = 1; numero <= ultima; numero++)
+        {
+            if (guardadas.Contains(numero)) continue;
+            var hora = revisiones.FirstOrDefault(r => r.Numero == numero)?.Hora ?? DateTime.Now.TimeOfDay;
+
+            using var comando = new SqlCommand(@"
+                INSERT INTO RUTINA_REVISION (rutina_id, numero, hora, creado_por)
+                VALUES (@rutina, @numero, @hora, @usuario);", conexion, transaccion);
+            comando.Parameters.AddWithValue("@rutina", rutinaId);
+            comando.Parameters.AddWithValue("@numero", numero);
+            comando.Parameters.Add("@hora", System.Data.SqlDbType.Time).Value =
+                TimeSpan.FromSeconds(Math.Floor(hora.TotalSeconds));
+            comando.Parameters.AddWithValue("@usuario", usuarioId);
+            comando.ExecuteNonQuery();
+        }
     }
 
     // Solo escribe las casillas que cambian, para no llenar el historial con cientos de filas
     private static void GuardarResultados(int rutinaId, IReadOnlyList<ResultadoRutina> resultados,
         SqlConnection conexion, SqlTransaction transaccion)
     {
-        var guardados = new Dictionary<(int, int), (int Id, ResultadoRutina Resultado)>();
+        var guardados = new Dictionary<(int, int, int), (int Id, ResultadoRutina Resultado)>();
         using (var consulta = new SqlCommand(@"
-            SELECT id, punto_id, seccion_id, estado, valor, comentario
+            SELECT id, punto_id, seccion_id, estado, valor, comentario, revision
             FROM RUTINA_RESULTADO WHERE rutina_id = @rutina;", conexion, transaccion))
         {
             consulta.Parameters.AddWithValue("@rutina", rutinaId);
@@ -217,12 +281,13 @@ public class RutinaRepositorio
                 var resultado = new ResultadoRutina(lector.GetInt32(1), lector.GetInt32(2),
                     lector.IsDBNull(3) ? null : lector.GetString(3),
                     lector.IsDBNull(4) ? null : lector.GetDecimal(4),
-                    lector.IsDBNull(5) ? null : lector.GetString(5));
-                guardados[(resultado.PuntoId, resultado.SeccionId)] = (lector.GetInt32(0), resultado);
+                    lector.IsDBNull(5) ? null : lector.GetString(5),
+                    Revision: lector.GetInt32(6));
+                guardados[(resultado.Revision, resultado.PuntoId, resultado.SeccionId)] = (lector.GetInt32(0), resultado);
             }
         }
 
-        var nuevos = resultados.ToDictionary(r => (r.PuntoId, r.SeccionId));
+        var nuevos = resultados.ToDictionary(r => (r.Revision, r.PuntoId, r.SeccionId));
 
         foreach (var (clave, (id, _)) in guardados)
         {
@@ -233,8 +298,8 @@ public class RutinaRepositorio
         }
 
         const string sqlInsertar = @"
-            INSERT INTO RUTINA_RESULTADO (rutina_id, punto_id, seccion_id, estado, valor, comentario)
-            VALUES (@rutina, @punto, @seccion, @estado, @valor, @comentario);";
+            INSERT INTO RUTINA_RESULTADO (rutina_id, revision, punto_id, seccion_id, estado, valor, comentario)
+            VALUES (@rutina, @revision, @punto, @seccion, @estado, @valor, @comentario);";
         const string sqlActualizar = @"
             UPDATE RUTINA_RESULTADO SET estado = @estado, valor = @valor, comentario = @comentario
             WHERE id = @id;";
@@ -255,6 +320,7 @@ public class RutinaRepositorio
             else
             {
                 Valor("@rutina", rutinaId);
+                Valor("@revision", resultado.Revision);
                 Valor("@punto", resultado.PuntoId);
                 Valor("@seccion", resultado.SeccionId);
             }
@@ -302,16 +368,17 @@ public class RutinaRepositorio
     }
 
     // Apunta en la casilla la incidencia que se ha abierto desde ella. false si la casilla ya no existe.
-    public bool Vincular(int rutinaId, int puntoId, int seccionId, int noConformidadId)
+    public bool Vincular(int rutinaId, int revision, int puntoId, int seccionId, int noConformidadId)
     {
         const string sql = @"
             UPDATE RUTINA_RESULTADO SET no_conformidad_id = @nc
-            WHERE rutina_id = @rutina AND punto_id = @punto AND seccion_id = @seccion;";
+            WHERE rutina_id = @rutina AND revision = @revision AND punto_id = @punto AND seccion_id = @seccion;";
 
         using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         comando.Parameters.AddWithValue("@nc", noConformidadId);
         comando.Parameters.AddWithValue("@rutina", rutinaId);
+        comando.Parameters.AddWithValue("@revision", revision);
         comando.Parameters.AddWithValue("@punto", puntoId);
         comando.Parameters.AddWithValue("@seccion", seccionId);
         return comando.ExecuteNonQuery() > 0;

@@ -15,6 +15,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones. Ya da de alta la fábrica, los cuatro roles (los tres de devoluciones y Calidad) y los seis estados (apartado 3).
    - [`no_conformidades.sql`](BaseDatos/no_conformidades.sql): tablas de calidad y opciones de los desplegables (la hoja LISTAS del Excel).
    - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
+   - [`rutina_revisiones.sql`](BaseDatos/rutina_revisiones.sql): solo en bases de datos creadas antes de que la rutina tuviera varias revisiones por día. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
 
    Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-f 65001`, por las tildes.
@@ -145,7 +146,8 @@ Sustituye a la hoja de Google Sheets "CHEQUEOS DIARIOS - PCC" que calidad rellen
 
 - **Plantilla**: las máquinas (`RUTINA_SECCION`), los puntos de control (`RUTINA_PUNTO`) y qué se revisa en cada máquina (`RUTINA_APLICA`). Lo último se cambia desde el botón "Plantilla"; las máquinas y los puntos, de momento, en la base de datos.
 - **Pantalla**: tres pestañas, como la hoja: planta baja, planta superior (`RUTINA_SECCION.planta`) y observaciones. Al pulsar una casilla salen las opciones de la leyenda; las grises son las que no se revisan en esa máquina. El botón ☰ de la barra superior oculta el menú lateral para ganar sitio.
-- **Observaciones**: el pie de la hoja. La caja de herramientas (operario y estado) y los depósitos van en `RUTINA`; las observaciones de cada sección, en `RUTINA_OBSERVACION`.
+- **Revisiones**: el segundo cuadrado de cada máquina en la hoja. La 1ª revisión es la ronda completa; con "+ Nueva revisión" se empieza otra con la plantilla entera en blanco, y cada una tiene su pestaña con la hora en que se empezó (`RUTINA_REVISION`; las casillas llevan su `revision`). Una revisión en la que no se marca nada no se guarda, y mientras la última esté vacía no se puede empezar otra.
+- **Observaciones**: son del día, no de cada revisión. El pie de la hoja: la caja de herramientas (operario y estado) y los depósitos van en `RUTINA`; las observaciones de cada sección, en `RUTINA_OBSERVACION`.
 - **Casillas**: en `RUTINA_RESULTADO` solo se guardan las rellenas. Cada una tiene un estado (correcto, no correcto, no aplica o mantenimiento) o, en los puntos numéricos como PESOS, un valor, y puede llevar un comentario. Al guardar solo se escriben las casillas que han cambiado, para no llenar el historial.
 - **Incidencias**: desde una casilla "no correcta" se abre la ficha de una incidencia nueva ya rellenada (fecha, sección, MC/PCC/BPM y problema), y al guardarla queda apuntada en la casilla (`no_conformidad_id`). La sección y el MC/PCC/BPM que se proponen salen de `RUTINA_SECCION.seccion_calidad` y `RUTINA_PUNTO.mc_pcc_bpm`.
 - **Dos personas en la misma ronda**: `RUTINA.version` hace que el segundo en guardar no pise al primero; tiene que recargar.

@@ -25,8 +25,11 @@ public class ModuloRutinaCalidad : UserControl
     private readonly RutinaServicio servicio = new();
     private PlantillaRutina plantilla = new(new(), new(), new());
     private Rutina rutina = new(0, DateTime.Today, null, null, null, null);
-    // Casillas rellenas de la ronda que se está viendo, por (punto, sección)
-    private Dictionary<(int PuntoId, int SeccionId), ResultadoRutina> casillas = new();
+    // Revisiones del día (la 1 es la ronda completa) y la que se está viendo
+    private List<RevisionRutina> revisiones = new() { new(1, null) };
+    private int revisionActual = 1;
+    // Casillas rellenas de cada revisión, por (punto, sección)
+    private Dictionary<int, Dictionary<(int PuntoId, int SeccionId), ResultadoRutina>> porRevision = new();
     private List<ObservacionRutina> observaciones = new();
     private bool hayCambios;
     private bool cargando;
@@ -38,6 +41,9 @@ public class ModuloRutinaCalidad : UserControl
     private readonly Label lblProgreso = new();
     private readonly DataGridView grid = new();
     private readonly Button btnGuardar = Tema.BotonPrincipal("Guardar ronda", 170);
+    private readonly FlowLayoutPanel pestanasRevision = new();
+    private readonly Button btnNuevaRevision = Tema.BotonSecundario("+ Nueva revisión", 160);
+    private readonly ToolTip ayuda = new();
 
     private static readonly string[] Plantas = { Planta.Baja, Planta.Superior };
 
@@ -70,11 +76,12 @@ public class ModuloRutinaCalidad : UserControl
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(40, 30, 40, 20)
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -88,10 +95,112 @@ public class ModuloRutinaCalidad : UserControl
 
         layout.Controls.Add(CrearCabecera(), 0, 0);
         layout.Controls.Add(CrearBarra(), 0, 1);
-        layout.Controls.Add(CrearLeyenda(), 0, 2);
-        layout.Controls.Add(CrearPestanasPlanta(), 0, 3);
-        layout.Controls.Add(zona, 0, 4);
+        layout.Controls.Add(CrearPestanasRevision(), 0, 2);
+        layout.Controls.Add(CrearLeyenda(), 0, 3);
+        layout.Controls.Add(CrearPestanasPlanta(), 0, 4);
+        layout.Controls.Add(zona, 0, 5);
         return layout;
+    }
+
+    // Revisiones del día: una pestaña por cada vez que se recorre la fábrica (el segundo
+    // cuadrado de la hoja) y el botón para empezar otra. Cada una enseña la plantilla entera.
+    private Control CrearPestanasRevision()
+    {
+        pestanasRevision.Dock = DockStyle.Fill;
+        pestanasRevision.WrapContents = false;
+        pestanasRevision.Padding = new Padding(0, 10, 0, 0);
+        btnNuevaRevision.Height = 32;
+        btnNuevaRevision.Margin = new Padding(10, 0, 0, 0);
+        btnNuevaRevision.Click += (s, e) => NuevaRevision();
+        ayuda.SetToolTip(btnNuevaRevision, "Empieza otra revisión ahora, con la plantilla en blanco.");
+        return pestanasRevision;
+    }
+
+    // Se rehacen al cargar el día y al cambiar las revisiones o su hora
+    private void MostrarPestanasRevision()
+    {
+        pestanasRevision.SuspendLayout();
+        foreach (var control in pestanasRevision.Controls.Cast<Control>().Where(c => c != btnNuevaRevision).ToList())
+            control.Dispose();
+        pestanasRevision.Controls.Clear();
+
+        pestanasRevision.Controls.Add(new Label
+        {
+            Text = "Revisión",
+            AutoSize = true,
+            ForeColor = Tema.Suave,
+            Margin = new Padding(0, 7, 10, 0)
+        });
+        foreach (var revision in revisiones)
+        {
+            int numero = revision.Numero;
+            var boton = new RadioButton
+            {
+                Text = RutinaServicio.NombreRevision(revision),
+                Appearance = Appearance.Button,
+                FlatStyle = FlatStyle.Flat,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(170, 32),
+                Margin = new Padding(0, 0, 6, 0),
+                Cursor = Cursors.Hand,
+                Checked = numero == revisionActual
+            };
+            ayuda.SetToolTip(boton, revision.CreadoPor != null
+                ? $"Empezada a las {revision.Hora:hh\\:mm} por {revision.CreadoPor}"
+                : "Sin guardar");
+            boton.CheckedChanged += (s, e) =>
+            {
+                PintarRevision(boton);
+                if (boton.Checked) CambiarRevision(numero);
+            };
+            PintarRevision(boton);
+            pestanasRevision.Controls.Add(boton);
+        }
+        pestanasRevision.Controls.Add(btnNuevaRevision);
+        pestanasRevision.ResumeLayout();
+    }
+
+    // Más discretas que las de planta, que van debajo
+    private static void PintarRevision(RadioButton boton)
+    {
+        boton.BackColor = boton.Checked ? Tema.AcentoSuave : Color.White;
+        boton.ForeColor = boton.Checked ? Tema.Acento : Tema.Texto;
+        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.FlatAppearance.BorderColor = boton.Checked ? Tema.Acento : Tema.Borde;
+        boton.FlatAppearance.CheckedBackColor = Tema.AcentoSuave;
+        boton.FlatAppearance.MouseOverBackColor = Tema.AcentoSuave;
+    }
+
+    private void CambiarRevision(int numero)
+    {
+        if (numero == revisionActual) return;
+        grid.EndEdit();
+        revisionActual = numero;
+        Construir();
+        ActualizarResumen();
+    }
+
+    // La nueva empieza ahora y en blanco. Si no se marca nada en ella, no se guarda.
+    private void NuevaRevision()
+    {
+        grid.EndEdit();
+        int numero = revisiones.Max(r => r.Numero) + 1;
+        revisiones.Add(new RevisionRutina(numero, DateTime.Now.TimeOfDay));
+        revisionActual = numero;
+        MostrarPestanasRevision();
+        Construir();
+        ActualizarResumen();
+    }
+
+    // Casillas de la revisión que se está viendo
+    private Dictionary<(int PuntoId, int SeccionId), ResultadoRutina> casillas
+    {
+        get
+        {
+            if (!porRevision.TryGetValue(revisionActual, out var lista))
+                porRevision[revisionActual] = lista = new();
+            return lista;
+        }
     }
 
     private Control CrearCabecera()
@@ -283,8 +392,10 @@ public class ModuloRutinaCalidad : UserControl
         depositos.Controls.Add(txtDepositos);
         pila.Controls.Add(depositos);
 
+        var btnAnadirFila = Tema.BotonSecundario("+  Añadir fila", 160);
+        btnAnadirFila.Click += (s, e) => AnadirFilaObservacion();
         var secciones = Componentes.Tarjeta("Observaciones por sección",
-            "Elige la sección en la última fila y escribe la observación. Para quitar una, selecciónala y pulsa Supr.");
+            "Elige la sección y escribe la observación. Para quitar una, selecciónala y pulsa Supr.", btnAnadirFila);
         secciones.Controls.Add(ConfigurarGridObservaciones());
         pila.Controls.Add(secciones);
 
@@ -295,8 +406,7 @@ public class ModuloRutinaCalidad : UserControl
     {
         Componentes.EstiloTabla(gridObservaciones, altoFila: 36);
         gridObservaciones.Dock = DockStyle.Top;
-        gridObservaciones.Height = 260;
-        gridObservaciones.AllowUserToAddRows = true;      // la fila en blanco del final es para añadir
+        gridObservaciones.ScrollBars = ScrollBars.None;   // crece con las filas; desplaza la página
         gridObservaciones.AllowUserToDeleteRows = true;
         gridObservaciones.EditMode = DataGridViewEditMode.EditOnEnter;
         gridObservaciones.GridColor = Tema.LineaTabla;
@@ -323,9 +433,30 @@ public class ModuloRutinaCalidad : UserControl
         };
         gridObservaciones.CellValueChanged += (s, e) => { if (!cargando) MarcarCambios(); };
         gridObservaciones.UserDeletedRow += (s, e) => MarcarCambios();
+        gridObservaciones.RowsAdded += (s, e) => AjustarAltoObservaciones();
+        gridObservaciones.RowsRemoved += (s, e) => AjustarAltoObservaciones();
         // Una sección que ya no está en la plantilla no rompe la tabla: se queda en blanco
         gridObservaciones.DataError += (s, e) => e.ThrowException = false;
+        AjustarAltoObservaciones();
         return gridObservaciones;
+    }
+
+    // Una fila nueva al final, con la sección lista para elegir
+    private void AnadirFilaObservacion()
+    {
+        gridObservaciones.EndEdit();
+        int fila = gridObservaciones.Rows.Add();
+        gridObservaciones.Focus();
+        gridObservaciones.CurrentCell = gridObservaciones.Rows[fila].Cells[0];
+        gridObservaciones.BeginEdit(true);
+    }
+
+    // Siempre se ven todas las filas, y como mínimo hueco para cinco
+    private void AjustarAltoObservaciones()
+    {
+        int filas = Math.Max(gridObservaciones.Rows.Count, 5);
+        gridObservaciones.Height = gridObservaciones.ColumnHeadersHeight
+            + filas * gridObservaciones.RowTemplate.Height + 2;
     }
 
     // Los operarios de la lista de calidad (los de las incidencias), para elegir el de la caja
@@ -723,7 +854,7 @@ public class ModuloRutinaCalidad : UserControl
         else if (e.KeyCode is Keys.Delete or Keys.Back) estado = null;
         else return;
 
-        e.SuppressKeyPress = true;   // si no, la letra empezaría a escribir en una casilla de número
+        e.SuppressKeyPress = true;   
         e.Handled = true;
         Marcar(Seleccionadas(), estado);
     }
@@ -755,9 +886,10 @@ public class ModuloRutinaCalidad : UserControl
         MarcarCambios();
     }
 
-    // Guarda la casilla en memoria; una que se queda sin nada se quita
+   
     private void Poner(ResultadoRutina casilla)
     {
+        casilla = casilla with { Revision = revisionActual };
         var clave = (casilla.PuntoId, casilla.SeccionId);
         if (RutinaServicio.Vacia(casilla) && casilla.NoConformidadId == null)
             casillas.Remove(clave);
@@ -774,7 +906,6 @@ public class ModuloRutinaCalidad : UserControl
         return null;
     }
 
-    // Las casillas de número (PESOS) se escriben como en una hoja de cálculo
     private void ValidarNumero(object? sender, DataGridViewCellValidatingEventArgs e)
     {
         if (!grid.IsCurrentCellInEditMode || Casilla(e.RowIndex, e.ColumnIndex) is not var (punto, _)) return;
@@ -886,10 +1017,12 @@ public class ModuloRutinaCalidad : UserControl
         }
 
         var casilla = casillas.GetValueOrDefault((punto.Id, seccion.Id));
-        if (casilla?.Estado != EstadoCasilla.NoCorrecto) return;   // otro la cambió al recargar
+        if (casilla?.Estado != EstadoCasilla.NoCorrecto) return;  
 
         int ncId;
-        using (var ficha = new FormNoConformidad(null, RutinaServicio.BorradorIncidencia(rutina.Fecha, punto, seccion, casilla)))
+        var revision = revisiones.First(r => r.Numero == revisionActual);
+        using (var ficha = new FormNoConformidad(null,
+            RutinaServicio.BorradorIncidencia(rutina.Fecha, revision, punto, seccion, casilla)))
         {
             if (ficha.ShowDialog(this) != DialogResult.OK) return;
             ncId = ficha.IdGuardado;
@@ -897,7 +1030,7 @@ public class ModuloRutinaCalidad : UserControl
 
         try
         {
-            servicio.Vincular(rutina.Id, punto.Id, seccion.Id, ncId);
+            servicio.Vincular(rutina.Id, revisionActual, punto.Id, seccion.Id, ncId);
         }
         catch (Exception ex) when (ex is DbException or ReglaNegocioException)
         {
@@ -939,9 +1072,16 @@ public class ModuloRutinaCalidad : UserControl
         try
         {
             if (recargarPlantilla) plantilla = servicio.ObtenerPlantilla();
-            var (leida, resultados, leidas) = servicio.ObtenerRutina(fecha);
+            var (leida, leidasRevisiones, resultados, leidas) = servicio.ObtenerRutina(fecha);
+            // Al recargar el mismo día se sigue en la misma revisión (o en la última, si era
+            // una nueva que no se ha guardado); al cambiar de día, en la primera
+            bool mismoDia = leida.Fecha == rutina.Fecha;
             rutina = leida;
-            casillas = resultados.ToDictionary(r => (r.PuntoId, r.SeccionId));
+            revisiones = leidasRevisiones;
+            if (!mismoDia) revisionActual = 1;
+            else if (!revisiones.Any(r => r.Numero == revisionActual)) revisionActual = revisiones.Max(r => r.Numero);
+            porRevision = resultados.GroupBy(r => r.Revision)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(r => (r.PuntoId, r.SeccionId)));
             observaciones = leidas;
         }
         catch (DbException ex)
@@ -964,6 +1104,7 @@ public class ModuloRutinaCalidad : UserControl
 
         hayCambios = false;
         btnGuardar.Enabled = false;
+        MostrarPestanasRevision();
         Construir();
         ActualizarResumen();
     }
@@ -988,7 +1129,7 @@ public class ModuloRutinaCalidad : UserControl
         try
         {
             var fijas = rutina with { CajaOperario = cmbCajaOperario.Text, CajaEstado = EstadoCaja(), Depositos = txtDepositos.Text };
-            servicio.Guardar(fijas, casillas.Values, LeerObservaciones(), plantilla);
+            servicio.Guardar(fijas, revisiones, porRevision.Values.SelectMany(c => c.Values), LeerObservaciones(), plantilla);
         }
         catch (ReglaNegocioException ex)
         {
@@ -1010,6 +1151,14 @@ public class ModuloRutinaCalidad : UserControl
     {
         hayCambios = true;
         btnGuardar.Enabled = true;
+
+        // La primera revisión de una ronda nueva empieza con lo primero que se marca
+        int sinHora = revisiones.FindIndex(r => r.Hora == null);
+        if (sinHora >= 0)
+        {
+            revisiones[sinHora] = revisiones[sinHora] with { Hora = DateTime.Now.TimeOfDay };
+            MostrarPestanasRevision();
+        }
         ActualizarResumen();
     }
 
@@ -1026,6 +1175,10 @@ public class ModuloRutinaCalidad : UserControl
             hayCambios ? "Cambios sin guardar" : null
         }.OfType<string>());
         lblProgreso.ForeColor = hayCambios ? Tema.Aviso : Tema.Suave;
+
+        // Mientras la última revisión esté en blanco no se empieza otra
+        int ultima = revisiones.Max(r => r.Numero);
+        btnNuevaRevision.Enabled = porRevision.GetValueOrDefault(ultima)?.Count > 0;
 
         int escritas = LeerObservaciones().Count(o => !string.IsNullOrWhiteSpace(o.Texto))
             + (string.IsNullOrWhiteSpace(txtDepositos.Text) ? 0 : 1);

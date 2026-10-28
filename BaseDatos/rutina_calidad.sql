@@ -60,21 +60,39 @@ CREATE TABLE RUTINA (
     CONSTRAINT FK_rutina_usuario FOREIGN KEY (creado_por) REFERENCES USUARIO(id)
 );
 
--- Una casilla rellenada. Las vacías no se guardan.
+-- Pasadas del día: la 1 es la ronda completa; las siguientes, las veces que se vuelve a
+-- revisar (el segundo cuadrado de la hoja). hora: cuándo se empezó.
+CREATE TABLE RUTINA_REVISION (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    rutina_id INT NOT NULL,
+    numero INT NOT NULL,
+    hora TIME(0) NOT NULL,
+    creado_por INT NOT NULL,
+    CONSTRAINT UQ_rutina_revision UNIQUE (rutina_id, numero),
+    CONSTRAINT CK_rutina_revision_numero CHECK (numero >= 1),
+    CONSTRAINT FK_rutina_revision_rutina FOREIGN KEY (rutina_id) REFERENCES RUTINA(id) ON DELETE CASCADE,
+    CONSTRAINT FK_rutina_revision_usuario FOREIGN KEY (creado_por) REFERENCES USUARIO(id)
+);
+
+-- Una casilla rellenada en una revisión. Las vacías no se guardan.
 -- estado: OK (correcto), NO (no correcto), NA (no aplica hoy), MTO (avisado a mantenimiento).
 -- Los puntos numéricos llevan valor y no estado.
 CREATE TABLE RUTINA_RESULTADO (
     id INT IDENTITY(1,1) PRIMARY KEY,           -- para el historial, que guarda un id por fila
     rutina_id INT NOT NULL,
+    revision INT NOT NULL CONSTRAINT DF_rutina_resultado_revision DEFAULT 1,
     punto_id INT NOT NULL,
     seccion_id INT NOT NULL,
     estado NVARCHAR(3) NULL,
     valor DECIMAL(10,2) NULL,
     comentario NVARCHAR(1000) NULL,
     no_conformidad_id INT NULL,                 -- incidencia abierta desde esta casilla
-    CONSTRAINT UQ_rutina_resultado UNIQUE (rutina_id, punto_id, seccion_id),
+    CONSTRAINT UQ_rutina_resultado UNIQUE (rutina_id, revision, punto_id, seccion_id),
     CONSTRAINT CK_rutina_resultado_estado CHECK (estado IN ('OK', 'NO', 'NA', 'MTO')),
     CONSTRAINT FK_rutina_resultado_rutina FOREIGN KEY (rutina_id) REFERENCES RUTINA(id) ON DELETE CASCADE,
+    -- Sin cascada: ya la hay desde RUTINA, y SQL Server no admite dos caminos
+    CONSTRAINT FK_rutina_resultado_revision FOREIGN KEY (rutina_id, revision)
+        REFERENCES RUTINA_REVISION(rutina_id, numero),
     CONSTRAINT FK_rutina_resultado_punto FOREIGN KEY (punto_id) REFERENCES RUTINA_PUNTO(id),
     CONSTRAINT FK_rutina_resultado_seccion FOREIGN KEY (seccion_id) REFERENCES RUTINA_SECCION(id),
     CONSTRAINT FK_rutina_resultado_nc FOREIGN KEY (no_conformidad_id)
@@ -167,6 +185,35 @@ BEGIN
     INSERT INTO HISTORIAL_CAMBIOS
         (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
     SELECT NULL, @usuario, 'RUTINA_OBSERVACION', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
+-- Igual para las revisiones del día (el JSON lleva rutina_id)
+CREATE OR ALTER TRIGGER TR_RUTINA_REVISION_HISTORIAL ON RUTINA_REVISION
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT NULL, @usuario, 'RUTINA_REVISION', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
     CROSS APPLY (SELECT

@@ -55,10 +55,15 @@ public record Rutina(
     string? CreadoPor,
     byte[]? Version = null);
 
+// Una pasada por la fábrica dentro de la ronda del día. La 1 es la ronda completa; las
+// siguientes, las veces que se vuelve a revisar. Hora: cuándo se empezó (null mientras no
+// se ha tocado nada en la revisión 1 de una ronda nueva). CreadoPor es null si no se ha guardado.
+public record RevisionRutina(int Numero, TimeSpan? Hora, string? CreadoPor = null);
+
 // Observación de una sección en el pie de la hoja ("EMB2 · Sigue dando el fallo de envío")
 public record ObservacionRutina(int SeccionId, string Texto);
 
-// Una casilla rellenada. Los puntos normales llevan Estado y los numéricos, Valor.
+// Una casilla rellenada en una revisión. Los puntos normales llevan Estado y los numéricos, Valor.
 // NoConformidadId: incidencia abierta desde la casilla (NumeroIncidencia, su número, solo para enseñarlo).
 public record ResultadoRutina(
     int PuntoId,
@@ -67,4 +72,5 @@ public record ResultadoRutina(
     decimal? Valor,
     string? Comentario,
     int? NoConformidadId = null,
-    string? NumeroIncidencia = null);
+    string? NumeroIncidencia = null,
+    int Revision = 1);
