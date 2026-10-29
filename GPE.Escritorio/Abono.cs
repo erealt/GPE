@@ -420,7 +420,7 @@ public class FormAbono : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo reabrir", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo reabrir", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -510,11 +510,10 @@ public class FormAbono : PantallaFase
             }
         }
 
-        if (MessageBox.Show(this,
+        if (!Mensajes.Confirmar(this, "Registrar abono y cerrar",
                 avisoRepetido + pregunta + " y la devolución quedará cerrada.\n" +
                 "Si hay algún error podrás reabrir el abono.\n\n¿Registrar y cerrar?",
-                "Registrar abono y cerrar", MessageBoxButtons.YesNo,
-                avisoRepetido == "" ? MessageBoxIcon.Question : MessageBoxIcon.Warning) != DialogResult.Yes)
+                aviso: avisoRepetido != ""))
             return;
 
         var datos = new DatosAbono(
@@ -531,7 +530,7 @@ public class FormAbono : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo registrar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo registrar", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -549,10 +548,9 @@ public class FormAbono : PantallaFase
     {
         if (!hayCambios || DialogResult == DialogResult.OK) return;
 
-        if (MessageBox.Show(this,
+        if (!Mensajes.DescartarCambios(this,
                 "Los datos del abono solo se guardan al registrarlo.\n" +
-                "Si sales ahora se perderán (el documento adjunto sí se ha guardado).\n\n¿Salir de todos modos?",
-                "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                "Si sales ahora se perderán (el documento adjunto sí se ha guardado).\n\n¿Salir de todos modos?"))
         {
             e.Cancel = true;
             DialogResult = DialogResult.None;

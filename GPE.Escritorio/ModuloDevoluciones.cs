@@ -201,11 +201,11 @@ public class ModuloDevoluciones : UserControl
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = servicio.ObtenerDevolucionesVisibles();
+            devoluciones = servicio.ObtenerDevolucionesEnCurso();
         }
         catch (DbException)
         {
-            return;   
+            return;
         }
         ActualizarFranjaAviso(devoluciones);   // los días cuentan aunque nadie recargue la lista
 

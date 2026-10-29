@@ -108,6 +108,13 @@ public class NoConformidadServicio
 
     public static bool Abierta(NoConformidad nc) => nc.FechaFin == null;
 
+    // Para el inicio: cuántos registros hay abiertos y cuántos de ellos fuera de plazo
+    public (int Abiertas, int FueraPlazo) ContarAbiertas()
+    {
+        var plazos = repositorio.ObtenerPlazosAbiertos();
+        return (plazos.Count, plazos.Count(fecha => Estado(fecha, null) == EstadoRegistro.FueraPlazo));
+    }
+
     // Días que han pasado desde la fecha prevista (solo si está fuera de plazo)
     public static int? DiasFueraPlazo(NoConformidad nc) =>
         Estado(nc) == EstadoRegistro.FueraPlazo ? (DateTime.Today - nc.FechaPrevista!.Value.Date).Days : null;

@@ -145,7 +145,7 @@ public static class Componentes
         {
             Text = titulo,
             AutoSize = true,
-            Font = new Font("Segoe UI", 13),
+            Font = Tema.FuenteApartado,
             ForeColor = Tema.Texto
         };
         var lblSubtitulo = etiquetaSubtitulo ?? new Label();
@@ -258,7 +258,7 @@ public static class Componentes
 
         e.PaintBackground(e.CellBounds, (e.State & DataGridViewElementStates.Selected) != 0);
 
-        using var fuente = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        var fuente = Tema.FuenteEtiqueta;
         var medida = TextRenderer.MeasureText(texto, fuente);
         var etiqueta = new Rectangle(
             e.CellBounds.X + 10,

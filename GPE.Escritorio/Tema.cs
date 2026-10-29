@@ -18,13 +18,29 @@ public static class Tema
     public static readonly Color AvisoFondo = Color.FromArgb(255, 241, 214);
     public static readonly Color Aviso = Color.FromArgb(150, 90, 0);
 
-    // Fuentes compartidas: no se deben liberar con Dispose, las usan todas las pantallas
+    // Fuentes compartidas: no se deben liberar con Dispose, las usan todas las pantallas.
+    // Todas las pantallas sacan de aquí sus fuentes, para que los tamaños sean los mismos en todas.
     public static readonly Font Fuente = new("Segoe UI", 10);
     public static readonly Font FuenteNegrita = new("Segoe UI", 10, FontStyle.Bold);
     public static readonly Font FuentePequena = new("Segoe UI", 9);
     public static readonly Font FuentePequenaNegrita = new("Segoe UI", 9, FontStyle.Bold);
+    public static readonly Font FuenteNota = new("Segoe UI", 8.5f);                       // notas bajo un campo, textos de la barra de progreso
     public static readonly Font FuenteEtiqueta = new("Segoe UI", 8.5f, FontStyle.Bold);   // cabeceras de tabla y etiquetas
+    public static readonly Font FuenteOpcion = new("Segoe UI", 9.5f);                     // pestañas y botones de elegir una opción
+    public static readonly Font FuenteOpcionElegida = new("Segoe UI", 9.5f, FontStyle.Bold);
+    public static readonly Font FuenteMenu = new("Segoe UI", 10.5f);                      // opciones del menú lateral
+    public static readonly Font FuenteMenuElegido = new("Segoe UI", 10.5f, FontStyle.Bold);
+    public static readonly Font FuenteDestacada = new("Segoe UI", 11.5f, FontStyle.Bold); // títulos dentro de una lista (historial)
+    public static readonly Font FuenteApartado = new("Segoe UI", 13);                     // título de cada tarjeta
+    public static readonly Font FuenteAviso = new("Segoe UI", 13, FontStyle.Bold);        // titular de un aviso
+    public static readonly Font FuenteTituloTarjeta = new("Segoe UI", 15, FontStyle.Bold); // tarjetas del inicio
+    public static readonly Font FuenteLogo = new("Segoe UI", 16, FontStyle.Bold);
+    public static readonly Font FuenteIcono = new("Segoe UI", 16);                         // botones con un símbolo (☰)
+    public static readonly Font FuenteTituloVentana = new("Segoe UI", 20, FontStyle.Bold); // título de una ventana aparte
     public static readonly Font FuenteTitulo = new("Segoe UI", 22, FontStyle.Bold);       // título de cada módulo
+
+    // Pestañas y botones de opción: la elegida en negrita
+    public static Font FuenteDeOpcion(bool elegida) => elegida ? FuenteOpcionElegida : FuenteOpcion;
 
     // Celdas de las tablas: columna que no se edita, valor distinto del esperado, valor con error
     public static readonly Color FondoSoloLectura = Color.FromArgb(247, 248, 246);

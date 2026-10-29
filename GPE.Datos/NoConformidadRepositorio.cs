@@ -69,6 +69,21 @@ public class NoConformidadRepositorio
         return lista;
     }
 
+    // Fecha prevista de cada registro abierto (sin fecha fin), para contar los que
+    // están fuera de plazo sin leer todos los registros
+    public List<DateTime?> ObtenerPlazosAbiertos()
+    {
+        const string sql = "SELECT fecha_prevista FROM NO_CONFORMIDAD WHERE fecha_fin IS NULL;";
+
+        var lista = new List<DateTime?>();
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+            lista.Add(lector.IsDBNull(0) ? null : lector.GetDateTime(0));
+        return lista;
+    }
+
     // Acciones inmediatas, correctoras y seguimientos de un registro, en su orden
     public List<AccionNc> ObtenerAcciones(int noConformidadId)
     {

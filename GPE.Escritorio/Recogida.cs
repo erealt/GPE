@@ -229,7 +229,7 @@ public class Recogida : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "Revisa los datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Revisa los datos", ex.Message);
             return;
         }
         catch (DbException ex)

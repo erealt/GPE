@@ -15,12 +15,9 @@ public class ModuloRutinaCalidad : UserControl
     private const int AnchoPunto = 220;
     private const int AnchoSeccion = 58;
 
-    // La de las cabeceras en Componentes.EstiloTabla
-    private static readonly Font FuenteCabecera = new("Segoe UI", 8.5f, FontStyle.Bold);
-
     // Las cabeceras se parten por palabras: en la columna tiene que caber la más larga (DEPOSITOS)
     public static int AnchoColumna(string nombre) =>
-        Math.Max(AnchoSeccion, nombre.Split(' ').Max(palabra => TextRenderer.MeasureText(palabra, FuenteCabecera).Width) + 26);
+        Math.Max(AnchoSeccion, nombre.Split(' ').Max(palabra => TextRenderer.MeasureText(palabra, Tema.FuenteEtiqueta).Width) + 26);
 
     private readonly RutinaServicio servicio = new();
     private PlantillaRutina plantilla = new(new(), new(), new());
@@ -165,7 +162,7 @@ public class ModuloRutinaCalidad : UserControl
     {
         boton.BackColor = boton.Checked ? Tema.AcentoSuave : Color.White;
         boton.ForeColor = boton.Checked ? Tema.Acento : Tema.Texto;
-        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.Font = Tema.FuenteDeOpcion(boton.Checked);
         boton.FlatAppearance.BorderColor = boton.Checked ? Tema.Acento : Tema.Borde;
         boton.FlatAppearance.CheckedBackColor = Tema.AcentoSuave;
         boton.FlatAppearance.MouseOverBackColor = Tema.AcentoSuave;
@@ -674,7 +671,7 @@ public class ModuloRutinaCalidad : UserControl
         var (fondo, texto) = Tema.ColorEstadoCasilla(boton == btnCajaOk ? EstadoCasilla.Correcto : EstadoCasilla.NoCorrecto);
         boton.BackColor = boton.Checked ? fondo : Color.White;
         boton.ForeColor = boton.Checked ? texto : Tema.Texto;
-        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.Font = Tema.FuenteDeOpcion(boton.Checked);
         boton.FlatAppearance.BorderColor = boton.Checked ? texto : Tema.Borde;
         boton.FlatAppearance.CheckedBackColor = fondo;
         boton.FlatAppearance.MouseOverBackColor = boton.Checked ? fondo : Tema.AcentoSuave;
@@ -692,7 +689,7 @@ public class ModuloRutinaCalidad : UserControl
     {
         boton.BackColor = boton.Checked ? Tema.Acento : Color.White;
         boton.ForeColor = boton.Checked ? Color.White : Tema.Texto;
-        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.Font = Tema.FuenteDeOpcion(boton.Checked);
         boton.FlatAppearance.BorderColor = boton.Checked ? Tema.Acento : Tema.Borde;
         boton.FlatAppearance.MouseOverBackColor = boton.Checked ? Tema.Acento : Tema.AcentoSuave;
     }
@@ -780,9 +777,8 @@ public class ModuloRutinaCalidad : UserControl
             g.DrawLine(borde, r.Left, r.Bottom - 1, r.Right - 1, r.Bottom - 1);
         }
 
-        using (var fuente = new Font("Segoe UI", 9, FontStyle.Bold))
-            TextRenderer.DrawText(g, texto, fuente, r, colorTexto,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        TextRenderer.DrawText(g, texto, Tema.FuentePequenaNegrita, r, colorTexto,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
         g.SmoothingMode = SmoothingMode.AntiAlias;
         // Esquina morada si tiene comentario, como en Excel
@@ -1010,8 +1006,7 @@ public class ModuloRutinaCalidad : UserControl
     {
         if (hayCambios || rutina.Id == 0)
         {
-            if (MessageBox.Show(this, "Para abrir la incidencia hay que guardar antes la ronda. ¿Guardarla ahora?",
-                    "Guardar la ronda", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            if (!Mensajes.Confirmar(this, "Guardar la ronda", "Para abrir la incidencia hay que guardar antes la ronda. ¿Guardarla ahora?"))
                 return;
             if (!Guardar()) return;
         }
@@ -1034,8 +1029,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         catch (Exception ex) when (ex is DbException or ReglaNegocioException)
         {
-            MessageBox.Show(this, "La incidencia se ha guardado, pero no se ha podido apuntar en la casilla.\n\n" + ex.Message,
-                "Incidencia sin apuntar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Incidencia sin apuntar", "La incidencia se ha guardado, pero no se ha podido apuntar en la casilla.\n\n" + ex.Message);
         }
         Cargar(rutina.Fecha, recargarPlantilla: false);
     }
@@ -1054,8 +1048,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         if (nc == null)
         {
-            MessageBox.Show(this, "Esta incidencia ya no existe: puede que otro usuario la haya borrado.",
-                "Incidencia no encontrada", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Mensajes.Informacion(this, "Incidencia no encontrada", "Esta incidencia ya no existe: puede que otro usuario la haya borrado.");
             return;
         }
 
@@ -1133,7 +1126,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se puede guardar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se puede guardar", ex.Message);
             return false;
         }
         catch (DbException ex)
@@ -1186,8 +1179,7 @@ public class ModuloRutinaCalidad : UserControl
     }
 
     private bool DescartarCambios() =>
-        !hayCambios || MessageBox.Show(this, "Hay cambios sin guardar en la ronda. ¿Descartarlos?",
-            "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+        !hayCambios || Mensajes.DescartarCambios(this, "Hay cambios sin guardar en la ronda. ¿Descartarlos?");
 
     private void AvisarAlCerrar(object? sender, FormClosingEventArgs e)
     {

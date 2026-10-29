@@ -61,8 +61,7 @@ public class FormPlantillaRutina : Form
         FormClosing += (s, e) =>
         {
             if (DialogResult != DialogResult.OK && hayCambios
-                && MessageBox.Show(this, "Hay cambios sin guardar. ¿Salir sin guardarlos?", "Cambios sin guardar",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                && !Mensajes.DescartarCambios(this, "Hay cambios sin guardar. ¿Salir sin guardarlos?"))
                 e.Cancel = true;
         };
     }
@@ -174,9 +173,8 @@ public class FormPlantillaRutina : Form
             e.Graphics.DrawLine(borde, r.Left, r.Bottom - 1, r.Right - 1, r.Bottom - 1);
         }
         if (revisa)
-            using (var fuente = new Font("Segoe UI", 10, FontStyle.Bold))
-                TextRenderer.DrawText(e.Graphics, "✓", fuente, r, Tema.Acento,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, "✓", Tema.FuenteNegrita, r, Tema.Acento,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         e.Handled = true;
     }
 

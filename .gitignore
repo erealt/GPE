@@ -1,0 +1,11 @@
+# Archivos generados por .NET
+bin/
+obj/
+
+# Configuración local de Visual Studio
+.vs/
+*.user
+*.suo
+
+# Archivos de configuración con secretos
+appsettings.*.json

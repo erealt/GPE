@@ -63,7 +63,7 @@ public class ModuloInicio : UserControl
         {
             Text = titulo,
             AutoSize = true,
-            Font = new Font("Segoe UI", 15, FontStyle.Bold),
+            Font = Tema.FuenteTituloTarjeta,
             ForeColor = Tema.Texto,
             Margin = new Padding(0, 0, 0, 6)
         });
@@ -79,7 +79,7 @@ public class ModuloInicio : UserControl
             Text = "Abrir  →",
             AutoSize = true,
             ForeColor = Tema.Texto,
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Font = Tema.FuenteOpcionElegida,
             Margin = new Padding(0)
         });
 
@@ -121,8 +121,8 @@ public class ModuloInicio : UserControl
     {
         try
         {
-            var lista = new DevolucionServicio().ObtenerDevolucionesVisibles();
-            int enCurso = lista.Count(d => d.Fase < Fase.Cierre);
+            var lista = new DevolucionServicio().ObtenerDevolucionesEnCurso();
+            int enCurso = lista.Count;
             int retrasadas = Sesion.TieneRol(Rol.Administracion) ? lista.Count(DevolucionServicio.AbonoRetrasado) : 0;
             return $"{enCurso} en curso" + (retrasadas > 0 ? $"  ·  ⚠ {retrasadas} esperando abono" : "");
         }
@@ -136,9 +136,7 @@ public class ModuloInicio : UserControl
     {
         try
         {
-            var lista = new NoConformidadServicio().ObtenerRegistros();
-            int abiertas = lista.Count(NoConformidadServicio.Abierta);
-            int fuera = lista.Count(nc => NoConformidadServicio.Estado(nc) == EstadoRegistro.FueraPlazo);
+            var (abiertas, fuera) = new NoConformidadServicio().ContarAbiertas();
             return $"{abiertas} {(abiertas == 1 ? "abierta" : "abiertas")}"
                 + (fuera > 0 ? $"  ·  ⚠ {fuera} fuera de plazo" : "");
         }

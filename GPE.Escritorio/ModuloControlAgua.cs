@@ -369,7 +369,7 @@ public class ModuloControlAgua : UserControl
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se puede guardar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se puede guardar", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -404,8 +404,7 @@ public class ModuloControlAgua : UserControl
     }
 
     private bool DescartarCambios() =>
-        !hayCambios || MessageBox.Show(this, "Hay cambios sin guardar en el control de agua. ¿Descartarlos?",
-            "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+        !hayCambios || Mensajes.DescartarCambios(this, "Hay cambios sin guardar en el control de agua. ¿Descartarlos?");
 
     private void AvisarAlCerrar(object? sender, FormClosingEventArgs e)
     {

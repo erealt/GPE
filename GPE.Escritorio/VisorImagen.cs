@@ -160,8 +160,7 @@ public class FormVisorImagen : Form
         }
         catch (Exception ex) when (ex is DbException or IOException or System.ComponentModel.Win32Exception)
         {
-            MessageBox.Show(this, "No se pudo abrir el archivo.\n\n" + ex.Message, "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.Error(this, "No se pudo abrir el archivo.", ex);
         }
     }
 }

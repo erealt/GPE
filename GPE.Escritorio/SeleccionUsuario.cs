@@ -28,7 +28,7 @@ public class FormSeleccionUsuario : Form
         var lblTitulo = new Label
         {
             Text = "¿Quién eres?",
-            Font = new Font("Segoe UI", 18, FontStyle.Bold),
+            Font = Tema.FuenteTituloVentana,
             ForeColor = Tema.Texto,
             Location = new Point(30, 20),
             AutoSize = true
@@ -71,8 +71,7 @@ public class FormSeleccionUsuario : Form
 
         if (cmbUsuario.Items.Count == 0)
         {
-            MessageBox.Show(this, "No hay usuarios dados de alta en la tabla USUARIO.",
-                "Sin usuarios", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Sin usuarios", "No hay usuarios dados de alta en la tabla USUARIO.");
             Close();
             return;
         }
@@ -95,9 +94,8 @@ public class FormSeleccionUsuario : Form
         }
 
         if (Sesion.Roles.Count == 0)
-            MessageBox.Show(this,
-                $"{usuario.Nombre} no tiene ningún rol asignado: podrá consultar las devoluciones, pero no hacer ningún paso.",
-                "Sin permisos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Mensajes.Informacion(this, "Sin permisos",
+                $"{usuario.Nombre} no tiene ningún rol asignado: podrá consultar las devoluciones, pero no hacer ningún paso.");
 
         Sesion.UsuarioActual = usuario;
         DialogResult = DialogResult.OK;

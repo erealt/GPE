@@ -79,10 +79,9 @@ namespace GPE.Escritorio
             Color gris = Color.FromArgb(218, 226, 221);
             Color texto = Tema.Texto;
 
-            using var fuente = new Font("Segoe UI", 8.5f);
-            using var negrita = new Font(
-                "Segoe UI", 8.5f, FontStyle.Bold);
-            using var fuenteNumero = new Font("Segoe UI", 9, FontStyle.Bold);
+            var fuente = Tema.FuenteNota;
+            var negrita = Tema.FuenteEtiqueta;
+            var fuenteNumero = Tema.FuentePequenaNegrita;
 
             using var lapiz = new Pen(gris, 3);
             using var lapizAcento = new Pen(acento, 3);

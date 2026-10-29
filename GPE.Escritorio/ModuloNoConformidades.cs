@@ -440,8 +440,7 @@ public class ModuloNoConformidades : UserControl
             }
             if (nc == null)
             {
-                MessageBox.Show(this, "Este registro ya no existe: puede que otro usuario lo haya borrado.",
-                    "Registro no encontrado", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Mensajes.Informacion(this, "Registro no encontrado", "Este registro ya no existe: puede que otro usuario lo haya borrado.");
                 CargarDatos();
                 return;
             }

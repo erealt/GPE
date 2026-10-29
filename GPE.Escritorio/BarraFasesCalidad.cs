@@ -63,7 +63,7 @@ public class BarraFasesCalidad : FlowLayoutPanel
             boton.Text = (hecha ? "✓ " : "") + texto + (opcional && !hecha ? " " : "");
             boton.BackColor = vista ? Tema.Acento : Color.White;
             boton.ForeColor = vista ? Color.White : opcional ? Tema.Suave : Tema.Texto;
-            boton.Font = new Font("Segoe UI", 9.5f, vista ? FontStyle.Bold : FontStyle.Regular);
+            boton.Font = Tema.FuenteDeOpcion(vista);
             boton.FlatAppearance.BorderColor = vista ? Tema.Acento : Tema.Borde;
             boton.FlatAppearance.MouseOverBackColor = vista ? Tema.Acento : Tema.AcentoSuave;
         }

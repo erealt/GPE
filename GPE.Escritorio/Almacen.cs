@@ -172,9 +172,8 @@ public class FormAlmacen : PantallaFase
         string recibo = yaHayRecibo
             ? "Se usará el recibo de la agencia que ya estaba adjunto."
             : "Recibo de la agencia: " + string.Join(", ", rutasRecibo.Select(Path.GetFileName));
-        if (MessageBox.Show(this,
-                $"¿Confirmas que la mercancía de {devolucion.Numero} ha llegado hoy al almacén?\n\n{recibo}",
-                "Marcar como recibida", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        if (!Mensajes.Confirmar(this, "Marcar como recibida",
+                $"¿Confirmas que la mercancía de {devolucion.Numero} ha llegado hoy al almacén?\n\n{recibo}"))
             return;
 
         try
@@ -183,13 +182,12 @@ public class FormAlmacen : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo marcar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo marcar", ex.Message);
             return;
         }
         catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, "No se pudo marcar como recibida.\n\n" + ex.Message,
-                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.Error(this, "No se pudo marcar como recibida.", ex);
             return;
         }
 
@@ -227,7 +225,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo reabrir", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo reabrir", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -630,10 +628,9 @@ public class FormAlmacen : PantallaFase
             return;
         }
 
-        if (MessageBox.Show(this,
+        if (!Mensajes.Confirmar(this, "Finalizar revisión",
                 "Al finalizar, la revisión pasa a solo consulta. Podrás reabrirla mientras no se registre el abono.\n\n" +
-                "¿Finalizar la revisión?",
-                "Finalizar revisión", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                "¿Finalizar la revisión?"))
             return;
 
         var lineas = grid.Rows.Cast<DataGridViewRow>()
@@ -654,7 +651,7 @@ public class FormAlmacen : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo finalizar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo finalizar", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -672,10 +669,9 @@ public class FormAlmacen : PantallaFase
     {
         if (!hayCambios || DialogResult == DialogResult.OK) return;
 
-        if (MessageBox.Show(this,
+        if (!Mensajes.DescartarCambios(this,
                 "Lo apuntado en la revisión solo se guarda al finalizarla.\n" +
-                "Si sales ahora se perderá (las fotos sí se han guardado).\n\n¿Salir de todos modos?",
-                "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                "Si sales ahora se perderá (las fotos sí se han guardado).\n\n¿Salir de todos modos?"))
         {
             e.Cancel = true;
             DialogResult = DialogResult.None;

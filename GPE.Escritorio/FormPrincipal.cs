@@ -138,7 +138,7 @@ public class FormPrincipal : Form
             Height = 60,
             Padding = new Padding(24, 0, 0, 0),
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 16, FontStyle.Bold),
+            Font = Tema.FuenteLogo,
             ForeColor = Tema.Acento
         };
 
@@ -179,9 +179,6 @@ public class FormPrincipal : Form
         return boton;
     }
 
-    private static readonly Font FuenteMenu = new("Segoe UI", 10.5f);
-    private static readonly Font FuenteMenuElegido = new("Segoe UI", 10.5f, FontStyle.Bold);
-
     private void MarcarElegido()
     {
         foreach (var m in modulos)
@@ -191,7 +188,7 @@ public class FormPrincipal : Form
             boton.BackColor = elegido ? Tema.AcentoSuave : Color.White;
             boton.FlatAppearance.MouseOverBackColor = elegido ? Tema.AcentoSuave : Tema.CabeceraTabla;
             boton.ForeColor = elegido ? Tema.Acento : Tema.Texto;
-            boton.Font = elegido ? FuenteMenuElegido : FuenteMenu;
+            boton.Font = elegido ? Tema.FuenteMenuElegido : Tema.FuenteMenu;
         }
     }
 
@@ -218,7 +215,7 @@ public class FormPrincipal : Form
             Width = 60,
             FlatStyle = FlatStyle.Flat,
             FlatAppearance = { BorderSize = 0, MouseOverBackColor = Tema.CabeceraTabla },
-            Font = new Font("Segoe UI", 16),
+            Font = Tema.FuenteIcono,
             ForeColor = Tema.Texto,
             Cursor = Cursors.Hand
         };

@@ -15,8 +15,10 @@ public class DevolucionRepositorio
             JOIN CLIENTE c ON c.id = d.cliente_id
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id";
 
-    public List<DevolucionFila> ObtenerDevoluciones() =>
-        LeerDevoluciones(SqlDevoluciones + " ORDER BY d.fecha_solicitud DESC, d.id DESC;", null);
+    // Solo las que están en esas fases: el filtro lo hace SQL Server y no viajan las demás
+    public List<DevolucionFila> ObtenerDevoluciones(IEnumerable<int> fases) =>
+        LeerDevoluciones(SqlDevoluciones + $" WHERE e.fase IN ({string.Join(", ", fases.DefaultIfEmpty(0))})" +
+            " ORDER BY d.fecha_solicitud DESC, d.id DESC;", null);
 
     // Una devolución con sus datos actuales, o null si ya no existe
     public DevolucionFila? ObtenerDevolucion(int devolucionId) =>

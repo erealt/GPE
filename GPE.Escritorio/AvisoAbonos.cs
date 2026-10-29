@@ -37,7 +37,7 @@ public class FormAvisoAbonos : Form
             Padding = new Padding(20, 15, 20, 0),
             BackColor = Tema.AvisoFondo,
             ForeColor = Tema.Aviso,
-            Font = new Font("Segoe UI", 13, FontStyle.Bold)
+            Font = Tema.FuenteAviso
         };
         var lblExplicacion = new Label
         {

@@ -238,7 +238,7 @@ public class FormNuevaDevolucion : Form
         }
         catch (ReglaNegocioException ex)   
         {
-            MessageBox.Show(this, ex.Message, "Faltan datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Faltan datos", ex.Message);
             return;
         }
         catch (DbException ex)

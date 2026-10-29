@@ -144,11 +144,10 @@ public class FormNoConformidad : Form
         if (SoloLectura)
         {
             BloquearEntradas();
-            Shown += (s, e) => MessageBox.Show(this,
+            Shown += (s, e) => Mensajes.Informacion(this, "Ficha abierta por otra persona",
                 NoConformidadServicio.DescribirBloqueo(bloqueo!) + "\n\n" +
                 "Para que no se pisen los cambios, se abre en solo lectura. " +
-                "Cuando la cierre, vuelve a abrirla para poder editarla.",
-                "Ficha abierta por otra persona", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "Cuando la cierre, vuelve a abrirla para poder editarla.");
         }
         else if (original != null)
         {
@@ -271,7 +270,7 @@ public class FormNoConformidad : Form
         txtNumero.TabStop = false;
         lblNumero.AutoSize = true;
         lblNumero.ForeColor = Tema.Suave;
-        lblNumero.Font = new Font("Segoe UI", 8.5f);
+        lblNumero.Font = Tema.FuenteNota;
         lblNumero.Margin = new Padding(0, 4, 0, 0);
 
         Sugerencias(txtCliente, clientes);
@@ -329,7 +328,7 @@ public class FormNoConformidad : Form
     {
         boton.BackColor = boton.Checked ? Tema.Acento : Color.White;
         boton.ForeColor = boton.Checked ? Color.White : Tema.Texto;
-        boton.Font = new Font("Segoe UI", 9.5f, boton.Checked ? FontStyle.Bold : FontStyle.Regular);
+        boton.Font = Tema.FuenteDeOpcion(boton.Checked);
         boton.FlatAppearance.BorderColor = boton.Checked ? Tema.Acento : Tema.Borde;
         boton.FlatAppearance.MouseOverBackColor = boton.Checked ? Tema.Acento : Tema.AcentoSuave;
     }
@@ -854,7 +853,7 @@ public class FormNoConformidad : Form
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se puede guardar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se puede guardar", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -871,10 +870,7 @@ public class FormNoConformidad : Form
     {
         if (!hayCambios || DialogResult == DialogResult.OK) return;
 
-        var respuesta = MessageBox.Show(this,
-            "Hay cambios sin guardar. ¿Salir sin guardarlos?",
-            "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
-        if (respuesta != DialogResult.Yes)
+        if (!Mensajes.DescartarCambios(this, "Hay cambios sin guardar. ¿Salir sin guardarlos?"))
             e.Cancel = true;
     }
 

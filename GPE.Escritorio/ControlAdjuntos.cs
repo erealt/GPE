@@ -124,7 +124,7 @@ public class ControlAdjuntos : UserControl
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "Archivo no válido", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Archivo no válido", ex.Message);
             return;
         }
         catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException)
@@ -176,8 +176,7 @@ public class ControlAdjuntos : UserControl
     {
         if (Seleccionado() is not AdjuntoInfo adjunto) return;
 
-        if (MessageBox.Show(this, $"¿Quitar \"{adjunto.NombreArchivo}\"?", "Quitar archivo",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        if (!Mensajes.Confirmar(this, "Quitar archivo", $"¿Quitar \"{adjunto.NombreArchivo}\"?"))
             return;
 
         try
@@ -186,7 +185,7 @@ public class ControlAdjuntos : UserControl
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "Sin permiso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Sin permiso", ex.Message);
             return;
         }
         catch (DbException ex)
@@ -205,8 +204,7 @@ public class ControlAdjuntos : UserControl
         btnVer.Enabled = btnQuitar.Enabled = Seleccionado() != null;
     }
 
-    private void Error(string mensaje, Exception ex) =>
-        MessageBox.Show(this, mensaje + "\n\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    private void Error(string mensaje, Exception ex) => Mensajes.Error(this, mensaje, ex);
 
     private static string FormatoTamano(int bytes) =>
         bytes >= 1024 * 1024 ? $"{bytes / (1024.0 * 1024):0.0} MB" : $"{Math.Max(1, bytes / 1024)} KB";

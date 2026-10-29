@@ -27,7 +27,7 @@ public class FormHistorial : Form
         var titulo = new Label
         {
             Text = "Historial de cambios",
-            Font = new Font("Segoe UI", 20, FontStyle.Bold),
+            Font = Tema.FuenteTituloVentana,
             ForeColor = Tema.Texto,
             Dock = DockStyle.Top,
             Height = 50
@@ -128,7 +128,7 @@ public class FormHistorial : Form
         {
             Text = entrada.Titulo,
             AutoSize = true,
-            Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
+            Font = Tema.FuenteDestacada,
             ForeColor = Tema.Texto
         });
         cuerpo.Controls.Add(new Label
