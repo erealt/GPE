@@ -86,6 +86,11 @@ public class FormPrincipal : Form
                 "Chequeos diarios y PCC del supervisor de calidad al recorrer la fábrica.",
                 ModuloInicio.ResumenRutina,
                 () => new ModuloRutinaCalidad()));
+
+            lista.Add(new Modulo("Control de agua",
+                "Cloro y organolépticos de los puntos de agua (MT-RG09).",
+                ModuloInicio.ResumenAgua,
+                () => new ModuloControlAgua()));
         }
 
         return lista;

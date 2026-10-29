@@ -15,6 +15,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones. Ya da de alta la fábrica, los cuatro roles (los tres de devoluciones y Calidad) y los seis estados (apartado 3).
    - [`no_conformidades.sql`](BaseDatos/no_conformidades.sql): tablas de calidad y opciones de los desplegables (la hoja LISTAS del Excel).
    - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
+   - [`control_agua.sql`](BaseDatos/control_agua.sql): tablas del control de agua (hoja AGUA del Excel de calidad), con los puntos de agua que se revisan.
    - [`rutina_revisiones.sql`](BaseDatos/rutina_revisiones.sql): solo en bases de datos creadas antes de que la rutina tuviera varias revisiones por día. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
 
@@ -96,7 +97,7 @@ flowchart LR
 
 ### Permisos por rol
 
-El menú enseña los módulos de los roles del usuario (`Sesion.VeDevoluciones` y `Sesion.VeCalidad`): las devoluciones, a Administración, Transporte y Almacén (y en consulta a quien no tiene ningún rol); las no conformidades y la rutina, al rol Calidad. Quien tenga varios roles ve los módulos de todos.
+El menú enseña los módulos de los roles del usuario (`Sesion.VeDevoluciones` y `Sesion.VeCalidad`): las devoluciones, a Administración, Transporte y Almacén (y en consulta a quien no tiene ningún rol); las no conformidades, la rutina y el control de agua, al rol Calidad. Quien tenga varios roles ve los módulos de todos.
 
 Cada paso lo hace un rol (tabla del apartado 3); quien no lo tiene lo ve en solo consulta. La lista de devoluciones solo enseña las que esperan algo de los roles del usuario (`DevolucionServicio.FasesPorRol`); las cerradas las puede consultar cualquiera filtrando o buscando.
 
@@ -152,6 +153,23 @@ Sustituye a la hoja de Google Sheets "CHEQUEOS DIARIOS - PCC" que calidad rellen
 - **Incidencias**: desde una casilla "no correcta" se abre la ficha de una incidencia nueva ya rellenada (fecha, sección, MC/PCC/BPM y problema), y al guardarla queda apuntada en la casilla (`no_conformidad_id`). La sección y el MC/PCC/BPM que se proponen salen de `RUTINA_SECCION.seccion_calidad` y `RUTINA_PUNTO.mc_pcc_bpm`.
 - **Dos personas en la misma ronda**: `RUTINA.version` hace que el segundo en guardar no pise al primero; tiene que recargar.
 - **Historial**: lo apuntan triggers, como en las incidencias.
+
+### Control de agua
+
+Sustituye a la hoja AGUA (MT-RG09) del Excel de calidad: cada día se apuntan los puntos de agua que se han revisado, con el cloro y los organolépticos.
+
+| Pieza | Archivo |
+|---|---|
+| Datos | [`DatosAgua.cs`](GPE.Datos/DatosAgua.cs), [`AguaRepositorio.cs`](GPE.Datos/AguaRepositorio.cs) |
+| Reglas | [`AguaServicio.cs`](GPE.Logica/AguaServicio.cs) |
+| Pantalla | [`ModuloControlAgua.cs`](GPE.Escritorio/ModuloControlAgua.cs) |
+
+- **Pantalla**: como la rutina, se elige el día arriba (calendario, flechas y "Hoy") y debajo hay una tabla con una fila por punto revisado: punto de agua, cloro, sabor, olor, color, turbidez y comentario. Con "+ Añadir fila" se apunta otro; con Supr se quita. "Guardar" guarda el día entero.
+- **Puntos de agua** (`AGUA_TOMA`): los que se pueden elegir en la tabla. De momento se cambian en la base de datos.
+- **Rango de cloro**: `AGUA_TOMA.cloro_min` y `cloro_max`, vacíos hasta que calidad los dé. Con rango, el cloro que se sale se ve en rojo.
+- **Controles** (`AGUA_CONTROL`): uno por punto y día. El cloro se deja vacío si no se ha medido. Al guardar solo se escriben las filas nuevas, las cambiadas y las quitadas.
+- **Dos personas en el mismo día**: `AGUA_CONTROL.version` hace que el segundo en guardar no pise al primero; tiene que recargar.
+- **Historial**: lo apunta un trigger, como en las incidencias.
 
 ---
 

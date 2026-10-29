@@ -159,4 +159,16 @@ public class ModuloInicio : UserControl
             return null;
         }
     }
+
+    public static string? ResumenAgua()
+    {
+        try
+        {
+            return new AguaServicio().ResumenHoy();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
 }
