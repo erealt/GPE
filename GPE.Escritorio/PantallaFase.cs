@@ -9,6 +9,11 @@ public class PantallaFase : Form
 {
     public int? PasoSolicitado { get; private set; }
 
+    public PantallaFase()
+    {
+        Componentes.AjustarAPantalla(this);
+    }
+
     // Barra de progreso en la que se pueden pulsar los pasos completados y el actual
     protected Control Progreso(DevolucionFila devolucion, int pasoVisto)
     {

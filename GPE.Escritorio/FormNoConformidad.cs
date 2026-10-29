@@ -96,6 +96,7 @@ public class FormNoConformidad : Form
         Size = new Size(1200, 800);
         MinimumSize = new Size(1100, 600);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this);
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 

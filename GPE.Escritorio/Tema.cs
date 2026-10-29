@@ -79,10 +79,7 @@ public static class Tema
     // Casillas de la rutina de calidad. FondoNoRevisa: casilla que la plantilla no revisa.
     public static readonly Color FondoNoRevisa = Color.FromArgb(226, 228, 224);
     // Líneas de la tabla (más marcadas que Linea: es una tabla grande que se recorre con la vista)
-    // y fondo de la fila y la columna que tienen el ratón encima
     public static readonly Color LineaTabla = Color.FromArgb(180, 186, 180);
-    public static readonly Color FondoRaton = Color.FromArgb(232, 241, 252);
-    public static readonly Color FondoNoRevisaRaton = Color.FromArgb(212, 221, 232);
 
     public static (Color Fondo, Color Texto) ColorEstadoCasilla(string estado) => estado switch
     {

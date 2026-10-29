@@ -41,6 +41,7 @@ public class FormNuevaDevolucion : Form
         Size = new Size(1200, 750);
         MinimumSize = new Size(1150, 600);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this);
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 

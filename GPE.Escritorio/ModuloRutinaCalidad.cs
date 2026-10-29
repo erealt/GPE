@@ -8,8 +8,9 @@ namespace GPE.Escritorio;
 
 // Rutina diaria del supervisor de calidad (la hoja "CHEQUEOS DIARIOS - PCC"): una tabla
 // con los puntos de control en filas y las máquinas en columnas. Se marcan las casillas
-// con el teclado (varias a la vez) o con el botón derecho, y desde una casilla "no
-// correcta" se abre una incidencia. Vive dentro de FormPrincipal.
+// con el teclado (varias a la vez) o pulsándolas, con un panel de botones grandes que
+// también sirve en una tablet (OpcionesCasilla), y desde una casilla "no correcta" se abre
+// una incidencia. Vive dentro de FormPrincipal.
 public class ModuloRutinaCalidad : UserControl
 {
     private const int AnchoPunto = 220;
@@ -48,11 +49,14 @@ public class ModuloRutinaCalidad : UserControl
     // depósitos y una lista de sección + observación
     private readonly RadioButton pestanaObservaciones = new();
     private Control panelObservaciones = null!;
-    private readonly ComboBox cmbCajaOperario = new();
+    // Operario de la caja: se elige con un panel de botones (ElegirOpcion); el botón lo enseña
+    private readonly Button btnCajaOperario = Tema.BotonSecundario("", 300);
+    private string? cajaOperario;
+    private List<string> operarios = new();
     private readonly CheckBox btnCajaOk = new(), btnCajaNoOk = new();   // estado de la caja: uno, otro o ninguno
     private readonly TextBox txtDepositos = new();
     private readonly DataGridView gridObservaciones = new();
-    private readonly DataGridViewComboBoxColumn columnaSeccion = new();
+    private const int ColObservacionSeccion = 0, ColObservacionTexto = 1, ColObservacionQuitar = 2;
 
     public ModuloRutinaCalidad()
     {
@@ -76,11 +80,9 @@ public class ModuloRutinaCalidad : UserControl
             RowCount = 6,
             Padding = new Padding(40, 30, 40, 20)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        foreach (int alto in AltosDeArriba)
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, alto));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         // La tabla y las observaciones ocupan el mismo sitio: se ve una u otra según la pestaña
@@ -96,7 +98,97 @@ public class ModuloRutinaCalidad : UserControl
         layout.Controls.Add(CrearLeyenda(), 0, 3);
         layout.Controls.Add(CrearPestanasPlanta(), 0, 4);
         layout.Controls.Add(zona, 0, 5);
+        this.layout = layout;
         return layout;
+    }
+
+    // Pantalla completa
+
+    // Se quedan solo las pestañas de planta y la tabla, con las filas estiradas para que quepan
+    // todas sin scroll. Lo de arriba (día, revisiones, leyenda) se oculta: se sale con Esc o F11.
+    private TableLayoutPanel layout = null!;
+    private bool pantallaCompleta;
+    private readonly Button btnPantallaCompleta = Tema.BotonSecundario("⛶  Pantalla completa", 190);
+    private readonly Button btnGuardarCompacto = Tema.BotonPrincipal("Guardar", 120);
+    private readonly Label lblRondaCompacta = new();
+    private const int AltoFilaNormal = 32, AltoFilaMinimo = 24, AltoFilaMaximo = 48;
+    private const int AnchoSeccionMaximo = 110;
+    private const int FilasDeArriba = 4;   // cabecera, día, revisiones y leyenda
+    private static readonly int[] AltosDeArriba = { 95, 80, 56, 68 };
+
+    private void PantallaCompleta(bool activar)
+    {
+        if (activar == pantallaCompleta || FindForm() is not FormPrincipal ventana) return;
+        pantallaCompleta = activar;
+
+        layout.SuspendLayout();
+        for (int i = 0; i < FilasDeArriba; i++)
+        {
+            layout.GetControlFromPosition(0, i)!.Visible = !activar;
+            layout.RowStyles[i].Height = activar ? 0 : AltosDeArriba[i];   // una fila oculta sigue ocupando su alto
+        }
+        layout.Padding = activar ? new Padding(20, 12, 20, 12) : new Padding(40, 30, 40, 20);
+        lblRondaCompacta.Text = $"{Componentes.Fecha(rutina.Fecha)}  ·  {revisionActual}ª revisión";
+        lblRondaCompacta.Visible = btnGuardarCompacto.Visible = activar;
+        btnPantallaCompleta.Text = activar ? "Salir (Esc)" : "⛶  Pantalla completa";
+        layout.ResumeLayout();
+
+        ventana.PantallaCompleta(activar);
+        AjustarAltoFilas();
+        grid.Focus();
+    }
+
+    // En pantalla completa las filas se reparten el alto disponible (dentro de unos límites,
+    // para que se puedan leer y pulsar); fuera de ella tienen su alto de siempre
+    private void AjustarAltoFilas()
+    {
+        AjustarAnchoColumnas();
+
+        int alto = AltoFilaNormal;
+        if (pantallaCompleta && grid.Rows.Count > 0)
+        {
+            int disponible = grid.ClientSize.Height - grid.ColumnHeadersHeight - 2;
+            if (grid.Controls.OfType<HScrollBar>().Any(b => b.Visible))
+                disponible -= SystemInformation.HorizontalScrollBarHeight;
+            alto = Math.Clamp(disponible / grid.Rows.Count, AltoFilaMinimo, AltoFilaMaximo);
+        }
+
+        grid.RowTemplate.Height = alto;
+        foreach (DataGridViewRow fila in grid.Rows)
+            if (fila.Height != alto) fila.Height = alto;
+    }
+
+    // En pantalla completa las máquinas se reparten también el ancho, para que las casillas sean
+    // más fáciles de pulsar con el dedo (sin pasarse, para que no queden demasiado separadas)
+    private void AjustarAnchoColumnas()
+    {
+        var columnas = grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Tag != null).ToList();
+        if (columnas.Count == 0) return;
+
+        int reparto = 0;
+        if (pantallaCompleta)
+        {
+            int disponible = grid.ClientSize.Width - AnchoPunto - 2;
+            if (grid.Controls.OfType<VScrollBar>().Any(b => b.Visible))
+                disponible -= SystemInformation.VerticalScrollBarWidth;
+            reparto = Math.Min(disponible / columnas.Count, AnchoSeccionMaximo);
+        }
+
+        foreach (var columna in columnas)
+        {
+            int ancho = Math.Max(AnchoColumna(columna.HeaderText), reparto);
+            if (columna.Width != ancho) columna.Width = ancho;
+        }
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.F11 || (keyData == Keys.Escape && pantallaCompleta && !grid.IsCurrentCellInEditMode))
+        {
+            PantallaCompleta(!pantallaCompleta);
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     // Revisiones del día: una pestaña por cada vez que se recorre la fábrica (el segundo
@@ -105,8 +197,8 @@ public class ModuloRutinaCalidad : UserControl
     {
         pestanasRevision.Dock = DockStyle.Fill;
         pestanasRevision.WrapContents = false;
-        pestanasRevision.Padding = new Padding(0, 10, 0, 0);
-        btnNuevaRevision.Height = 32;
+        pestanasRevision.Padding = new Padding(0, 8, 0, 0);
+        btnNuevaRevision.Height = 40;
         btnNuevaRevision.Margin = new Padding(10, 0, 0, 0);
         btnNuevaRevision.Click += (s, e) => NuevaRevision();
         ayuda.SetToolTip(btnNuevaRevision, "Empieza otra revisión ahora, con la plantilla en blanco.");
@@ -126,7 +218,7 @@ public class ModuloRutinaCalidad : UserControl
             Text = "Revisión",
             AutoSize = true,
             ForeColor = Tema.Suave,
-            Margin = new Padding(0, 7, 10, 0)
+            Margin = new Padding(0, 11, 10, 0)
         });
         foreach (var revision in revisiones)
         {
@@ -137,7 +229,7 @@ public class ModuloRutinaCalidad : UserControl
                 Appearance = Appearance.Button,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Size = new Size(170, 32),
+                Size = new Size(190, 40),
                 Margin = new Padding(0, 0, 6, 0),
                 Cursor = Cursors.Hand,
                 Checked = numero == revisionActual
@@ -254,9 +346,9 @@ public class ModuloRutinaCalidad : UserControl
 
         Button Flecha(string texto, int dias)
         {
-            var boton = Tema.BotonSecundario(texto, 40);
-            boton.Height = 32;
-            boton.Margin = new Padding(0, 22, 6, 0);
+            var boton = Tema.BotonSecundario(texto, 48);
+            boton.Height = 40;
+            boton.Margin = new Padding(0, 18, 6, 0);
             boton.Click += (s, e) =>
             {
                 var dia = dtpFecha.Value.Date.AddDays(dias);
@@ -264,9 +356,9 @@ public class ModuloRutinaCalidad : UserControl
             };
             return boton;
         }
-        var btnHoy = Tema.BotonSecundario("Hoy", 60);
-        btnHoy.Height = 32;
-        btnHoy.Margin = new Padding(0, 22, 20, 0);
+        var btnHoy = Tema.BotonSecundario("Hoy", 70);
+        btnHoy.Height = 40;
+        btnHoy.Margin = new Padding(0, 18, 20, 0);
         btnHoy.Click += (s, e) => CambiarDia(DateTime.Today);
 
         var filtros = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
@@ -292,17 +384,17 @@ public class ModuloRutinaCalidad : UserControl
         datos.Controls.Add(lblProgreso);
 
         var btnRecargar = Tema.BotonSecundario("Recargar", 110);
-        btnRecargar.Height = 34;
+        btnRecargar.Height = 40;
         btnRecargar.Click += (s, e) =>
         {
             if (DescartarCambios()) Cargar(rutina.Fecha, recargarPlantilla: true);
         };
         var btnPlantilla = Tema.BotonSecundario("Plantilla", 110);
-        btnPlantilla.Height = 34;
+        btnPlantilla.Height = 40;
         btnPlantilla.Margin = new Padding(10, 3, 0, 3);
         btnPlantilla.Click += (s, e) => ConfigurarPlantilla();
 
-        var botones = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 14, 0, 0) };
+        var botones = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 12, 0, 0) };
         botones.Controls.Add(btnRecargar);
         botones.Controls.Add(btnPlantilla);
 
@@ -345,8 +437,8 @@ public class ModuloRutinaCalidad : UserControl
         leyenda.SetFlowBreak(noRevisa, true);
         leyenda.Controls.Add(new Label
         {
-            Text = "Pulsa una casilla para marcarla. Para varias, selecciónalas (o pulsa una cabecera) " +
-                   "y pulsa su letra. En PESOS se escribe el número.",
+            Text = "Pulsa una casilla para marcarla. Pulsa el nombre de un punto o de una máquina " +
+                   "para marcarla entera (\"Todo correcto\"). En PESOS se apunta el número con el teclado que sale.",
             AutoSize = true,
             ForeColor = Tema.Suave,
             Font = Tema.FuentePequena,
@@ -362,18 +454,15 @@ public class ModuloRutinaCalidad : UserControl
         scroll.Padding = new Padding(0, 0, 10, 0);
         var campos = new CamposFormulario();
 
-        foreach (var combo in new[] { cmbCajaOperario })
-        {
-            combo.DropDownStyle = ComboBoxStyle.DropDown;   // se elige de la lista o se escribe
-            combo.MaxLength = RutinaServicio.LargoCaja;
-            combo.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
-            combo.AutoCompleteSource = AutoCompleteSource.ListItems;
-            combo.TextChanged += (s, e) => { if (!cargando) MarcarCambios(); };
-        }
+        btnCajaOperario.Height = 48;
+        btnCajaOperario.TextAlign = ContentAlignment.MiddleLeft;
+        btnCajaOperario.Padding = new Padding(10, 0, 0, 0);
+        btnCajaOperario.Click += (s, e) => ElegirOperario();
+        MostrarOperario();
 
         var caja = Componentes.Tarjeta("Caja de herramientas", "Quién la tiene hoy y cómo está.");
         var rejilla = Componentes.Rejilla(2);
-        rejilla.Controls.Add(campos.Campo("Operario", cmbCajaOperario));
+        rejilla.Controls.Add(campos.Campo("Operario", btnCajaOperario));
         rejilla.Controls.Add(campos.Campo("Estado", CrearEstadoCaja()));
         caja.Controls.Add(rejilla);
         pila.Controls.Add(caja);
@@ -389,63 +478,157 @@ public class ModuloRutinaCalidad : UserControl
         depositos.Controls.Add(txtDepositos);
         pila.Controls.Add(depositos);
 
-        var btnAnadirFila = Tema.BotonSecundario("+  Añadir fila", 160);
-        btnAnadirFila.Click += (s, e) => AnadirFilaObservacion();
+        var btnAnadirFila = Tema.BotonSecundario("+  Añadir observación", 220);
+        btnAnadirFila.Height = 48;
+        btnAnadirFila.Click += (s, e) => AnadirFilaObservacion(btnAnadirFila);
         var secciones = Componentes.Tarjeta("Observaciones por sección",
-            "Elige la sección y escribe la observación. Para quitar una, selecciónala y pulsa Supr.", btnAnadirFila);
+            "Pulsa \"+ Añadir observación\", elige la sección y escribe. Pulsa la sección para cambiarla y ✕ para quitarla.",
+            btnAnadirFila);
         secciones.Controls.Add(ConfigurarGridObservaciones());
         pila.Controls.Add(secciones);
 
         return scroll;
     }
 
+    // Como el control de agua: la sección se elige con botones grandes, la observación se
+    // escribe en la celda y ✕ quita la fila (también vale Supr)
     private Control ConfigurarGridObservaciones()
     {
-        Componentes.EstiloTabla(gridObservaciones, altoFila: 36);
+        Componentes.EstiloTabla(gridObservaciones, altoFila: 48);
         gridObservaciones.Dock = DockStyle.Top;
         gridObservaciones.ScrollBars = ScrollBars.None;   // crece con las filas; desplaza la página
         gridObservaciones.AllowUserToDeleteRows = true;
-        gridObservaciones.EditMode = DataGridViewEditMode.EditOnEnter;
+        gridObservaciones.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
         gridObservaciones.GridColor = Tema.LineaTabla;
         gridObservaciones.CellBorderStyle = DataGridViewCellBorderStyle.Single;
+        gridObservaciones.MultiSelect = false;
 
-        columnaSeccion.HeaderText = "SECCIÓN";
-        columnaSeccion.Width = 200;
-        columnaSeccion.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-        columnaSeccion.FlatStyle = FlatStyle.Flat;
-        columnaSeccion.DisplayMember = nameof(RutinaSeccion.Nombre);
-        columnaSeccion.ValueMember = nameof(RutinaSeccion.Id);
-        gridObservaciones.Columns.Add(columnaSeccion);
+        gridObservaciones.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "SECCIÓN",
+            Width = 220,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
         gridObservaciones.Columns.Add(new DataGridViewTextBoxColumn
         {
             HeaderText = "OBSERVACIÓN",
-            MaxInputLength = RutinaServicio.LargoComentario
+            MaxInputLength = RutinaServicio.LargoComentario,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
+        gridObservaciones.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "",
+            Width = 56,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            ReadOnly = true,
+            ToolTipText = "Quitar la observación",
+            SortMode = DataGridViewColumnSortMode.NotSortable
         });
 
-        // La sección se apunta en cuanto se elige, sin esperar a salir de la celda
-        gridObservaciones.CurrentCellDirtyStateChanged += (s, e) =>
+        gridObservaciones.CellClick += (s, e) =>
         {
-            if (gridObservaciones.CurrentCell is DataGridViewComboBoxCell)
-                gridObservaciones.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            if (e.RowIndex < 0) return;
+            var fila = gridObservaciones.Rows[e.RowIndex];
+            if (e.ColumnIndex == ColObservacionSeccion) ElegirSeccionObservacion(fila);
+            else if (e.ColumnIndex == ColObservacionTexto) gridObservaciones.BeginEdit(true);
+            else if (e.ColumnIndex == ColObservacionQuitar) QuitarObservacion(fila);
+        };
+        gridObservaciones.KeyDown += (s, e) =>
+        {
+            if (e.KeyCode is not (Keys.Enter or Keys.F2) || gridObservaciones.IsCurrentCellInEditMode
+                || gridObservaciones.CurrentCell is not { ColumnIndex: ColObservacionSeccion } celda) return;
+            ElegirSeccionObservacion(gridObservaciones.Rows[celda.RowIndex]);
+            e.Handled = e.SuppressKeyPress = true;
+        };
+        // La celda guarda el id de la sección: se enseña su nombre
+        gridObservaciones.CellFormatting += (s, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != ColObservacionSeccion) return;
+            e.Value = NombreSeccion(gridObservaciones.Rows[e.RowIndex]) ?? "—";
+            e.FormattingApplied = true;
+        };
+        gridObservaciones.CellPainting += (s, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != ColObservacionQuitar || e.Graphics == null) return;
+            e.PaintBackground(e.CellBounds, false);
+            TextRenderer.DrawText(e.Graphics, "✕", Tema.FuenteNegrita, e.CellBounds, Tema.Suave,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            e.Handled = true;
         };
         gridObservaciones.CellValueChanged += (s, e) => { if (!cargando) MarcarCambios(); };
         gridObservaciones.UserDeletedRow += (s, e) => MarcarCambios();
         gridObservaciones.RowsAdded += (s, e) => AjustarAltoObservaciones();
         gridObservaciones.RowsRemoved += (s, e) => AjustarAltoObservaciones();
-        // Una sección que ya no está en la plantilla no rompe la tabla: se queda en blanco
-        gridObservaciones.DataError += (s, e) => e.ThrowException = false;
         AjustarAltoObservaciones();
         return gridObservaciones;
     }
 
-    // Una fila nueva al final, con la sección lista para elegir
-    private void AnadirFilaObservacion()
+    // Una sección que ya no está en la plantilla no rompe la tabla: null
+    private string? NombreSeccion(DataGridViewRow fila) =>
+        fila.Cells[ColObservacionSeccion].Value is int id ? plantilla.Secciones.FirstOrDefault(s => s.Id == id)?.Nombre : null;
+
+    private ElegirOpcion PanelSecciones(DataGridViewRow? fila) =>
+        new("Sección", plantilla.Secciones.Select(s => (s.Id.ToString(), s.Nombre, true)).ToList(),
+            (fila?.Cells[ColObservacionSeccion].Value as int?)?.ToString());
+
+    // Se elige la sección, se añade la fila y se empieza a escribir la observación
+    private void AnadirFilaObservacion(Control boton)
     {
         gridObservaciones.EndEdit();
-        int fila = gridObservaciones.Rows.Add();
-        gridObservaciones.Focus();
-        gridObservaciones.CurrentCell = gridObservaciones.Rows[fila].Cells[0];
-        gridObservaciones.BeginEdit(true);
+        var panel = PanelSecciones(null);
+        panel.Abrir(this, boton.PointToScreen(new Point(0, boton.Height)), () =>
+        {
+            if (panel.Elegida is not string clave) return;
+            int i = gridObservaciones.Rows.Add(int.Parse(clave), "", "");
+            gridObservaciones.Focus();
+            gridObservaciones.CurrentCell = gridObservaciones.Rows[i].Cells[ColObservacionTexto];
+            gridObservaciones.BeginEdit(true);
+        });
+    }
+
+    private void ElegirSeccionObservacion(DataGridViewRow fila)
+    {
+        var panel = PanelSecciones(fila);
+        var celda = gridObservaciones.GetCellDisplayRectangle(ColObservacionSeccion, fila.Index, false);
+        panel.Abrir(this, gridObservaciones.PointToScreen(new Point(celda.Left, celda.Bottom)), () =>
+        {
+            if (fila.DataGridView != null && panel.Elegida is string clave
+                && !Equals(fila.Cells[ColObservacionSeccion].Value, int.Parse(clave)))
+                fila.Cells[ColObservacionSeccion].Value = int.Parse(clave);
+        });
+    }
+
+    private void QuitarObservacion(DataGridViewRow fila)
+    {
+        if (!Mensajes.Confirmar(this, "Quitar observación", $"¿Quitar la observación de {NombreSeccion(fila) ?? "esta fila"}?"))
+            return;
+        gridObservaciones.Rows.Remove(fila);
+        MarcarCambios();
+    }
+
+    // Operario de la caja: los de la lista de calidad y, si se había apuntado otro, también ese
+    private void ElegirOperario()
+    {
+        var nombres = operarios.ToList();
+        if (cajaOperario != null && !nombres.Contains(cajaOperario)) nombres.Insert(0, cajaOperario);
+        var panel = new ElegirOpcion("¿Quién tiene la caja de herramientas?",
+            nombres.Select(n => (n, n, true)).ToList(), cajaOperario, textoQuitar: "Quitar el operario");
+        panel.Abrir(this, btnCajaOperario.PointToScreen(new Point(0, btnCajaOperario.Height)), () =>
+        {
+            string? elegido = panel.Quitar ? null : panel.Elegida ?? cajaOperario;
+            if (elegido == cajaOperario) return;
+            cajaOperario = elegido;
+            MostrarOperario();
+            MarcarCambios();
+        });
+    }
+
+    private void MostrarOperario()
+    {
+        btnCajaOperario.Text = cajaOperario ?? "Elige quién la tiene…";
+        btnCajaOperario.ForeColor = cajaOperario == null ? Tema.Suave : Tema.Texto;
     }
 
     // Siempre se ven todas las filas, y como mínimo hueco para cinco
@@ -461,12 +644,12 @@ public class ModuloRutinaCalidad : UserControl
     {
         try
         {
-            var operarios = new NoConformidadServicio().ObtenerListas().GetValueOrDefault(ListaCalidad.Operario) ?? new();
-            cmbCajaOperario.Items.AddRange(operarios.Select(o => (object)o.Valor).ToArray());
+            var lista = new NoConformidadServicio().ObtenerListas().GetValueOrDefault(ListaCalidad.Operario) ?? new();
+            operarios = lista.Select(o => o.Valor).ToList();
         }
         catch (DbException)
         {
-            // Sin la lista se puede escribir el nombre igual
+            // Sin la lista no se puede elegir, pero se sigue viendo el que estuviera apuntado
         }
     }
 
@@ -506,29 +689,44 @@ public class ModuloRutinaCalidad : UserControl
         grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
 
         grid.CellPainting += PintarCasilla;
-        grid.CellMouseEnter += (s, e) => SeguirRaton(e.RowIndex, e.ColumnIndex);
-        grid.MouseLeave += (s, e) => SeguirRaton(-1, -1);
         grid.KeyDown += TeclaPulsada;
         grid.CellMouseDown += BotonDerecho;
-        // Al pulsar una sola casilla salen las opciones de la leyenda. Si se arrastra o se usa
-        // Ctrl / Mayús para elegir varias, no: se marcan después con una letra o el botón derecho.
+        // Al pulsar una sola casilla salen las opciones de la leyenda, o el teclado de números en
+        // las de número (con el teclado del ordenador también se puede escribir en la casilla).
+        // Si se arrastra o se usa Ctrl / Mayús para elegir varias, no: se marcan después con una
+        // letra o el botón derecho (que abre el mismo panel).
         grid.CellMouseClick += (s, e) =>
         {
-            if (e.Button == MouseButtons.Left && ModifierKeys == Keys.None && grid.SelectedCells.Count == 1
-                && Casilla(e.RowIndex, e.ColumnIndex) is var (punto, _) && !punto.Numerico)
-            {
-                var celda = grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
-                MostrarOpciones(e.RowIndex, e.ColumnIndex, new Point(celda.Left, celda.Bottom));
-            }
+            if (e.Button != MouseButtons.Left || ModifierKeys != Keys.None || grid.SelectedCells.Count != 1
+                || Casilla(e.RowIndex, e.ColumnIndex) is not var (punto, seccion) || !Editable(punto, seccion)) return;
+
+            var celda = grid.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
+            var debajo = new Point(celda.Left, celda.Bottom);
+            if (punto.Numerico)
+                PedirNumero(punto, seccion, grid.Rows[e.RowIndex].Cells[e.ColumnIndex], debajo);
+            else
+                MostrarOpciones(debajo);
         };
+        // Al pulsar el nombre de un punto o de una máquina se eligen todas sus casillas y salen
+        // las opciones, con "Todo correcto" para marcar de golpe lo que está bien
         grid.CellClick += (s, e) =>
         {
-            if (e.ColumnIndex == 0 && e.RowIndex >= 0) SeleccionarFila(e.RowIndex);
+            if (e.ColumnIndex != 0 || e.RowIndex < 0) return;
+            SeleccionarFila(e.RowIndex);
+            var celda = grid.GetCellDisplayRectangle(0, e.RowIndex, false);
+            MostrarOpciones(new Point(celda.Right, celda.Top));
         };
-        grid.ColumnHeaderMouseClick += (s, e) => { if (e.ColumnIndex > 0) SeleccionarColumna(e.ColumnIndex); };
+        grid.ColumnHeaderMouseClick += (s, e) =>
+        {
+            if (e.ColumnIndex < 1) return;
+            SeleccionarColumna(e.ColumnIndex);
+            var cabecera = grid.GetCellDisplayRectangle(e.ColumnIndex, -1, false);
+            MostrarOpciones(new Point(cabecera.Left, cabecera.Bottom));
+        };
         grid.CellToolTipTextNeeded += (s, e) => e.ToolTipText = TextoAyuda(e.RowIndex, e.ColumnIndex);
         grid.CellValidating += ValidarNumero;
         grid.CellEndEdit += GuardarNumero;
+        grid.Resize += (s, e) => { if (pantallaCompleta) AjustarAltoFilas(); };
 
         return grid;
     }
@@ -589,6 +787,7 @@ public class ModuloRutinaCalidad : UserControl
 
         grid.ResumeLayout();
         grid.ClearSelection();
+        AjustarAltoFilas();
     }
 
     private List<RutinaSeccion> SeccionesDe(string planta) =>
@@ -606,7 +805,7 @@ public class ModuloRutinaCalidad : UserControl
                 Appearance = Appearance.Button,
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Size = new Size(260, 36),
+                Size = new Size(260, 44),
                 Margin = new Padding(0, 0, 6, 0),
                 Cursor = Cursors.Hand,
                 Checked = planta == plantaElegida
@@ -626,7 +825,7 @@ public class ModuloRutinaCalidad : UserControl
         pestanaObservaciones.Appearance = Appearance.Button;
         pestanaObservaciones.FlatStyle = FlatStyle.Flat;
         pestanaObservaciones.TextAlign = ContentAlignment.MiddleCenter;
-        pestanaObservaciones.Size = new Size(200, 36);
+        pestanaObservaciones.Size = new Size(200, 44);
         pestanaObservaciones.Margin = new Padding(0, 0, 6, 0);
         pestanaObservaciones.Cursor = Cursors.Hand;
         pestanaObservaciones.Text = "Observaciones";
@@ -637,7 +836,37 @@ public class ModuloRutinaCalidad : UserControl
         };
         PintarPestana(pestanaObservaciones);
         pestanas.Controls.Add(pestanaObservaciones);
-        return pestanas;
+
+        // A la derecha: pantalla completa y, dentro de ella, el día y "Guardar" (el de arriba no se ve)
+        var derecha = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            WrapContents = false,
+            Padding = new Padding(0, 6, 0, 0)
+        };
+        lblRondaCompacta.AutoSize = true;
+        lblRondaCompacta.ForeColor = Tema.Suave;
+        lblRondaCompacta.Margin = new Padding(0, 13, 14, 0);
+        lblRondaCompacta.Visible = false;
+        btnGuardarCompacto.Height = 44;
+        btnGuardarCompacto.Margin = new Padding(0, 0, 8, 0);
+        btnGuardarCompacto.Visible = false;
+        btnGuardarCompacto.Enabled = btnGuardar.Enabled;
+        btnGuardar.EnabledChanged += (s, e) => btnGuardarCompacto.Enabled = btnGuardar.Enabled;
+        btnGuardarCompacto.Click += (s, e) => Guardar();
+        btnPantallaCompleta.Height = 44;
+        btnPantallaCompleta.Margin = new Padding(0);
+        btnPantallaCompleta.Click += (s, e) => PantallaCompleta(!pantallaCompleta);
+        ayuda.SetToolTip(btnPantallaCompleta, "Ver la tabla sola, con todas las filas a la vista (F11)");
+        derecha.Controls.Add(lblRondaCompacta);
+        derecha.Controls.Add(btnGuardarCompacto);
+        derecha.Controls.Add(btnPantallaCompleta);
+
+        var fila = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+        fila.Controls.Add(pestanas);
+        fila.Controls.Add(derecha);
+        return fila;
     }
 
     // Dos botones en vez de una lista: se pulsa uno y, si se vuelve a pulsar, se desmarca
@@ -650,7 +879,7 @@ public class ModuloRutinaCalidad : UserControl
             boton.Appearance = Appearance.Button;
             boton.FlatStyle = FlatStyle.Flat;
             boton.TextAlign = ContentAlignment.MiddleCenter;
-            boton.Size = new Size(130, 34);
+            boton.Size = new Size(150, 48);
             boton.Margin = new Padding(0, 0, 10, 0);
             boton.Cursor = Cursors.Hand;
             boton.CheckedChanged += (s, e) =>
@@ -694,17 +923,6 @@ public class ModuloRutinaCalidad : UserControl
         boton.FlatAppearance.MouseOverBackColor = boton.Checked ? Tema.Acento : Tema.AcentoSuave;
     }
 
-    // Fila y columna con el ratón encima (-1: ninguna). Se resaltan para seguirlas con la vista.
-    private int filaRaton = -1, columnaRaton = -1;
-
-    private void SeguirRaton(int fila, int columna)
-    {
-        if (fila == filaRaton && columna == columnaRaton) return;
-        filaRaton = fila;
-        columnaRaton = columna;
-        grid.Invalidate();
-    }
-
     private (RutinaPunto Punto, RutinaSeccion Seccion)? Casilla(int fila, int columna)
     {
         if (fila < 0 || columna < 1 || fila >= grid.Rows.Count || columna >= grid.Columns.Count) return null;
@@ -715,13 +933,7 @@ public class ModuloRutinaCalidad : UserControl
     private bool Editable(RutinaPunto punto, RutinaSeccion seccion) =>
         plantilla.Aplica.Contains((punto.Id, seccion.Id)) || casillas.ContainsKey((punto.Id, seccion.Id));
 
-    private static string Simbolo(string estado) => estado switch
-    {
-        EstadoCasilla.Correcto => "✓",
-        EstadoCasilla.NoCorrecto => "NO",
-        EstadoCasilla.Mantenimiento => "M",
-        _ => "N/A"
-    };
+    private static string Simbolo(string estado) => OpcionesCasilla.Simbolo(estado);
 
     // Tecla que marca cada estado (TeclaPulsada); el espacio también vale para "correcto"
     private static readonly Dictionary<Keys, string> Teclas = new()
@@ -736,14 +948,6 @@ public class ModuloRutinaCalidad : UserControl
 
     private void PintarCasilla(object? sender, DataGridViewCellPaintingEventArgs e)
     {
-        // Nombre del punto y cabecera de la máquina bajo el ratón: en morado, para no perderse
-        bool filaRaton = e.RowIndex >= 0 && e.RowIndex == this.filaRaton;
-        bool columnaRaton = e.ColumnIndex > 0 && e.ColumnIndex == this.columnaRaton;
-        if ((e.ColumnIndex == 0 && filaRaton) || (e.RowIndex < 0 && columnaRaton))
-        {
-            e.CellStyle!.BackColor = e.CellStyle.SelectionBackColor = Tema.AcentoSuave;
-            e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = Tema.Acento;
-        }
         if (e.Graphics == null || Casilla(e.RowIndex, e.ColumnIndex) is not var (punto, seccion)) return;
 
         var g = e.Graphics;
@@ -764,10 +968,6 @@ public class ModuloRutinaCalidad : UserControl
             texto = casilla?.Valor?.ToString("0.##", Componentes.Es) ?? "";
         if (seleccionada && texto == "" && fondo == Color.White)
             fondo = Tema.AcentoSuave;
-        else if ((filaRaton || columnaRaton) && fondo == Color.White)
-            fondo = Tema.FondoRaton;
-        else if ((filaRaton || columnaRaton) && fondo == Tema.FondoNoRevisa)
-            fondo = Tema.FondoNoRevisaRaton;
 
         using (var relleno = new SolidBrush(fondo))
             g.FillRectangle(relleno, r);
@@ -812,7 +1012,7 @@ public class ModuloRutinaCalidad : UserControl
         if (casilla?.Estado != null) lineas.Add(EstadoCasilla.Nombre(casilla.Estado));
         if (casilla?.Comentario != null) lineas.Add(casilla.Comentario);
         if (casilla?.NoConformidadId != null)
-            lineas.Add($"Incidencia {casilla.NumeroIncidencia ?? "abierta"} (botón derecho para verla)");
+            lineas.Add($"Incidencia {casilla.NumeroIncidencia ?? "abierta"} (pulsa la casilla para verla)");
         return string.Join("\n", lineas);
     }
 
@@ -932,6 +1132,30 @@ public class ModuloRutinaCalidad : UserControl
         MarcarCambios();
     }
 
+    // Teclado de números grande para las casillas de número (PESOS), pensado para la tablet
+    private void PedirNumero(RutinaPunto punto, RutinaSeccion seccion, DataGridViewCell celda, Point donde)
+    {
+        string actual = casillas.GetValueOrDefault((punto.Id, seccion.Id))?.Valor?.ToString("0.##", Componentes.Es) ?? "";
+        var panel = new TecladoNumerico($"{punto.Nombre} · {seccion.Nombre}", actual, largoMaximo: 10);
+        panel.Abrir(this, grid.PointToScreen(donde), () =>
+        {
+            if (panel.Valor is not string texto || texto == actual || celda.DataGridView == null) return;
+
+            decimal? valor = LeerNumero(texto);
+            if (texto != "" && (valor == null
+                || RutinaServicio.Error(new ResultadoRutina(punto.Id, 0, null, valor, null), punto) is string))
+            {
+                Mensajes.Aviso(this, "Número no válido", "Escribe un número, por ejemplo 636 o 12,5.");
+                return;
+            }
+
+            var anterior = casillas.GetValueOrDefault((punto.Id, seccion.Id));
+            Poner((anterior ?? new ResultadoRutina(punto.Id, seccion.Id, null, null, null)) with { Valor = valor });
+            celda.Value = valor?.ToString("0.##", Componentes.Es);
+            MarcarCambios();
+        });
+    }
+
     private static decimal? LeerNumero(string texto)
     {
         if (texto == "") return null;
@@ -952,53 +1176,45 @@ public class ModuloRutinaCalidad : UserControl
             grid.ClearSelection();
             celda.Selected = true;
         }
-        MostrarOpciones(e.RowIndex, e.ColumnIndex, grid.PointToClient(Cursor.Position));
+        MostrarOpciones(grid.PointToClient(Cursor.Position));
     }
 
-    // Menú con los estados de la leyenda (con sus colores) para las casillas seleccionadas y,
-    // si es una sola, su incidencia. Pulsar el estado que ya tiene la casilla la vacía.
-    private void MostrarOpciones(int fila, int columna, Point donde)
+    // Panel con los estados de la leyenda en botones grandes (para usarlo también con el dedo)
+    // para las casillas seleccionadas y, si es una sola, su incidencia.
+    // donde: punto de la tabla junto al que se abre.
+    private void MostrarOpciones(Point donde)
     {
-        if (Casilla(fila, columna) is not var (punto, seccion) || !Editable(punto, seccion)) return;
-
         var seleccion = Seleccionadas();
-        var casilla = casillas.GetValueOrDefault((punto.Id, seccion.Id));
+        if (seleccion.Count == 0) return;
 
-        var menu = new ContextMenuStrip { Font = Tema.Fuente };
-        if (!punto.Numerico)
+        var (punto, seccion) = seleccion[0];
+        bool una = seleccion.Count == 1;
+        var casilla = una ? casillas.GetValueOrDefault((punto.Id, seccion.Id)) : null;
+        bool numerico = seleccion.All(c => c.Punto.Numerico);
+
+        // "PESOS · ENVASADORA 1", "ORDEN Y LIMPIEZA · 12 casillas", "ENVASADORA 1 · 25 casillas"...
+        string titulo = una ? $"{punto.Nombre} · {seccion.Nombre}"
+            : seleccion.All(c => c.Punto.Id == punto.Id) ? $"{punto.Nombre} · {seleccion.Count} casillas"
+            : seleccion.All(c => c.Seccion.Id == seccion.Id) ? $"{seccion.Nombre} · {seleccion.Count} casillas"
+            : $"{seleccion.Count} casillas";
+        string? incidencia = !una ? null
+            : casilla?.NoConformidadId != null ? $"Ver incidencia {casilla.NumeroIncidencia}"
+            : casilla?.Estado == EstadoCasilla.NoCorrecto ? "Abrir incidencia…"
+            : null;
+
+        var panel = new OpcionesCasilla(titulo, seleccion.Count, numerico, casilla?.Estado, incidencia);
+        panel.Abrir(this, grid.PointToScreen(donde), () =>
         {
-            foreach (string estado in EstadoCasilla.Todos)
+            if (panel.EligioEstado)
+                Marcar(panel.SoloVacias ? seleccion.Where(c => casillas.GetValueOrDefault((c.Punto.Id, c.Seccion.Id))?.Estado == null) : seleccion,
+                    panel.Estado);
+            if (panel.PideIncidencia)
             {
-                string elegido = estado;
-                var (fondo, texto) = Tema.ColorEstadoCasilla(estado);
-                var opcion = new ToolStripMenuItem(
-                    $"{Simbolo(estado)}   {EstadoCasilla.Nombre(estado)}   ({Tecla(estado)})", null,
-                    (s2, e2) => Marcar(seleccion, seleccion.Count == 1 && casilla?.Estado == elegido ? null : elegido))
-                {
-                    BackColor = fondo,
-                    ForeColor = texto,
-                    Font = Tema.FuenteNegrita,
-                    Checked = seleccion.Count == 1 && casilla?.Estado == estado
-                };
-                menu.Items.Add(opcion);
+                // Se abre cuando el panel ya se ha cerrado del todo
+                if (casilla?.NoConformidadId is int ncId) BeginInvoke(() => VerIncidencia(ncId));
+                else BeginInvoke(() => AbrirIncidencia(punto, seccion));
             }
-        }
-        else
-            menu.Items.Add("Vaciar", null, (s2, e2) => Marcar(seleccion, null));
-
-        if (seleccion.Count == 1 && casilla?.NoConformidadId is int ncId)
-        {
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add($"Ver incidencia {casilla.NumeroIncidencia}", null, (s2, e2) => VerIncidencia(ncId));
-        }
-        else if (seleccion.Count == 1 && casilla?.Estado == EstadoCasilla.NoCorrecto)
-        {
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Abrir incidencia…", null, (s2, e2) => AbrirIncidencia(punto, seccion));
-        }
-
-        menu.Closed += (s2, e2) => BeginInvoke(menu.Dispose);
-        menu.Show(grid, donde);
+        });
     }
 
     // La incidencia se apunta en la casilla, así que la ronda tiene que estar guardada antes
@@ -1086,13 +1302,13 @@ public class ModuloRutinaCalidad : UserControl
         cargando = true;
         dtpFecha.MaxDate = DateTime.Today;   // por si GPE lleva abierto desde ayer
         dtpFecha.Value = rutina.Fecha;
-        cmbCajaOperario.Text = rutina.CajaOperario ?? "";
+        cajaOperario = string.IsNullOrWhiteSpace(rutina.CajaOperario) ? null : rutina.CajaOperario;
+        MostrarOperario();
         PonerEstadoCaja(rutina.CajaEstado);
         txtDepositos.Text = rutina.Depositos ?? "";
-        columnaSeccion.DataSource = plantilla.Secciones;
         gridObservaciones.Rows.Clear();
         foreach (var observacion in observaciones)
-            gridObservaciones.Rows.Add(observacion.SeccionId, observacion.Texto);
+            gridObservaciones.Rows.Add(observacion.SeccionId, observacion.Texto, "");
         cargando = false;
 
         hayCambios = false;
@@ -1121,7 +1337,7 @@ public class ModuloRutinaCalidad : UserControl
         gridObservaciones.EndEdit();
         try
         {
-            var fijas = rutina with { CajaOperario = cmbCajaOperario.Text, CajaEstado = EstadoCaja(), Depositos = txtDepositos.Text };
+            var fijas = rutina with { CajaOperario = cajaOperario, CajaEstado = EstadoCaja(), Depositos = txtDepositos.Text };
             servicio.Guardar(fijas, revisiones, porRevision.Values.SelectMany(c => c.Values), LeerObservaciones(), plantilla);
         }
         catch (ReglaNegocioException ex)

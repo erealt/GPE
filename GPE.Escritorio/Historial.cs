@@ -21,6 +21,7 @@ public class FormHistorial : Form
         Size = new Size(900, 700);
         MinimumSize = new Size(650, 450);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this, 0.7);   // es una lista de texto: no hace falta tanto ancho
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 

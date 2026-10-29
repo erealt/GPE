@@ -21,6 +21,7 @@ public class FormPlantillaRutina : Form
         Size = new Size(1300, 800);
         MinimumSize = new Size(900, 500);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this);
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 

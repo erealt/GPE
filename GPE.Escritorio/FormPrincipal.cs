@@ -22,6 +22,7 @@ public class FormPrincipal : Form
     private readonly Panel zonaModulo = new() { Dock = DockStyle.Fill };
     private readonly FlowLayoutPanel menu = new();
     private Control menuLateral = null!;
+    private Control barraSuperior = null!;
     private readonly List<Modulo> modulos;
     // null si el usuario no ve las devoluciones (rol Calidad)
     private readonly ModuloDevoluciones? devoluciones = Sesion.VeDevoluciones ? new() : null;
@@ -33,13 +34,15 @@ public class FormPrincipal : Form
         Size = new Size(1400, 800);
         MinimumSize = new Size(1350, 650);
         StartPosition = FormStartPosition.CenterScreen;
+        // Se abre ocupando toda la pantalla; al restaurarla se queda con el tamaño de arriba
+        WindowState = FormWindowState.Maximized;
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 
         modulos = CrearModulos();
 
         Controls.Add(zonaModulo);
-        Controls.Add(CrearBarraSuperior());
+        Controls.Add(barraSuperior = CrearBarraSuperior());
         Controls.Add(menuLateral = CrearMenuLateral());
 
         Mostrar(modulos[0]);
@@ -112,6 +115,37 @@ public class FormPrincipal : Form
         actual = modulo;
         Text = modulo == modulos[0] ? "GPE" : "GPE - " + modulo.Nombre;
         MarcarElegido();
+    }
+
+    // Pantalla completa, para tablas grandes como la rutina de calidad: sin menú, sin barra
+    // superior y sin bordes, ocupando también la barra de tareas de Windows. Al salir, todo
+    // queda como estaba (con el menú oculto si ya lo estaba).
+    private (bool Menu, FormWindowState Estado)? antesDePantallaCompleta;
+
+    public void PantallaCompleta(bool activar)
+    {
+        if (activar == (antesDePantallaCompleta != null)) return;
+
+        SuspendLayout();
+        if (activar)
+        {
+            antesDePantallaCompleta = (menuLateral.Visible, WindowState);
+            menuLateral.Visible = barraSuperior.Visible = false;
+            // Sin bordes y vuelta a maximizar, para que Windows la extienda sobre la barra de tareas
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.None;
+            WindowState = FormWindowState.Maximized;
+        }
+        else if (antesDePantallaCompleta is (var menu, var estado))
+        {
+            menuLateral.Visible = menu;
+            barraSuperior.Visible = true;
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            WindowState = estado;
+            antesDePantallaCompleta = null;
+        }
+        ResumeLayout();
     }
 
     // Menú lateral

@@ -27,6 +27,7 @@ public class FormVisorImagen : Form
         Size = new Size(1100, 800);
         MinimumSize = new Size(600, 450);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this);
         BackColor = Color.FromArgb(30, 30, 30);
         Font = Tema.Fuente;
         KeyPreview = true;

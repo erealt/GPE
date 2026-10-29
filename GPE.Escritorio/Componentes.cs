@@ -12,6 +12,21 @@ public static class Componentes
     // Fecha como se enseña en resúmenes y tablas: "20 oct 2026", o "—" si no hay
     public static string Fecha(DateTime? fecha) => fecha?.ToString("dd MMM yyyy", Es) ?? "—";
 
+    // Ventanas aparte (fichas, pasos, historial...): al abrirse ocupan casi toda la pantalla en la
+    // que está la ventana principal. El tamaño que les da cada pantalla es el mínimo, y nunca
+    // se pasan de la pantalla (en un portátil pequeño ocupan lo que haya).
+    public static void AjustarAPantalla(Form ventana, double proporcion = 0.9)
+    {
+        ventana.Load += (s, e) =>
+        {
+            var area = Screen.FromControl(ventana.Owner ?? ventana).WorkingArea;
+            int ancho = Math.Min(area.Width, Math.Max(ventana.Width, (int)(area.Width * proporcion)));
+            int alto = Math.Min(area.Height, Math.Max(ventana.Height, (int)(area.Height * proporcion)));
+            ventana.Bounds = new Rectangle(
+                area.X + (area.Width - ancho) / 2, area.Y + (area.Height - alto) / 2, ancho, alto);
+        };
+    }
+
     // Panel con scroll y una columna donde se van apilando las secciones
     public static (Panel Scroll, TableLayoutPanel Pila) Pagina()
     {
