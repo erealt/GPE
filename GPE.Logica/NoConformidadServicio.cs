@@ -138,10 +138,6 @@ public class NoConformidadServicio
         };
     }
 
-    // Posición de la primera fase necesaria sin hacer; null si el registro está cerrado
-    public static int? FaseEnCurso(List<EstadoFase> fases) =>
-        fases[^1].Hecha ? null : fases.FindIndex(f => !f.Hecha && !f.Opcional);
-
     // Validación
 
     // Quita espacios, deja en null lo vacío y borra los campos que no son de este tipo

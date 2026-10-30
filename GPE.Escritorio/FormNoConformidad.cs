@@ -132,8 +132,8 @@ public class FormNoConformidad : Form
         tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
         barraFases.FasePulsada += IrAFase;
 
-        // Uno nuevo empieza por el registro; uno ya guardado, por la fase en curso
-        MostrarFase(original == null ? 0 : NoConformidadServicio.FaseEnCurso(fases) ?? 0);
+        // Siempre empieza por el registro; la barra de fases ya marca lo que falta
+        MostrarFase(0);
 
         if (SoloLectura)
         {
