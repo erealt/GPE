@@ -124,6 +124,34 @@ public class RutinaServicio
     public void GuardarPlantilla(IReadOnlyCollection<(int PuntoId, int SeccionId)> aplica) =>
         repositorio.GuardarPlantilla(aplica);
 
+    // Largo de las columnas nombre de RUTINA_SECCION y RUTINA_PUNTO
+    public const int LargoNombreSeccion = 50;
+    public const int LargoNombrePunto = 100;
+
+    public void AnadirSeccion(string nombre, string planta)
+    {
+        nombre = nombre.Trim();
+        if (nombre.Length == 0)
+            throw new ReglaNegocioException("Escribe el nombre de la máquina.");
+        if (nombre.Length > LargoNombreSeccion)
+            throw new ReglaNegocioException($"El nombre no puede pasar de {LargoNombreSeccion} caracteres.");
+        if (planta != Planta.Baja && planta != Planta.Superior)
+            throw new ReglaNegocioException("Elige la planta.");
+        if (!repositorio.AnadirSeccion(nombre, planta))
+            throw new ReglaNegocioException($"Ya hay una máquina llamada \"{nombre}\".");
+    }
+
+    public void AnadirPunto(string nombre, bool numerico)
+    {
+        nombre = nombre.Trim();
+        if (nombre.Length == 0)
+            throw new ReglaNegocioException("Escribe el nombre del punto de control.");
+        if (nombre.Length > LargoNombrePunto)
+            throw new ReglaNegocioException($"El nombre no puede pasar de {LargoNombrePunto} caracteres.");
+        if (!repositorio.AnadirPunto(nombre, numerico))
+            throw new ReglaNegocioException($"Ya hay un punto de control llamado \"{nombre}\".");
+    }
+
     // Incidencias
 
     // Incidencia en blanco con lo que ya se sabe de la casilla, para completarla en su ficha

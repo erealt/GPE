@@ -1418,7 +1418,7 @@ public class ModuloRutinaCalidad : UserControl
     {
         if (!DescartarCambios()) return;
         using (var formulario = new FormPlantillaRutina())
-            if (formulario.ShowDialog(this) != DialogResult.OK) return;
+            if (formulario.ShowDialog(this) != DialogResult.OK && !formulario.HayNuevos) return;
         Cargar(rutina.Fecha, recargarPlantilla: true);
     }
 }

@@ -13,6 +13,9 @@ public class FormPlantillaRutina : Form
     private readonly DataGridView grid = new();
     private bool hayCambios;
 
+    // Se ha añadido alguna máquina o punto (ya está en la base aunque se cancele la plantilla)
+    public bool HayNuevos { get; private set; }
+
     public FormPlantillaRutina()
     {
         Text = "Plantilla de la rutina de calidad";
@@ -27,9 +30,10 @@ public class FormPlantillaRutina : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(30, 20, 30, 20)
         };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -38,13 +42,30 @@ public class FormPlantillaRutina : Form
         {
             Text = "Pulsa una casilla para indicar si ese punto se revisa en esa máquina. " +
                    "Pulsa la cabecera de una máquina o el nombre de un punto para cambiar toda la columna o la fila.\n" +
-                   "Lo ya marcado en rondas anteriores no se pierde. Para añadir máquinas o puntos, de momento hay que hacerlo en la base de datos.",
+                   "Lo ya marcado en rondas anteriores no se pierde.",
             AutoSize = true,
             MaximumSize = new Size(1200, 0),
             ForeColor = Tema.Suave,
             Margin = new Padding(0, 0, 0, 12)
         }, 0, 0);
-        layout.Controls.Add(ConfigurarGrid(), 0, 1);
+
+        var btnMaquina = Tema.BotonSecundario("+ Añadir máquina", 180);
+        btnMaquina.Click += (s, e) => Anadir(esMaquina: true);
+        var btnPunto = Tema.BotonSecundario("+ Añadir punto de control", 230);
+        btnPunto.Click += (s, e) => Anadir(esMaquina: false);
+        var anadir = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 12) };
+        foreach (var boton in new[] { btnMaquina, btnPunto })
+        {
+            // Que crezca con el texto: con la letra ampliada de Windows no cabía
+            boton.MinimumSize = boton.Size;
+            boton.AutoSize = true;
+            boton.Padding = new Padding(10, 0, 10, 0);
+            boton.Margin = new Padding(0, 0, 10, 0);
+            anadir.Controls.Add(boton);
+        }
+        layout.Controls.Add(anadir, 0, 1);
+
+        layout.Controls.Add(ConfigurarGrid(), 0, 2);
 
         var btnGuardar = Tema.BotonPrincipal("Guardar plantilla", 180);
         btnGuardar.Click += (s, e) => Guardar();
@@ -53,7 +74,7 @@ public class FormPlantillaRutina : Form
         CancelButton = btnCancelar;
         var acciones = Componentes.Acciones(btnGuardar, btnCancelar);
         acciones.Margin = new Padding(0, 15, 0, 0);
-        layout.Controls.Add(acciones, 0, 2);
+        layout.Controls.Add(acciones, 0, 3);
 
         Controls.Add(layout);
         Load += (s, e) => Cargar();
@@ -121,6 +142,40 @@ public class FormPlantillaRutina : Form
             return;
         }
         aplica.UnionWith(plantilla.Aplica);
+        Montar();
+    }
+
+    // Las máquinas y puntos nuevos se guardan al momento; lo marcado sin guardar se mantiene
+    private void Anadir(bool esMaquina)
+    {
+        using (var ventana = new FormNuevoRutina(esMaquina))
+            if (ventana.ShowDialog(this) != DialogResult.OK) return;
+        HayNuevos = true;
+
+        PlantillaRutina nueva;
+        try
+        {
+            nueva = servicio.ObtenerPlantilla();
+        }
+        catch (DbException ex)
+        {
+            Mensajes.ErrorBaseDatos(this, "Se ha añadido, pero no se pudo recargar la plantilla.", ex);
+            return;
+        }
+        plantilla = plantilla with { Secciones = nueva.Secciones, Puntos = nueva.Puntos };
+        Montar();
+
+        // Que se vea lo añadido
+        if (esMaquina)
+            grid.FirstDisplayedScrollingColumnIndex = grid.Columns.Count - 1;
+        else if (grid.Rows.Count > 0)
+            grid.FirstDisplayedScrollingRowIndex = grid.Rows.Count - 1;
+    }
+
+    private void Montar()
+    {
+        grid.Rows.Clear();
+        grid.Columns.Clear();
 
         var columnaPunto = new DataGridViewTextBoxColumn
         {

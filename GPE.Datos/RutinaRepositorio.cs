@@ -66,6 +66,44 @@ public class RutinaRepositorio
         }
     }
 
+    // Máquina o sección nueva, al final de las de su planta. False si ya hay una con ese nombre (aunque esté desactivada).
+    public bool AnadirSeccion(string nombre, string planta)
+    {
+        const string sql = @"
+            IF EXISTS (SELECT 1 FROM RUTINA_SECCION WHERE nombre = @nombre) SELECT 0;
+            ELSE
+            BEGIN
+                INSERT INTO RUTINA_SECCION (nombre, planta, orden)
+                SELECT @nombre, @planta, ISNULL(MAX(orden), 0) + 1 FROM RUTINA_SECCION;
+                SELECT 1;
+            END";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@nombre", nombre);
+        comando.Parameters.AddWithValue("@planta", planta);
+        return (int)comando.ExecuteScalar()! == 1;
+    }
+
+    // Punto de control nuevo, al final. False si ya hay uno con ese nombre (aunque esté desactivado).
+    public bool AnadirPunto(string nombre, bool numerico)
+    {
+        const string sql = @"
+            IF EXISTS (SELECT 1 FROM RUTINA_PUNTO WHERE nombre = @nombre) SELECT 0;
+            ELSE
+            BEGIN
+                INSERT INTO RUTINA_PUNTO (nombre, numerico, orden)
+                SELECT @nombre, @numerico, ISNULL(MAX(orden), 0) + 1 FROM RUTINA_PUNTO;
+                SELECT 1;
+            END";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@nombre", nombre);
+        comando.Parameters.AddWithValue("@numerico", numerico);
+        return (int)comando.ExecuteScalar()! == 1;
+    }
+
     // Rondas
 
     // La ronda de ese día, o null si aún no se ha guardado ninguna
