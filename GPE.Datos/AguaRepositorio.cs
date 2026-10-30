@@ -60,61 +60,53 @@ public class AguaRepositorio
     }
 
     // Guarda los cambios de un día de una vez: borra, cambia (Id <> 0) y da de alta (Id = 0).
-    // false si otro ha cambiado o borrado alguno mientras tanto, o ya ha apuntado esa toma
-    // ese día: entonces no se guarda nada.
+    // false si otro ha cambiado o borrado alguno mientras tanto: entonces no se guarda nada.
     public bool GuardarDia(IReadOnlyList<ControlAgua> cambiados, IReadOnlyList<ControlAgua> borrados, int usuarioId)
     {
         using var conexion = Conexion.Abrir();
         using var transaccion = conexion.BeginTransaction();
 
-        try
+        foreach (var control in borrados)
         {
-            foreach (var control in borrados)
-            {
-                using var borrar = new SqlCommand(
-                    "DELETE FROM AGUA_CONTROL WHERE id = @id AND version = @version;", conexion, transaccion);
-                borrar.Parameters.AddWithValue("@id", control.Id);
-                borrar.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)control.Version ?? DBNull.Value;
-                if (borrar.ExecuteNonQuery() == 0) return false;
-            }
-
-            foreach (var control in cambiados)
-            {
-                const string sqlInsertar = @"
-                    INSERT INTO AGUA_CONTROL (fecha, toma_id, cloro, sabor_ok, olor_ok, color_ok, turbidez_ok, comentario, creado_por)
-                    VALUES (@fecha, @toma, @cloro, @sabor, @olor, @color, @turbidez, @comentario, @usuario);";
-                const string sqlActualizar = @"
-                    UPDATE AGUA_CONTROL SET toma_id = @toma, cloro = @cloro, sabor_ok = @sabor, olor_ok = @olor,
-                        color_ok = @color, turbidez_ok = @turbidez, comentario = @comentario
-                    WHERE id = @id AND version = @version;";
-
-                using var comando = new SqlCommand(control.Id == 0 ? sqlInsertar : sqlActualizar, conexion, transaccion);
-                comando.Parameters.AddWithValue("@toma", control.TomaId);
-                var cloro = comando.Parameters.Add("@cloro", System.Data.SqlDbType.Decimal);
-                cloro.Precision = 4;
-                cloro.Scale = 2;
-                cloro.Value = (object?)control.Cloro ?? DBNull.Value;
-                comando.Parameters.AddWithValue("@sabor", control.SaborOk);
-                comando.Parameters.AddWithValue("@olor", control.OlorOk);
-                comando.Parameters.AddWithValue("@color", control.ColorOk);
-                comando.Parameters.AddWithValue("@turbidez", control.TurbidezOk);
-                comando.Parameters.AddWithValue("@comentario", (object?)control.Comentario ?? DBNull.Value);
-                if (control.Id == 0)
-                {
-                    comando.Parameters.AddWithValue("@fecha", control.Fecha.Date);
-                    comando.Parameters.AddWithValue("@usuario", usuarioId);
-                }
-                else
-                {
-                    comando.Parameters.AddWithValue("@id", control.Id);
-                    comando.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)control.Version ?? DBNull.Value;
-                }
-                if (comando.ExecuteNonQuery() == 0) return false;
-            }
+            using var borrar = new SqlCommand(
+                "DELETE FROM AGUA_CONTROL WHERE id = @id AND version = @version;", conexion, transaccion);
+            borrar.Parameters.AddWithValue("@id", control.Id);
+            borrar.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)control.Version ?? DBNull.Value;
+            if (borrar.ExecuteNonQuery() == 0) return false;
         }
-        catch (SqlException ex) when (ex.Number is 2627 or 2601)
+
+        foreach (var control in cambiados)
         {
-            return false;   // otro apuntó primero esa toma ese día
+            const string sqlInsertar = @"
+                INSERT INTO AGUA_CONTROL (fecha, toma_id, cloro, sabor_ok, olor_ok, color_ok, turbidez_ok, comentario, creado_por)
+                VALUES (@fecha, @toma, @cloro, @sabor, @olor, @color, @turbidez, @comentario, @usuario);";
+            const string sqlActualizar = @"
+                UPDATE AGUA_CONTROL SET toma_id = @toma, cloro = @cloro, sabor_ok = @sabor, olor_ok = @olor,
+                    color_ok = @color, turbidez_ok = @turbidez, comentario = @comentario
+                WHERE id = @id AND version = @version;";
+
+            using var comando = new SqlCommand(control.Id == 0 ? sqlInsertar : sqlActualizar, conexion, transaccion);
+            comando.Parameters.AddWithValue("@toma", control.TomaId);
+            var cloro = comando.Parameters.Add("@cloro", System.Data.SqlDbType.Decimal);
+            cloro.Precision = 4;
+            cloro.Scale = 2;
+            cloro.Value = (object?)control.Cloro ?? DBNull.Value;
+            comando.Parameters.AddWithValue("@sabor", control.SaborOk);
+            comando.Parameters.AddWithValue("@olor", control.OlorOk);
+            comando.Parameters.AddWithValue("@color", control.ColorOk);
+            comando.Parameters.AddWithValue("@turbidez", control.TurbidezOk);
+            comando.Parameters.AddWithValue("@comentario", (object?)control.Comentario ?? DBNull.Value);
+            if (control.Id == 0)
+            {
+                comando.Parameters.AddWithValue("@fecha", control.Fecha.Date);
+                comando.Parameters.AddWithValue("@usuario", usuarioId);
+            }
+            else
+            {
+                comando.Parameters.AddWithValue("@id", control.Id);
+                comando.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)control.Version ?? DBNull.Value;
+            }
+            if (comando.ExecuteNonQuery() == 0) return false;
         }
 
         transaccion.Commit();

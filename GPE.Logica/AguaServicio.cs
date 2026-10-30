@@ -66,8 +66,7 @@ public class AguaServicio
     // Guarda los controles de un día tal como están en pantalla.
     // controles: todas las filas; originales: las que había al cargar el día.
     // Solo se escriben las nuevas, las que han cambiado y las quitadas.
-    public void GuardarDia(DateTime fecha, IEnumerable<ControlAgua> controles, IReadOnlyList<ControlAgua> originales,
-        IReadOnlyList<AguaToma> tomas)
+    public void GuardarDia(DateTime fecha, IEnumerable<ControlAgua> controles, IReadOnlyList<ControlAgua> originales)
     {
         if (Sesion.UsuarioActual is not Usuario usuario)
             throw new ReglaNegocioException("No hay ningún usuario elegido.");
@@ -78,12 +77,6 @@ public class AguaServicio
         foreach (var control in lista)
             if (Error(control) is string error)
                 throw new ReglaNegocioException(error);
-
-        if (lista.GroupBy(c => c.TomaId).FirstOrDefault(g => g.Count() > 1) is { } repetida)
-        {
-            string nombre = tomas.FirstOrDefault(t => t.Id == repetida.Key)?.Nombre ?? "Un punto de agua";
-            throw new ReglaNegocioException($"{nombre} está dos veces. Deja una sola fila por punto de agua y día.");
-        }
 
         var porId = originales.ToDictionary(c => c.Id);
         var cambiados = lista.Where(c => c.Id == 0 || !porId.TryGetValue(c.Id, out var original) || !Iguales(c, original)).ToList();

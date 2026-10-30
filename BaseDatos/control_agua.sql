@@ -22,6 +22,7 @@ CREATE TABLE AGUA_TOMA (
 );
 
 -- Un control: una fila de la hoja. El cloro no se mide todos los días.
+-- Un mismo punto puede revisarse más de una vez el mismo día.
 -- Los organolépticos: 1 = Ok, 0 = no correcto.
 CREATE TABLE AGUA_CONTROL (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -37,11 +38,11 @@ CREATE TABLE AGUA_CONTROL (
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_agua_control_creado DEFAULT SYSDATETIME(),
     -- Igual que en RUTINA: al guardar se comprueba que nadie lo haya cambiado desde que se abrió
     version ROWVERSION NOT NULL,
-    CONSTRAINT UQ_agua_control UNIQUE (fecha, toma_id),
     CONSTRAINT CK_agua_control_cloro CHECK (cloro >= 0 AND cloro < 10),
     CONSTRAINT FK_agua_control_toma FOREIGN KEY (toma_id) REFERENCES AGUA_TOMA(id),
     CONSTRAINT FK_agua_control_usuario FOREIGN KEY (creado_por) REFERENCES USUARIO(id)
 );
+CREATE INDEX IX_agua_control_fecha ON AGUA_CONTROL (fecha);
 GO
 
 -- Historial: igual que TR_RUTINA_HISTORIAL (sin la versión en el JSON)

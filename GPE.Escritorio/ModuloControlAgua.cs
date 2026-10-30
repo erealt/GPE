@@ -348,16 +348,12 @@ public class ModuloControlAgua : UserControl
         return grid.PointToScreen(new Point(celda.Left, celda.Bottom));
     }
 
-    // Los puntos de agua para elegir el de una fila (null: una nueva). Los apuntados en otras
-    // filas salen desactivados: no se pueden repetir en el mismo día.
-    private ElegirOpcion PanelPuntos(DataGridViewRow? fila)
-    {
-        var apuntados = grid.Rows.Cast<DataGridViewRow>().Where(f => f != fila)
-            .Select(f => f.Cells[ColToma].Value).OfType<int>().ToHashSet();
-        return new ElegirOpcion("Punto de agua",
-            tomas.Select(t => (t.Id.ToString(), t.Nombre, !apuntados.Contains(t.Id))).ToList(),
+    // Los puntos de agua para elegir el de una fila (null: una nueva). Un punto puede
+    // apuntarse más de una vez el mismo día.
+    private ElegirOpcion PanelPuntos(DataGridViewRow? fila) =>
+        new("Punto de agua",
+            tomas.Select(t => (t.Id.ToString(), t.Nombre, true)).ToList(),
             (fila?.Cells[ColToma].Value as int?)?.ToString());
-    }
 
     // Se elige el punto y se añade la fila, con todo "Sí"; luego se abre el teclado del cloro,
     // que es lo siguiente que se apunta
@@ -504,7 +500,7 @@ public class ModuloControlAgua : UserControl
         try
         {
             if (error != null) throw new ReglaNegocioException(error);
-            servicio.GuardarDia(fecha, controles, originales, tomas);
+            servicio.GuardarDia(fecha, controles, originales);
         }
         catch (ReglaNegocioException ex)
         {
