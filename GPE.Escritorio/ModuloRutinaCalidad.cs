@@ -13,6 +13,8 @@ public class ModuloRutinaCalidad : UserControl
     private const int AnchoSeccion = 58;
     public static int AnchoColumna(string nombre) =>
         Math.Max(AnchoSeccion, nombre.Split(' ').Max(palabra => TextRenderer.MeasureText(palabra, Tema.FuenteEtiqueta).Width) + 26);
+    private static int AnchoColumnaCompacta(string nombre) =>
+        Math.Max(AnchoSeccionMinimo, nombre.Split(' ').Max(palabra => TextRenderer.MeasureText(palabra, Tema.FuenteEtiqueta).Width) + 12);
 
     private readonly RutinaServicio servicio = new();
     private PlantillaRutina plantilla = new(new(), new(), new());
@@ -97,8 +99,10 @@ public class ModuloRutinaCalidad : UserControl
     private readonly Button btnPantallaCompleta = Tema.BotonSecundario("⛶  Pantalla completa", 190);
     private readonly Button btnGuardarCompacto = Tema.BotonPrincipal("Guardar", 120);
     private readonly Label lblRondaCompacta = new();
-    private const int AltoFilaNormal = 32, AltoFilaMinimo = 24, AltoFilaMaximo = 48;
-    private const int AnchoSeccionMaximo = 110;
+    private const int AltoFilaNormal = 32, AltoFilaMinimo = 14, AltoFilaComoda = 20, AltoFilaMaximo = 48;
+    private float escalaAlto = 1f;
+    private const int AnchoSeccionMaximo = 110, AnchoSeccionMinimo = 34;
+    private const int AltoCabecera = 76, AltoCabeceraCompacta = 52;
     private const int FilasDeArriba = 4;   // cabecera, día, revisiones y leyenda
     private static readonly int[] AltosDeArriba = { 95, 80, 56, 68 };
 
@@ -117,6 +121,7 @@ public class ModuloRutinaCalidad : UserControl
         lblRondaCompacta.Text = $"{Componentes.Fecha(rutina.Fecha)}  ·  {revisionActual}ª revisión";
         lblRondaCompacta.Visible = btnGuardarCompacto.Visible = activar;
         btnPantallaCompleta.Text = activar ? "Salir (Esc)" : "⛶  Pantalla completa";
+        grid.ColumnHeadersHeight = activar ? AltoCabeceraCompacta : AltoCabecera;
         layout.ResumeLayout();
 
         ventana.PantallaCompleta(activar);
@@ -136,10 +141,15 @@ public class ModuloRutinaCalidad : UserControl
                 disponible -= SystemInformation.HorizontalScrollBarHeight;
             alto = Math.Clamp(disponible / grid.Rows.Count, AltoFilaMinimo, AltoFilaMaximo);
         }
+        // Filas más bajas de lo normal (pantalla pequeña) piden letra más pequeña
+        escalaAlto = Math.Min(1f, (float)alto / AltoFilaComoda);
 
         grid.RowTemplate.Height = alto;
         foreach (DataGridViewRow fila in grid.Rows)
             if (fila.Height != alto) fila.Height = alto;
+
+        // Al encoger las filas puede desaparecer la barra vertical y quedar sitio para las columnas
+        if (pantallaCompleta) AjustarAnchoColumnas();
     }
 
     private void AjustarAnchoColumnas()
@@ -147,21 +157,69 @@ public class ModuloRutinaCalidad : UserControl
         var columnas = grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Tag != null).ToList();
         if (columnas.Count == 0) return;
 
-        int reparto = 0;
-        if (pantallaCompleta)
+        if (!pantallaCompleta)
         {
-            int disponible = grid.ClientSize.Width - AnchoPunto - 2;
-            if (grid.Controls.OfType<VScrollBar>().Any(b => b.Visible))
-                disponible -= SystemInformation.VerticalScrollBarWidth;
-            reparto = Math.Min(disponible / columnas.Count, AnchoSeccionMaximo);
+            PonerEscala(1f);
+            grid.Columns[0].Width = AnchoPunto;
+            foreach (var columna in columnas)
+                if (columna.Width != AnchoColumna(columna.HeaderText)) columna.Width = AnchoColumna(columna.HeaderText);
+            return;
         }
 
-        foreach (var columna in columnas)
+        int disponible = grid.ClientSize.Width - 2;
+        if (grid.Controls.OfType<VScrollBar>().Any(b => b.Visible))
+            disponible -= SystemInformation.VerticalScrollBarWidth;
+
+        // Si ni con lo mínimo cabe (pantalla pequeña), se encoge todo por igual, letra incluida
+        var minimos = columnas.Select(c => AnchoColumnaCompacta(c.HeaderText)).ToList();
+        float escala = Math.Min(1f, (float)disponible / (AnchoPunto + minimos.Sum()));
+        PonerEscala(Math.Min(escala, escalaAlto));
+        int anchoPunto = (int)(AnchoPunto * escala);
+        grid.Columns[0].Width = anchoPunto;
+
+        // Lo que sobra se reparte a partes iguales; las que necesitan más de su parte se quedan con su mínimo
+        var anchos = minimos.Select(m => (int)(m * escala)).ToList();
+        var libres = Enumerable.Range(0, columnas.Count).ToList();
+        int resto = disponible - anchoPunto;
+        while (libres.Count > 0)
         {
-            int ancho = Math.Max(AnchoColumna(columna.HeaderText), reparto);
-            if (columna.Width != ancho) columna.Width = ancho;
+            int parte = Math.Min(resto / libres.Count, AnchoSeccionMaximo);
+            var fijas = libres.Where(i => anchos[i] > parte).ToList();
+            if (fijas.Count == 0)
+            {
+                foreach (int i in libres) anchos[i] = parte;
+                break;
+            }
+            foreach (int i in fijas) { resto -= anchos[i]; libres.Remove(i); }
         }
+
+        for (int i = 0; i < columnas.Count; i++)
+            if (columnas[i].Width != anchos[i]) columnas[i].Width = anchos[i];
     }
+
+    // Letra de la cabecera y de los puntos a la escala de la tabla (1 = tamaño normal)
+    private float escalaActual = 1f;
+    private Font? fuenteCabeceraEscalada, fuentePuntoEscalada;
+
+    private void PonerEscala(float escala)
+    {
+        escala = (float)Math.Round(escala, 2);
+        if (escala == escalaActual) return;
+        escalaActual = escala;
+
+        var anteriores = (fuenteCabeceraEscalada, fuentePuntoEscalada);
+        fuenteCabeceraEscalada = escala < 1f ? Escalar(Tema.FuenteEtiqueta, escala) : null;
+        fuentePuntoEscalada = escala < 1f ? Escalar(Tema.FuentePequenaNegrita, escala) : null;
+        grid.ColumnHeadersDefaultCellStyle.Font = fuenteCabeceraEscalada ?? Tema.FuenteEtiqueta;
+        grid.Columns[0].DefaultCellStyle.Font = fuentePuntoEscalada ?? Tema.FuentePequenaNegrita;
+        anteriores.fuenteCabeceraEscalada?.Dispose();
+        anteriores.fuentePuntoEscalada?.Dispose();
+    }
+
+    private static Font Escalar(Font fuente, float escala) =>
+        new(fuente.FontFamily, Math.Max(6f, fuente.Size * escala), fuente.Style);
+
+    private Font FuenteCasilla => fuentePuntoEscalada ?? Tema.FuentePequenaNegrita;
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
@@ -655,7 +713,7 @@ public class ModuloRutinaCalidad : UserControl
         grid.MultiSelect = true;
         grid.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
         grid.ShowCellToolTips = true;
-        grid.ColumnHeadersHeight = 76;
+        grid.ColumnHeadersHeight = AltoCabecera;
         grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
         grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
         grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -719,7 +777,7 @@ public class ModuloRutinaCalidad : UserControl
         columnaPunto.DefaultCellStyle.Padding = new Padding(10, 0, 4, 0);
         columnaPunto.DefaultCellStyle.BackColor = Tema.CabeceraTabla;
         columnaPunto.DefaultCellStyle.SelectionBackColor = Tema.CabeceraTabla;
-        columnaPunto.DefaultCellStyle.Font = Tema.FuentePequenaNegrita;
+        columnaPunto.DefaultCellStyle.Font = FuenteCasilla;
         columnaPunto.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
         grid.Columns.Add(columnaPunto);
 
@@ -946,7 +1004,7 @@ public class ModuloRutinaCalidad : UserControl
             g.DrawLine(borde, r.Left, r.Bottom - 1, r.Right - 1, r.Bottom - 1);
         }
 
-        TextRenderer.DrawText(g, texto, Tema.FuentePequenaNegrita, r, colorTexto,
+        TextRenderer.DrawText(g, texto, FuenteCasilla, r, colorTexto,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
         g.SmoothingMode = SmoothingMode.AntiAlias;
