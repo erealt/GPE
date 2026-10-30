@@ -15,6 +15,9 @@ public class FormNuevoRutina : Form
     private readonly RadioButton rbSuperior = new() { Text = Planta.Nombre(Planta.Superior), AutoSize = true };
     private readonly CheckBox chkNumerico = new() { Text = "Dato numérico", AutoSize = true };
 
+    // Planta de la máquina añadida
+    public string PlantaElegida => rbSuperior.Checked ? Planta.Superior : Planta.Baja;
+
     public FormNuevoRutina(bool esMaquina)
     {
         this.esMaquina = esMaquina;
@@ -81,7 +84,7 @@ public class FormNuevoRutina : Form
         try
         {
             if (esMaquina)
-                servicio.AnadirSeccion(txtNombre.Text, rbSuperior.Checked ? Planta.Superior : Planta.Baja);
+                servicio.AnadirSeccion(txtNombre.Text, PlantaElegida);
             else
                 servicio.AnadirPunto(txtNombre.Text, chkNumerico.Checked);
         }
