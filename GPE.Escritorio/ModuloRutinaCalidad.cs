@@ -6,34 +6,26 @@ using System.Globalization;
 
 namespace GPE.Escritorio;
 
-// Rutina diaria del supervisor de calidad (la hoja "CHEQUEOS DIARIOS - PCC"): una tabla
-// con los puntos de control en filas y las máquinas en columnas. Se marcan las casillas
-// con el teclado (varias a la vez) o pulsándolas, con un panel de botones grandes que
-// también sirve en una tablet (OpcionesCasilla), y desde una casilla "no correcta" se abre
-// una incidencia. Vive dentro de FormPrincipal.
+// Rutina diaria del supervisor de calidad (la hoja "CHEQUEOS DIARIOS - PCC")
 public class ModuloRutinaCalidad : UserControl
 {
     private const int AnchoPunto = 220;
     private const int AnchoSeccion = 58;
-
-    // Las cabeceras se parten por palabras: en la columna tiene que caber la más larga (DEPOSITOS)
     public static int AnchoColumna(string nombre) =>
         Math.Max(AnchoSeccion, nombre.Split(' ').Max(palabra => TextRenderer.MeasureText(palabra, Tema.FuenteEtiqueta).Width) + 26);
 
     private readonly RutinaServicio servicio = new();
     private PlantillaRutina plantilla = new(new(), new(), new());
     private Rutina rutina = new(0, DateTime.Today, null, null, null, null);
-    // Revisiones del día (la 1 es la ronda completa) y la que se está viendo
     private List<RevisionRutina> revisiones = new() { new(1, null) };
     private int revisionActual = 1;
-    // Casillas rellenas de cada revisión, por (punto, sección)
+
     private Dictionary<int, Dictionary<(int PuntoId, int SeccionId), ResultadoRutina>> porRevision = new();
     private List<ObservacionRutina> observaciones = new();
     private bool hayCambios;
     private bool cargando;
 
     private readonly DateTimePicker dtpFecha = new();
-    // Cada planta se ve por separado: una pestaña por planta
     private string plantaElegida = Planta.Baja;
     private readonly Label lblRonda = new();
     private readonly Label lblProgreso = new();
@@ -45,15 +37,13 @@ public class ModuloRutinaCalidad : UserControl
 
     private static readonly string[] Plantas = { Planta.Baja, Planta.Superior };
 
-    // Observaciones del pie de la hoja, en su propia pestaña: caja de herramientas,
-    // depósitos y una lista de sección + observación
     private readonly RadioButton pestanaObservaciones = new();
     private Control panelObservaciones = null!;
-    // Operario de la caja: se elige con un panel de botones (ElegirOpcion); el botón lo enseña
+
     private readonly Button btnCajaOperario = Tema.BotonSecundario("", 300);
     private string? cajaOperario;
     private List<string> operarios = new();
-    private readonly CheckBox btnCajaOk = new(), btnCajaNoOk = new();   // estado de la caja: uno, otro o ninguno
+    private readonly CheckBox btnCajaOk = new(), btnCajaNoOk = new();  
     private readonly TextBox txtDepositos = new();
     private readonly DataGridView gridObservaciones = new();
     private const int ColObservacionSeccion = 0, ColObservacionTexto = 1, ColObservacionQuitar = 2;
@@ -66,7 +56,7 @@ public class ModuloRutinaCalidad : UserControl
         {
             CargarOperarios();
             Cargar(DateTime.Today, recargarPlantilla: true);
-            // La ventana principal no sabe de esta ronda: avisa ella al cerrar con cambios
+            
             if (FindForm() is Form ventana) ventana.FormClosing += AvisarAlCerrar;
         };
     }
@@ -102,10 +92,6 @@ public class ModuloRutinaCalidad : UserControl
         return layout;
     }
 
-    // Pantalla completa
-
-    // Se quedan solo las pestañas de planta y la tabla, con las filas estiradas para que quepan
-    // todas sin scroll. Lo de arriba (día, revisiones, leyenda) se oculta: se sale con Esc o F11.
     private TableLayoutPanel layout = null!;
     private bool pantallaCompleta;
     private readonly Button btnPantallaCompleta = Tema.BotonSecundario("⛶  Pantalla completa", 190);
@@ -138,8 +124,6 @@ public class ModuloRutinaCalidad : UserControl
         grid.Focus();
     }
 
-    // En pantalla completa las filas se reparten el alto disponible (dentro de unos límites,
-    // para que se puedan leer y pulsar); fuera de ella tienen su alto de siempre
     private void AjustarAltoFilas()
     {
         AjustarAnchoColumnas();
@@ -158,8 +142,6 @@ public class ModuloRutinaCalidad : UserControl
             if (fila.Height != alto) fila.Height = alto;
     }
 
-    // En pantalla completa las máquinas se reparten también el ancho, para que las casillas sean
-    // más fáciles de pulsar con el dedo (sin pasarse, para que no queden demasiado separadas)
     private void AjustarAnchoColumnas()
     {
         var columnas = grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Tag != null).ToList();
@@ -190,9 +172,6 @@ public class ModuloRutinaCalidad : UserControl
         }
         return base.ProcessCmdKey(ref msg, keyData);
     }
-
-    // Revisiones del día: una pestaña por cada vez que se recorre la fábrica (el segundo
-    // cuadrado de la hoja) y el botón para empezar otra. Cada una enseña la plantilla entera.
     private Control CrearPestanasRevision()
     {
         pestanasRevision.Dock = DockStyle.Fill;
@@ -490,8 +469,6 @@ public class ModuloRutinaCalidad : UserControl
         return scroll;
     }
 
-    // Como el control de agua: la sección se elige con botones grandes, la observación se
-    // escribe en la celda y ✕ quita la fila (también vale Supr)
     private Control ConfigurarGridObservaciones()
     {
         Componentes.EstiloTabla(gridObservaciones, altoFila: 48);
@@ -565,7 +542,6 @@ public class ModuloRutinaCalidad : UserControl
         return gridObservaciones;
     }
 
-    // Una sección que ya no está en la plantilla no rompe la tabla: null
     private string? NombreSeccion(DataGridViewRow fila) =>
         fila.Cells[ColObservacionSeccion].Value is int id ? plantilla.Secciones.FirstOrDefault(s => s.Id == id)?.Nombre : null;
 
@@ -573,7 +549,6 @@ public class ModuloRutinaCalidad : UserControl
         new("Sección", plantilla.Secciones.Select(s => (s.Id.ToString(), s.Nombre, true)).ToList(),
             (fila?.Cells[ColObservacionSeccion].Value as int?)?.ToString());
 
-    // Se elige la sección, se añade la fila y se empieza a escribir la observación
     private void AnadirFilaObservacion(Control boton)
     {
         gridObservaciones.EndEdit();
@@ -608,7 +583,6 @@ public class ModuloRutinaCalidad : UserControl
         MarcarCambios();
     }
 
-    // Operario de la caja: los de la lista de calidad y, si se había apuntado otro, también ese
     private void ElegirOperario()
     {
         var nombres = operarios.ToList();
@@ -639,7 +613,6 @@ public class ModuloRutinaCalidad : UserControl
             + filas * gridObservaciones.RowTemplate.Height + 2;
     }
 
-    // Los operarios de la lista de calidad (los de las incidencias), para elegir el de la caja
     private void CargarOperarios()
     {
         try
@@ -649,7 +622,7 @@ public class ModuloRutinaCalidad : UserControl
         }
         catch (DbException)
         {
-            // Sin la lista no se puede elegir, pero se sigue viendo el que estuviera apuntado
+        
         }
     }
 
@@ -691,10 +664,7 @@ public class ModuloRutinaCalidad : UserControl
         grid.CellPainting += PintarCasilla;
         grid.KeyDown += TeclaPulsada;
         grid.CellMouseDown += BotonDerecho;
-        // Al pulsar una sola casilla salen las opciones de la leyenda, o el teclado de números en
-        // las de número (con el teclado del ordenador también se puede escribir en la casilla).
-        // Si se arrastra o se usa Ctrl / Mayús para elegir varias, no: se marcan después con una
-        // letra o el botón derecho (que abre el mismo panel).
+      
         grid.CellMouseClick += (s, e) =>
         {
             if (e.Button != MouseButtons.Left || ModifierKeys != Keys.None || grid.SelectedCells.Count != 1
@@ -707,8 +677,7 @@ public class ModuloRutinaCalidad : UserControl
             else
                 MostrarOpciones(debajo);
         };
-        // Al pulsar el nombre de un punto o de una máquina se eligen todas sus casillas y salen
-        // las opciones, con "Todo correcto" para marcar de golpe lo que está bien
+      
         grid.CellClick += (s, e) =>
         {
             if (e.ColumnIndex != 0 || e.RowIndex < 0) return;
@@ -1055,7 +1024,6 @@ public class ModuloRutinaCalidad : UserControl
         Marcar(Seleccionadas(), estado);
     }
 
-    // Pone el estado (null = vaciar) en las casillas. A las de número solo se les puede vaciar.
     private void Marcar(IEnumerable<(RutinaPunto Punto, RutinaSeccion Seccion)> lista, string? estado)
     {
         bool cambia = false;
@@ -1082,7 +1050,6 @@ public class ModuloRutinaCalidad : UserControl
         MarcarCambios();
     }
 
-   
     private void Poner(ResultadoRutina casilla)
     {
         casilla = casilla with { Revision = revisionActual };
@@ -1131,8 +1098,6 @@ public class ModuloRutinaCalidad : UserControl
         celda.Value = valor?.ToString("0.##", Componentes.Es);
         MarcarCambios();
     }
-
-    // Teclado de números grande para las casillas de número (PESOS), pensado para la tablet
     private void PedirNumero(RutinaPunto punto, RutinaSeccion seccion, DataGridViewCell celda, Point donde)
     {
         string actual = casillas.GetValueOrDefault((punto.Id, seccion.Id))?.Valor?.ToString("0.##", Componentes.Es) ?? "";
@@ -1164,8 +1129,6 @@ public class ModuloRutinaCalidad : UserControl
         return decimal.TryParse(texto, NumberStyles.Number, Componentes.Es, out decimal valor) ? valor : null;
     }
 
-    // Opciones e incidencias
-
     private void BotonDerecho(object? sender, DataGridViewCellMouseEventArgs e)
     {
         if (e.Button != MouseButtons.Right || e.RowIndex < 0 || e.ColumnIndex < 1) return;
@@ -1179,9 +1142,6 @@ public class ModuloRutinaCalidad : UserControl
         MostrarOpciones(grid.PointToClient(Cursor.Position));
     }
 
-    // Panel con los estados de la leyenda en botones grandes (para usarlo también con el dedo)
-    // para las casillas seleccionadas y, si es una sola, su incidencia.
-    // donde: punto de la tabla junto al que se abre.
     private void MostrarOpciones(Point donde)
     {
         var seleccion = Seleccionadas();
@@ -1217,7 +1177,6 @@ public class ModuloRutinaCalidad : UserControl
         });
     }
 
-    // La incidencia se apunta en la casilla, así que la ronda tiene que estar guardada antes
     private void AbrirIncidencia(RutinaPunto punto, RutinaSeccion seccion)
     {
         if (hayCambios || rutina.Id == 0)
@@ -1282,8 +1241,6 @@ public class ModuloRutinaCalidad : UserControl
         {
             if (recargarPlantilla) plantilla = servicio.ObtenerPlantilla();
             var (leida, leidasRevisiones, resultados, leidas) = servicio.ObtenerRutina(fecha);
-            // Al recargar el mismo día se sigue en la misma revisión (o en la última, si era
-            // una nueva que no se ha guardado); al cambiar de día, en la primera
             bool mismoDia = leida.Fecha == rutina.Fecha;
             rutina = leida;
             revisiones = leidasRevisiones;
@@ -1300,7 +1257,7 @@ public class ModuloRutinaCalidad : UserControl
         }
 
         cargando = true;
-        dtpFecha.MaxDate = DateTime.Today;   // por si GPE lleva abierto desde ayer
+        dtpFecha.MaxDate = DateTime.Today;   
         dtpFecha.Value = rutina.Fecha;
         cajaOperario = string.IsNullOrWhiteSpace(rutina.CajaOperario) ? null : rutina.CajaOperario;
         MostrarOperario();
@@ -1351,7 +1308,6 @@ public class ModuloRutinaCalidad : UserControl
             return false;
         }
 
-        // Se vuelve a leer para tener la versión nueva (y lo que haya guardado otro en las casillas)
         Cargar(rutina.Fecha, recargarPlantilla: false);
         return true;
     }
@@ -1361,7 +1317,6 @@ public class ModuloRutinaCalidad : UserControl
         hayCambios = true;
         btnGuardar.Enabled = true;
 
-        // La primera revisión de una ronda nueva empieza con lo primero que se marca
         int sinHora = revisiones.FindIndex(r => r.Hora == null);
         if (sinHora >= 0)
         {
@@ -1385,7 +1340,6 @@ public class ModuloRutinaCalidad : UserControl
         }.OfType<string>());
         lblProgreso.ForeColor = hayCambios ? Tema.Aviso : Tema.Suave;
 
-        // Mientras la última revisión esté en blanco no se empieza otra
         int ultima = revisiones.Max(r => r.Numero);
         btnNuevaRevision.Enabled = porRevision.GetValueOrDefault(ultima)?.Count > 0;
 
