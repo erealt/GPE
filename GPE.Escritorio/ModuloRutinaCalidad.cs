@@ -941,7 +941,7 @@ public class ModuloRutinaCalidad : UserControl
         btnCajaNoOk.Checked = estado == "No OK";
     }
 
-    private static void PintarPestana(RadioButton boton)
+    internal static void PintarPestana(RadioButton boton)
     {
         boton.BackColor = boton.Checked ? Tema.Acento : Color.White;
         boton.ForeColor = boton.Checked ? Color.White : Tema.Texto;
