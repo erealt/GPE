@@ -1,8 +1,6 @@
 namespace GPE.Escritorio;
 
-// Campos de un formulario: la etiqueta encima del control y, debajo, un mensaje de
-// error en rojo que aparece al validar y desaparece en cuanto se corrige el campo.
-// Se usa en la nueva devolución, la recogida y el abono.
+// Campo con la etiqueta encima y el error en rojo debajo, que se quita al corregirlo.
 public class CamposFormulario
 {
     private readonly Dictionary<Control, Label> errores = new();

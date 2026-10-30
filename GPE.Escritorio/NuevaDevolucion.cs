@@ -197,8 +197,7 @@ public class FormNuevaDevolucion : Form
             primerError ??= cmbMotivo;
         }
 
-        // Los productos son opcionales y las filas vacías se ignoran,
-        // pero una fila con lote tiene que llevar producto
+        // Las filas vacías se ignoran, pero una con lote tiene que llevar producto
         var filasSinProducto = filas
             .Where(f => f.Producto.SelectedItem is not Producto && !string.IsNullOrWhiteSpace(f.Lote.Text))
             .ToList();

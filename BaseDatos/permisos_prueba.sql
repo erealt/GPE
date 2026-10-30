@@ -1,21 +1,5 @@
-/* Prueba de permisos por rol. Ejecutar después de crear_tablas.sql (que crea los roles).
-   Con sqlcmd hay que ejecutarlo con -f 65001 (el archivo está en UTF-8, por las tildes).
-
-   Roles (cada uno ve en la lista las devoluciones que esperan algo de él):
-   - Administración: da de alta las devoluciones y registra el abono.
-                     Ve las recién creadas y las que esperan el abono.
-   - Transporte:     programa la recogida. Ve las recién creadas.
-   - Almacén:        marca la llegada de la mercancía y la revisa.
-                     Ve las que tienen la recogida programada y las recibidas sin revisar.
-   - Calidad:        no ve las devoluciones, solo las no conformidades y la rutina de calidad.
-
-   Usuarios de la prueba, uno por rol (en la fábrica 1, la que usa la aplicación de momento).
-   Los cuatro correos llegan al mismo buzón: Gmail entrega "nombre+loquesea@gmail.com" en "nombre@gmail.com".
-   - Administrador: el usuario que antes se llamaba Estela
-   - Almacén:       el que antes era Usuario Prueba
-   - Transporte:    nuevo
-   - Calidad:       nuevo
-
+/* Un usuario de prueba por rol, en la fábrica 1. Después de crear_tablas.sql; con sqlcmd, -f 65001.
+   Los correos "nombre+algo@gmail.com" llegan todos a "nombre@gmail.com".
    Se puede ejecutar varias veces: deja a cada usuario exactamente con su rol. */
 
 USE GPE;

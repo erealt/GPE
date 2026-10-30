@@ -1,11 +1,7 @@
 USE GPE;
 GO
 
-/*
-   CALIDAD: INCIDENCIAS Y NO CONFORMIDADES
-   Sustituye al Excel "INCIDENCIAS Y NO CONFORMIDADES - CALIDAD" (MT-RG09).
-   Se ejecuta una vez, después de crear_tablas.sql.
-*/
+-- Incidencias y no conformidades (Excel MT-RG09). Se ejecuta una vez, después de crear_tablas.sql.
 CREATE TABLE CALIDAD_LISTA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     lista NVARCHAR(20) NOT NULL,
@@ -18,12 +14,10 @@ CREATE TABLE CALIDAD_LISTA (
         'MC_PCC_BPM', 'PARAMETRO', 'OPERARIO', 'CAPITULO_NORMA'))
 );
 
--- Una fila de la hoja INCIDENCIAS. El estado (en plazo, fuera de plazo, cerrada)
--- no se guarda: se calcula con la fecha prevista y la fecha fin, como en el Excel.
+-- Una fila de la hoja INCIDENCIAS. El estado no se guarda: sale de la fecha prevista y la fecha fin.
 CREATE TABLE NO_CONFORMIDAD (
     id INT IDENTITY(1,1) PRIMARY KEY,
     tipo_registro NVARCHAR(10) NOT NULL,          -- NC, INCIDENCIA o MEJORA
-    -- Lo pone la aplicación según la serie (558, AC-2026-1, AI-20/04/26-1; incidencias 1, 2...).
     -- Texto y sin UNIQUE: en el Excel hay otros formatos (LC25-06) y algún número repetido.
     numero NVARCHAR(30) NULL,
     fecha_detectado DATE NOT NULL,
@@ -46,8 +40,7 @@ CREATE TABLE NO_CONFORMIDAD (
     horas_mano_obra DECIMAL(7,2) NULL,
     creado_por INT NOT NULL,
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_no_conformidad_creado DEFAULT SYSDATETIME(),
-    -- Cambia sola en cada UPDATE: al guardar se comprueba que nadie haya guardado
-    -- desde que se abrió la ficha. No sale en el historial (ver el trigger).
+    -- Para comprobar al guardar que nadie ha guardado desde que se abrió la ficha.
     version ROWVERSION NOT NULL,
     CONSTRAINT CK_no_conformidad_tipo CHECK (tipo_registro IN ('NC', 'INCIDENCIA', 'MEJORA')),
     CONSTRAINT CK_no_conformidad_coste CHECK (coste_economico >= 0),
@@ -57,9 +50,7 @@ CREATE TABLE NO_CONFORMIDAD (
 
 CREATE INDEX IX_no_conformidad_fecha ON NO_CONFORMIDAD (fecha_detectado);
 
--- Acciones inmediatas, correctoras y seguimientos de un registro: una fila por acción
--- o comprobación, en el orden en que se ven en la ficha. Se borran con el registro.
--- En los seguimientos, hecha no se usa y la fecha es la de la comprobación.
+-- Acciones inmediatas, correctoras y seguimientos. En los seguimientos no se usa hecha.
 CREATE TABLE NC_ACCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
     no_conformidad_id INT NOT NULL,
@@ -77,11 +68,8 @@ CREATE TABLE NC_ACCION (
 
 CREATE INDEX IX_nc_accion_no_conformidad ON NC_ACCION (no_conformidad_id, clase, orden);
 
--- Quién tiene abierta cada ficha, para avisar a los demás y que la vean en solo lectura.
--- sesion identifica cada GPE abierto (el mismo usuario puede tenerlo en dos equipos).
--- Mientras la ficha está abierta, GPE actualiza ultimo_aviso cada minuto; si pasan unos
--- minutos sin hacerlo (GPE se cerró de golpe, se fue la luz...), el bloqueo deja de contar.
--- No lleva historial: abrir una ficha no es un cambio.
+-- Quién tiene abierta cada ficha (los demás la ven en solo lectura). sesion: cada GPE abierto.
+-- GPE renueva ultimo_aviso cada minuto; si deja de hacerlo, el bloqueo caduca. Sin historial.
 CREATE TABLE NC_BLOQUEO (
     no_conformidad_id INT PRIMARY KEY,
     usuario_id INT NOT NULL,
@@ -95,8 +83,7 @@ CREATE TABLE NC_BLOQUEO (
 );
 GO
 
--- Historial: igual que los de devoluciones, con devolucion_id NULL.
--- Se consulta con tabla_afectada = 'NO_CONFORMIDAD' y registro_id.
+-- Historial como el de devoluciones, con devolucion_id NULL.
 CREATE OR ALTER TRIGGER TR_NO_CONFORMIDAD_HISTORIAL ON NO_CONFORMIDAD
 AFTER INSERT, UPDATE, DELETE
 AS
@@ -113,8 +100,7 @@ BEGIN
     SELECT NULL, @usuario, 'NO_CONFORMIDAD', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
     FROM inserted i
     FULL OUTER JOIN deleted d ON d.id = i.id
-    -- La versión se quita del JSON: cambia en cada UPDATE y haría que un guardado sin
-    -- cambios contara como cambio (JSON_MODIFY con NULL borra la propiedad)
+    -- Sin la versión: cambia en cada UPDATE y un guardado sin cambios contaría como cambio
     CROSS APPLY (SELECT
         COALESCE(i.id, d.id) AS registro_id,
         CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
@@ -156,9 +142,7 @@ BEGIN
 END;
 GO
 
-/*
-   Opciones iniciales: copiadas tal cual de la hoja LISTAS
-*/
+-- Opciones iniciales, copiadas de la hoja LISTAS
 INSERT INTO CALIDAD_LISTA (lista, valor, descripcion, orden) VALUES
     (N'ORIGEN', N'I', N'Interna', 1),
     (N'ORIGEN', N'R', N'Reclamación de cliente', 2),

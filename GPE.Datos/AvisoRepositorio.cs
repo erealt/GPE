@@ -8,8 +8,7 @@ public class AvisoRepositorio
     // Tras este número de fallos un aviso se deja de reintentar
     public const int MaximoIntentos = 5;
 
-    // Apunta un aviso para cada usuario con el rol responsable de la fase indicada
-    // en la fábrica de la devolución. Va dentro de la transacción del cambio que lo provoca.
+    // Un aviso por usuario con el rol de la fase en la fábrica de la devolución, dentro de la transacción del cambio.
     public static void Apuntar(SqlConnection conexion, SqlTransaction transaccion,
         int devolucionId, string tipo, int faseResponsable)
     {
@@ -29,8 +28,7 @@ public class AvisoRepositorio
         comando.ExecuteNonQuery();
     }
 
-    // Reserva los avisos pendientes durante unos minutos para que otro ordenador
-    // que esté enviando a la vez no los mande también, y los devuelve.
+    // Reserva los pendientes unos minutos para que otro equipo no los envíe a la vez.
     public List<AvisoPendiente> ReservarPendientes()
     {
         const string sql = @"
@@ -98,9 +96,8 @@ public class AvisoRepositorio
         return avisos;
     }
 
-    // Devoluciones que siguen en la fase indicada, para cada usuario con el rol responsable
-    // del paso siguiente en su fábrica (en la 3, el almacén tiene que revisar; en la 4,
-    // administración tiene que registrar el abono). Se saltan quienes ya recibieron hoy ese resumen.
+    // Devoluciones paradas en la fase, por cada usuario con el rol del paso siguiente.
+    // Se salta a quien ya recibió hoy ese resumen.
     public List<DevolucionPendiente> ObtenerPendientes(int faseActual, string tipoResumen)
     {
         const string sql = @"

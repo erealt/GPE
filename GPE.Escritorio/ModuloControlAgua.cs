@@ -4,11 +4,8 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Control de agua (la hoja AGUA, MT-RG09): como en la rutina de calidad, se elige el día y
-// debajo se apuntan en una tabla los puntos de agua revisados, con el cloro y los
-// organolépticos. Se usa también con una tablet, así que todo se hace pulsando: el punto se
-// elige con botones grandes (ElegirOpcion), el cloro con un teclado de números
-// (TecladoNumerico) y cada organoléptico cambia de Sí a No con un toque. Vive dentro de FormPrincipal.
+// Control de agua (hoja AGUA, MT-RG09): el día arriba y los puntos revisados debajo.
+// Pensado también para tablet: todo se hace pulsando.
 public class ModuloControlAgua : UserControl
 {
     private readonly AguaServicio servicio = new();
@@ -70,8 +67,7 @@ public class ModuloControlAgua : UserControl
         return layout;
     }
 
-    // La tabla mide lo que sus filas y "Añadir fila" va justo debajo de la última, como una
-    // fila más; si no caben, se desplaza todo junto
+    // "Añadir fila" va justo debajo de la última fila; si no cabe, se desplaza todo junto
     private Control CrearZonaTabla()
     {
         var zona = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
@@ -265,8 +261,7 @@ public class ModuloControlAgua : UserControl
         return columna;
     }
 
-    // El nombre del punto de agua (la celda guarda su id) y el cloro fuera del rango del
-    // punto (si lo tiene), en rojo
+    // La celda del punto guarda su id; el cloro fuera de rango sale en rojo
     private void Formatear(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.CellStyle == null) return;
@@ -310,8 +305,7 @@ public class ModuloControlAgua : UserControl
 
     // Filas
 
-    // Al pulsar una celda: el punto y el cloro abren su panel, Sí / No cambia, el comentario
-    // se empieza a escribir y ✕ quita la fila
+    // Al pulsar: punto y cloro abren su panel, Sí / No cambia y ✕ quita la fila
     private void CeldaPulsada(object? sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -348,15 +342,13 @@ public class ModuloControlAgua : UserControl
         return grid.PointToScreen(new Point(celda.Left, celda.Bottom));
     }
 
-    // Los puntos de agua para elegir el de una fila (null: una nueva). Un punto puede
-    // apuntarse más de una vez el mismo día.
+    // fila null: una nueva. Un punto puede apuntarse varias veces el mismo día.
     private ElegirOpcion PanelPuntos(DataGridViewRow? fila) =>
         new("Punto de agua",
             tomas.Select(t => (t.Id.ToString(), t.Nombre, true)).ToList(),
             (fila?.Cells[ColToma].Value as int?)?.ToString());
 
-    // Se elige el punto y se añade la fila, con todo "Sí"; luego se abre el teclado del cloro,
-    // que es lo siguiente que se apunta
+    // La fila nueva empieza con todo "Sí" y abre el teclado del cloro
     private void AnadirFila()
     {
         grid.EndEdit();

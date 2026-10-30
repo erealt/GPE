@@ -1,7 +1,6 @@
 ﻿namespace GPE.Datos;
 
-// Fases del proceso (columna ESTADO_DEVOLUCION.fase). Abono y cierre se registran
-// a la vez, así que se pasa de la 4 a la 6: la 5 solo aparece en la barra de progreso.
+// Fases (ESTADO_DEVOLUCION.fase). Abono y cierre van juntos: de la 4 se pasa a la 6; la 5 solo sale en la barra.
 public static class Fase
 {
     public const int SolicitudRecibida = 1;
@@ -69,8 +68,7 @@ public record CambioHistorial(
     string? ValoresAnteriores,
     string? ValoresNuevos);
 
-// Usuario que está usando la aplicación. Se envía a SQL Server al abrir cada
-// conexión para que los triggers sepan quién hace cada cambio.
+// Usuario de la aplicación; se envía a SQL Server para que los triggers sepan quién cambia qué.
 public static class Sesion
 {
     public static Usuario? UsuarioActual { get; set; }
@@ -85,8 +83,7 @@ public static class Sesion
     public static bool VeCalidad => TieneRol(Rol.Calidad);
 }
 
-// Nombres de la tabla ROL. Cada rol hace unos pasos de la devolución;
-// los demás usuarios solo pueden consultarlos.
+// Nombres de la tabla ROL. Cada rol hace sus pasos; el resto solo consulta.
 public static class Rol
 {
     public const string Administracion = "Administración";   // nueva devolución, abono y cierre
@@ -139,8 +136,7 @@ public record LineaRevision(
     int Cantidad,
     bool Apto);
 
-// Cabecera de la revisión. Agencia y RevisadaPor son null si aún no se ha guardado;
-// Transportista es el de la recogida, para proponerlo como agencia.
+// Agencia y RevisadaPor son null si no se ha guardado; Transportista (el de la recogida) se propone como agencia.
 public record CabeceraRevision(
     string? RevisadaPor,
     string? Agencia,

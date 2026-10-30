@@ -19,9 +19,7 @@ public class DevolucionServicio
         [Rol.Almacen] = new[] { Fase.RecogidaSolicitada, Fase.MercanciaRecibida },
     };
 
-    // Fases que ve el usuario de la sesión (si tiene varios roles, las de todos).
-    // Las cerradas las ve cualquiera, por si hay que comprobar algo; la lista
-    // solo las enseña al filtrar por el estado "Cierre".
+    // Fases de todos los roles del usuario. Las cerradas las ve cualquiera (filtrando por "Cierre").
     public static HashSet<int> FasesVisibles()
     {
         var fases = Sesion.Roles.Where(FasesPorRol.ContainsKey).SelectMany(r => FasesPorRol[r]).ToHashSet();
@@ -31,8 +29,7 @@ public class DevolucionServicio
 
     public List<DevolucionFila> ObtenerDevolucionesVisibles() => repositorio.ObtenerDevoluciones(FasesVisibles());
 
-    // Las visibles sin las cerradas, que con los años son la mayoría: para el inicio
-    // y el aviso de abonos, que solo cuentan las que están en marcha
+    // Las visibles sin las cerradas, para el inicio y el aviso de abonos
     public List<DevolucionFila> ObtenerDevolucionesEnCurso() =>
         repositorio.ObtenerDevoluciones(FasesVisibles().Where(f => f != Fase.Cierre));
 
@@ -60,8 +57,7 @@ public class DevolucionServicio
 
     public List<string> ObtenerRoles(int usuarioId) => repositorio.ObtenerRoles(usuarioId);
 
-    // Permisos: cada paso lo hace un rol. Las pantallas ya no dejan hacerlo a los demás;
-    // esto es la segunda comprobación, como el resto de validaciones.
+    // Segunda comprobación de permisos: las pantallas ya no dejan hacerlo a otros roles.
     private static void ExigirRol(string rol, string accion)
     {
         if (!Sesion.TieneRol(rol))
@@ -103,9 +99,7 @@ public class DevolucionServicio
     public CabeceraRevision ObtenerCabeceraRevision(int devolucionId) =>
         repositorio.ObtenerCabeceraRevision(devolucionId);
 
-    // Solo se puede reabrir el último paso completado (el siguiente aún no ha empezado):
-    // fase 3 → 2 deshace la recepción; fase 4 → 3 reabre la revisión;
-    // fase 6 → 4 reabre el abono (abono y cierre se registran a la vez).
+    // Solo se reabre el último paso: 3 → 2 deshace la recepción, 4 → 3 la revisión y 6 → 4 el abono.
     public void Reabrir(int devolucionId, int faseActual, string motivo)
     {
         if (faseActual is not (Fase.MercanciaRecibida or Fase.RevisadaAlmacen or Fase.Cierre))
@@ -125,8 +119,7 @@ public class DevolucionServicio
             throw new ReglaNegocioException(MensajeOtroUsuario);
     }
 
-    // Hace falta el recibo de la agencia: el que se adjunta ahora o uno de una
-    // recepción anterior que se deshizo
+    // Hace falta el recibo: el que se adjunta ahora o uno de una recepción deshecha
     public void MarcarRecibida(int devolucionId, IEnumerable<string> rutasRecibo)
     {
         ExigirRol(Rol.Almacen, "marcar la mercancía como recibida");
@@ -169,8 +162,7 @@ public class DevolucionServicio
 
     // Abono y cierre
 
-    // Pasados estos días desde la llegada de la mercancía sin abonar, se avisa al usuario.
-    // Con 0 se avisa desde el mismo día en que llega.
+    // Días desde la llegada sin abonar a partir de los que se avisa (0: el mismo día).
     public const int DiasAvisoAbono = 0;
 
     // "hoy", "1 día", "5 días"
@@ -181,8 +173,7 @@ public class DevolucionServicio
         _ => $"{dias} días"
     };
 
-    // Días desde que llegó la mercancía, o null si no está esperando abono
-    // (aún no ha llegado o ya está cerrada)
+    // Días desde que llegó la mercancía; null si no espera abono
     public static int? DiasSinAbono(DevolucionFila devolucion) =>
         devolucion.Fase is Fase.MercanciaRecibida or Fase.RevisadaAlmacen && devolucion.FechaLlegada is DateTime llegada
             ? (DateTime.Today - llegada.Date).Days

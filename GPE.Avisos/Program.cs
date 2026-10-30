@@ -1,12 +1,7 @@
 using GPE.Logica;
 
-// Avisos por correo sin abrir GPE. Lo ejecuta cada mañana una tarea programada de Windows
-// en un ordenador que esté encendido (ver README, "Avisos por correo").
-//   1. Envía los avisos que se quedaron pendientes en AVISO_CORREO.
-//   2. Envía el resumen diario al almacén con las devoluciones pendientes de revisar.
-// Usa la misma configuración que GPE (variables GPE_SMTP_* y GPE_CONEXION).
-// Lo que pasa se apunta en %LOCALAPPDATA%\GPE\avisos.log. Si falla, termina con código 1
-// para que la tarea programada lo reintente.
+// Envía los avisos pendientes y los resúmenes diarios sin abrir GPE (tarea programada, ver README).
+// Log en %LOCALAPPDATA%\GPE\avisos.log; si falla sale con código 1 para que la tarea reintente.
 
 string carpetaLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GPE");
 Directory.CreateDirectory(carpetaLog);

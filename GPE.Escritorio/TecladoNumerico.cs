@@ -1,8 +1,6 @@
 namespace GPE.Escritorio;
 
-// Teclado de números grande para apuntar un valor con el dedo (el cloro del control de agua).
-// También se puede escribir con el teclado del ordenador. Lo escrito se queda al pulsar
-// "Aceptar" o fuera del panel; con Esc no se cambia nada.
+// Teclado de números para el dedo. Se acepta con "Aceptar" o pulsando fuera; Esc no cambia nada.
 public class TecladoNumerico : PanelEmergente
 {
     private const int AnchoTecla = 72;

@@ -31,8 +31,7 @@ public class ModuloDevoluciones : UserControl
     private readonly System.Windows.Forms.Timer temporizadorAviso = new() { Interval = MinutosEntreAvisos * 60_000 };
     private bool soloRetrasadas;    // filtro activado desde la franja
 
-    // Tocaba avisar mientras había otra ventana abierta: FormPrincipal vuelve a llamar
-    // a MostrarAvisoAbonos al volver a la ventana principal
+    // Tocaba avisar con otra ventana abierta: se avisa al volver a la principal
     public bool AvisoPendiente { get; private set; }
 
     // Al elegir una devolución en el aviso: FormPrincipal cambia a este módulo antes de abrirla
@@ -44,8 +43,7 @@ public class ModuloDevoluciones : UserControl
 
         Controls.Add(CrearContenido());
 
-        // FormPrincipal crea este módulo al arrancar (aunque se vea el inicio) para que
-        // el aviso funcione desde el principio; la lista se carga la primera vez que se ve
+        // Se crea al arrancar por el aviso; la lista se carga la primera vez que se ve
         Load += (s, e) => CargarDatos();
         temporizadorAviso.Tick += (s, e) => MostrarAvisoAbonos();
         temporizadorAviso.Start();
@@ -187,8 +185,7 @@ public class ModuloDevoluciones : UserControl
             ? devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList()
             : new List<DevolucionFila>();
 
-    // Ventana de aviso, al entrar y cada MinutosEntreAvisos mientras quede alguna pendiente.
-    // Salta aunque se esté en otro módulo (FormPrincipal la llama al arrancar).
+    // Al entrar y cada MinutosEntreAvisos mientras quede alguna, aunque se esté en otro módulo
     public void MostrarAvisoAbonos()
     {
         if (Application.OpenForms.Count > 1)
@@ -362,8 +359,7 @@ public class ModuloDevoluciones : UserControl
 
         grid.Columns[0].DefaultCellStyle.ForeColor = Tema.Acento;
         grid.Columns[0].DefaultCellStyle.Font = Tema.FuenteNegrita;
-        // El número entero, sin cortar: la columna mide lo que ocupa el número. Con un ancho
-        // mínimo y "Fill", al maximizar la ventana esta columna se quedaba con todo el sobrante.
+        // Ancho según el número: con "Fill" se quedaba todo el sobrante al maximizar
         grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
         grid.Columns[0].MinimumWidth = 135;
         grid.Columns[ColumnaEstado].FillWeight = 140;
@@ -532,8 +528,7 @@ public class ModuloDevoluciones : UserControl
                 || numero.Contains(texto, StringComparison.OrdinalIgnoreCase)
                 || cli.Contains(texto, StringComparison.OrdinalIgnoreCase)
                 || codigoCliente.Contains(texto, StringComparison.OrdinalIgnoreCase);
-            // Las cerradas solo salen al buscar una o al filtrar por su estado: así la lista
-            // enseña lo pendiente y se puede consultar cualquier cerrada si hace falta
+            // Las cerradas solo salen al buscarlas o al filtrar por su estado
             bool cerrada = fila.Tag is DevolucionFila { Fase: Fase.Cierre };
             bool coincideEstado = estado == "" ? !cerrada || texto != "" : est == estado;
 
@@ -581,8 +576,7 @@ public class ModuloDevoluciones : UserControl
         grid.Visible = visibles > 0;
     }
 
-    // Se mira la fila seleccionada y no CurrentRow: al seleccionar por código (al volver de
-    // una devolución), SelectionChanged salta antes de que CurrentRow se actualice.
+    // SelectedRows y no CurrentRow: al seleccionar por código, CurrentRow aún no se ha actualizado.
     private DevolucionFila? DevolucionSeleccionada() =>
         grid.SelectedRows.Cast<DataGridViewRow>()
             .FirstOrDefault(f => f.Visible && f.Tag is DevolucionFila)?.Tag as DevolucionFila;

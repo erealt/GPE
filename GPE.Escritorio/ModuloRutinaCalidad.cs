@@ -177,7 +177,7 @@ public class ModuloRutinaCalidad : UserControl
         int anchoPunto = (int)(AnchoPunto * escala);
         grid.Columns[0].Width = anchoPunto;
 
-        // Lo que sobra se reparte a partes iguales; las que necesitan más de su parte se quedan con su mínimo
+        // El sobrante se reparte a partes iguales; las que necesitan más se quedan con su mínimo
         var anchos = minimos.Select(m => (int)(m * escala)).ToList();
         var libres = Enumerable.Range(0, columnas.Count).ToList();
         int resto = disponible - anchoPunto;

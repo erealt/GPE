@@ -5,20 +5,15 @@ using System.Globalization;
 
 namespace GPE.Escritorio;
 
-// Alta y edición de una incidencia, no conformidad o acción de mejora: una fila de la
-// hoja INCIDENCIAS del Excel. Los campos "solo para NC" y "solo para incidencias" se
-// muestran u ocultan según el tipo de registro elegido.
-// Hay una tarjeta por fase (registro, acción inmediata, análisis, corrección, cierre) y solo se
-// ve la de la fase elegida. Arriba, la barra de fases hace de pestañas: marca las hechas
-// y al pulsar una se pasa a ella.
+// Ficha de una incidencia, NC o acción de mejora (fila de la hoja INCIDENCIAS).
+// Una tarjeta por fase; solo se ve la elegida en la barra de fases.
 public class FormNoConformidad : Form
 {
     private readonly NoConformidadServicio servicio = new();
     private readonly NoConformidad? original;   // null si es nuevo
     private readonly NoConformidad? borrador;
 
-    // Quién tiene abierta la ficha si es otro GPE: entonces solo se consulta.
-    // Si no, este GPE la bloquea y renueva el bloqueo cada minuto hasta cerrarla.
+    // Si otro GPE tiene la ficha abierta, aquí solo se consulta
     private readonly BloqueoNc? bloqueo;
     private bool SoloLectura => bloqueo != null;
     private readonly System.Windows.Forms.Timer renovarBloqueo = new();
@@ -33,7 +28,6 @@ public class FormNoConformidad : Form
     private static readonly OpcionLista SinIndicar = new("—", null);
 
     // Identificación
-    // Tipo de registro: tres botones de los que solo se puede elegir uno
     private readonly FlowLayoutPanel selectorTipo = new();
     private readonly Dictionary<string, RadioButton> botonesTipo = new();
     private readonly DateTimePicker dtpDetectado = new();
@@ -75,8 +69,7 @@ public class FormNoConformidad : Form
     private Control campoTipo = null!;
     private Control tarjetaIncidencia = null!;
 
-    // Fases del registro según lo que hay escrito ahora, la tarjeta de cada una y la
-    // que se está viendo (-1 mientras se monta la ficha: se ven todas)
+    // faseElegida = -1 mientras se monta la ficha: se ven todas
     private readonly BarraFasesCalidad barraFases = new();
     private List<EstadoFase> fases = new();
     private readonly Dictionary<string, Control> tarjetasFase = new();
@@ -162,8 +155,7 @@ public class FormNoConformidad : Form
 
     // Ficha abierta por otra persona
 
-    // Si falla la base de datos, se deja editar: al guardar, la versión del registro
-    // sigue impidiendo que se pisen los cambios de otro
+    // Si falla la base se deja editar: la versión sigue impidiendo pisar cambios de otro
     private BloqueoNc? Bloquear(int id)
     {
         try
@@ -291,8 +283,7 @@ public class FormNoConformidad : Form
             "Todavía no hay seguimientos. Añade uno cada vez que se compruebe si las acciones han funcionado.");
     }
 
-    // Botones pegados (No conformidad · Incidencia · Acción de mejora); el elegido, en morado.
-    // Son RadioButton con aspecto de botón: al estar en el mismo panel, solo puede haber uno marcado.
+    // RadioButton con aspecto de botón: en el mismo panel solo puede haber uno marcado.
     private void PrepararSelectorTipo()
     {
         selectorTipo.AutoSize = false;
@@ -351,9 +342,7 @@ public class FormNoConformidad : Form
         texto.AutoCompleteCustomSource.AddRange(nombres.ToArray());
     }
 
-    // Desplegable con las opciones de una lista; si el valor guardado ya no está en la
-    // lista (una opción antigua o desactivada), se añade para no perderlo.
-    // Con filtro, solo se ponen las opciones que lo cumplen.
+    // Si el valor guardado ya no está en la lista (opción antigua o desactivada), se añade para no perderlo.
     private void LlenarLista(ComboBox combo, string lista, string? valor, Func<OpcionLista, bool>? filtro = null)
     {
         combo.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -646,8 +635,7 @@ public class FormNoConformidad : Form
         _ => "Verificación y cierre"
     };
 
-    // Enseña solo la tarjeta de la fase (en el registro, también la de clasificación
-    // si es una incidencia) y vuelve arriba de la página
+    // En el registro de una incidencia se ve también la tarjeta de clasificación
     private void MostrarFase(int indice)
     {
         faseElegida = indice;
@@ -664,8 +652,7 @@ public class FormNoConformidad : Form
         scroll.AutoScrollPosition = Point.Empty;
     }
 
-    // Al pasar a otra fase, el cursor va a su primer campo, al final del texto (sin
-    // seleccionarlo, para no borrarlo al escribir)
+    // Cursor al final del texto, sin seleccionarlo, para no borrarlo al escribir
     private void IrAFase(int indice)
     {
         MostrarFase(indice);
@@ -689,8 +676,7 @@ public class FormNoConformidad : Form
         control.Focus();
     }
 
-    // En una NC de auditoría solo se ofrecen las secciones de auditoría (interna,
-    // externa, cliente). Si la sección elegida no es una de ellas, se quita.
+    // En una NC de auditoría solo se ofrecen las secciones de auditoría
     private void ActualizarSecciones()
     {
         bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(TipoElegido, Valor(cmbOrigen));
@@ -749,8 +735,7 @@ public class FormNoConformidad : Form
         lblEstado.ForeColor = estado == EstadoRegistro.FueraPlazo ? Tema.Error : Tema.Suave;
     }
 
-    // Lee los campos de la pantalla. Si el coste o las horas no son números, deja el
-    // error marcado, lo devuelve en errorNumero y el registro es null.
+    // null si el coste o las horas no son números (el error va en errorNumero).
     private NoConformidad? LeerRegistro(out Control? errorNumero)
     {
         Control? primero = null;

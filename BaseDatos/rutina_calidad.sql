@@ -1,16 +1,10 @@
 USE GPE;
 GO
 
-/*
-   CALIDAD: RUTINA DEL SUPERVISOR (CHEQUEOS DIARIOS - PCC)
-   Sustituye a la hoja de Google Sheets que calidad rellena cada día al recorrer la
-   fábrica: una columna por máquina o sección, una fila por punto de control.
-   Se ejecuta una vez, después de no_conformidades.sql.
-*/
+-- Rutina del supervisor de calidad (CHEQUEOS DIARIOS - PCC). Se ejecuta una vez, después de no_conformidades.sql.
 
--- Columnas de la hoja: máquinas y secciones que se recorren, por planta.
--- seccion_calidad es la sección de CALIDAD_LISTA que se propone al abrir una incidencia
--- desde la rutina (los nombres no coinciden: FLO 1 en la hoja, FLOWPACK en las incidencias).
+-- Columnas de la hoja. seccion_calidad: la de CALIDAD_LISTA que se propone en la incidencia
+-- (los nombres no coinciden: FLO 1 en la hoja, FLOWPACK en las incidencias).
 CREATE TABLE RUTINA_SECCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(50) NOT NULL,
@@ -22,8 +16,7 @@ CREATE TABLE RUTINA_SECCION (
     CONSTRAINT CK_rutina_seccion_planta CHECK (planta IN ('BAJA', 'SUPERIOR'))
 );
 
--- Filas de la hoja: lo que se revisa. Los numéricos (PESOS) llevan un valor en vez de
--- correcto / no correcto. mc_pcc_bpm es el valor de esa lista que se propone en la incidencia.
+-- Filas de la hoja. Los numéricos (PESOS) llevan valor; mc_pcc_bpm se propone en la incidencia.
 CREATE TABLE RUTINA_PUNTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(100) NOT NULL,
@@ -43,8 +36,7 @@ CREATE TABLE RUTINA_APLICA (
     CONSTRAINT FK_rutina_aplica_seccion FOREIGN KEY (seccion_id) REFERENCES RUTINA_SECCION(id)
 );
 
--- Una ronda por día, como la hoja (una por fecha). Lleva las observaciones fijas del pie
--- de la hoja: la caja de herramientas (operario y estado) y los depósitos.
+-- Una ronda por día, con las observaciones fijas del pie de la hoja (caja de herramientas y depósitos).
 CREATE TABLE RUTINA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     fecha DATE NOT NULL,
@@ -53,15 +45,13 @@ CREATE TABLE RUTINA (
     depositos NVARCHAR(1000) NULL,
     creado_por INT NOT NULL,
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_rutina_creado DEFAULT SYSDATETIME(),
-    -- Igual que en NO_CONFORMIDAD: al guardar se comprueba que nadie haya guardado
-    -- la misma ronda desde que se abrió
+    -- Como en NO_CONFORMIDAD, para no pisar lo que otro haya guardado
     version ROWVERSION NOT NULL,
     CONSTRAINT UQ_rutina_fecha UNIQUE (fecha),
     CONSTRAINT FK_rutina_usuario FOREIGN KEY (creado_por) REFERENCES USUARIO(id)
 );
 
--- Pasadas del día: la 1 es la ronda completa; las siguientes, las veces que se vuelve a
--- revisar (el segundo cuadrado de la hoja). hora: cuándo se empezó.
+-- La 1 es la ronda completa; las siguientes, los repasos (el segundo cuadrado de la hoja).
 CREATE TABLE RUTINA_REVISION (
     id INT IDENTITY(1,1) PRIMARY KEY,
     rutina_id INT NOT NULL,
@@ -74,9 +64,7 @@ CREATE TABLE RUTINA_REVISION (
     CONSTRAINT FK_rutina_revision_usuario FOREIGN KEY (creado_por) REFERENCES USUARIO(id)
 );
 
--- Una casilla rellenada en una revisión. Las vacías no se guardan.
--- estado: OK (correcto), NO (no correcto), NA (no aplica hoy), MTO (avisado a mantenimiento).
--- Los puntos numéricos llevan valor y no estado.
+-- Casillas rellenadas. estado: OK, NO (no correcto), NA (no aplica hoy), MTO (avisado a mantenimiento).
 CREATE TABLE RUTINA_RESULTADO (
     id INT IDENTITY(1,1) PRIMARY KEY,           -- para el historial, que guarda un id por fila
     rutina_id INT NOT NULL,
@@ -99,8 +87,7 @@ CREATE TABLE RUTINA_RESULTADO (
         REFERENCES NO_CONFORMIDAD(id) ON DELETE SET NULL
 );
 
--- Observaciones por sección del pie de la hoja ("Sección: EMB2 · Sigue dando el fallo..."),
--- en el orden en que se escribieron
+-- Observaciones por sección del pie de la hoja
 CREATE TABLE RUTINA_OBSERVACION (
     id INT IDENTITY(1,1) PRIMARY KEY,
     rutina_id INT NOT NULL,
@@ -228,11 +215,7 @@ BEGIN
 END;
 GO
 
-/*
-   Plantilla inicial: copiada de la hoja "CHEQUEOS DIARIOS - PCC" (01/10).
-   La sección de calidad es una propuesta: hay que revisarla con calidad
-   (las que no tienen equivalente claro se dejan en NULL).
-*/
+-- Plantilla inicial, de la hoja del 01/10. La sección de calidad es una propuesta pendiente de calidad.
 INSERT INTO RUTINA_SECCION (nombre, planta, seccion_calidad, orden) VALUES
     (N'L1', 'BAJA', N'L1', 1),
     (N'L2', 'BAJA', N'L2', 2),
@@ -290,11 +273,8 @@ INSERT INTO RUTINA_PUNTO (nombre, numerico, mc_pcc_bpm, orden) VALUES
     (N'Revisar mangueras', 0, NULL, 24),
     (N'PESOS', 1, NULL, 25);
 
--- Qué se revisa en cada sección: las casillas blancas de la hoja. Cada letra es una
--- sección en su orden (L1, L2, LR, MC 1... TERM 1): X se revisa, . no (gris en la hoja).
--- COMEDOR, CONCHA y DEPOSITOS (letras 14 a 16) están sombreadas enteras en la hoja:
--- se han puesto según las marcas que tienen y lo que se revisa en cada una.
--- Después se cambia desde GPE con el botón "Plantilla".
+-- Una letra por sección en su orden (L1, L2, LR... TERM 1): X se revisa, . no.
+-- COMEDOR, CONCHA y DEPOSITOS (14 a 16) están sombreadas enteras en la hoja: pendientes de confirmar.
 INSERT INTO RUTINA_APLICA (punto_id, seccion_id)
 SELECT p.id, s.id
 FROM (VALUES

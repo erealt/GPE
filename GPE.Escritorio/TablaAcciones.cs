@@ -4,10 +4,7 @@ using System.Globalization;
 
 namespace GPE.Escritorio;
 
-// Tabla editable de las acciones inmediatas o correctoras, o de los seguimientos, de la ficha de calidad:
-// una fila por acción con si está hecha, la acción, fecha, responsable y observaciones.
-// En los seguimientos no hay "hecha" (cada fila ya es algo hecho) y la fecha es obligatoria.
-// Se añaden filas con el botón de debajo y se quitan con "Quitar" en cada fila.
+// Acciones o seguimientos de la ficha de calidad. Los seguimientos no tienen "hecha" y la fecha es obligatoria.
 public class TablaAcciones : TableLayoutPanel
 {
     private const int ColHecha = 0, ColAccion = 1, ColFecha = 2, ColResponsable = 3, ColObservaciones = 4, ColQuitar = 5;
@@ -189,8 +186,7 @@ public class TablaAcciones : TableLayoutPanel
         grid.BeginEdit(true);
     }
 
-    // Lee las acciones de la tabla. Las filas sin nada escrito no cuentan. Si alguna está
-    // mal, deja el error en su celda y devuelve null.
+    // Las filas vacías no cuentan. null si alguna está mal (el error queda en su celda).
     public List<AccionNc>? Leer(DateTime fechaDetectado)
     {
         grid.EndEdit();
@@ -247,8 +243,7 @@ public class TablaAcciones : TableLayoutPanel
         return acciones;
     }
 
-    // Las acciones tal como están escritas, sin comprobar nada: para ver en qué fase va
-    // el registro mientras se rellena. Solo llevan la acción y si está hecha.
+    // Sin comprobar nada, para saber en qué fase va el registro mientras se rellena
     public List<AccionNc> Borrador() =>
         grid.Rows.Cast<DataGridViewRow>()
             .Where(fila => !FilaVacia(fila))

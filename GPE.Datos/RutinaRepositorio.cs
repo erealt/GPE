@@ -2,8 +2,7 @@ using Microsoft.Data.SqlClient;
 
 namespace GPE.Datos;
 
-// Rutina diaria del supervisor de calidad (tablas RUTINA_SECCION, RUTINA_PUNTO,
-// RUTINA_APLICA, RUTINA, RUTINA_REVISION y RUTINA_RESULTADO)
+// Rutina diaria del supervisor de calidad (tablas RUTINA_*)
 public class RutinaRepositorio
 {
     // Plantilla
@@ -163,11 +162,8 @@ public class RutinaRepositorio
         return resultados;
     }
 
-    // Crea la ronda (Id = 0) o guarda sus cambios, y deja en RUTINA_RESULTADO y RUTINA_OBSERVACION
-    // justo estas casillas y observaciones. Devuelve el id, o null si otro la ha guardado
-    // mientras tanto (su versión ya no es la que trae rutina, o ya creó la de ese día).
-    // La incidencia de cada casilla no se toca aquí: la apunta Vincular.
-    // revisiones: las que hay en pantalla, por si alguna aún no está guardada.
+    // Crea o guarda la ronda con justo estas casillas y observaciones; null si otro la ha guardado antes.
+    // La incidencia de cada casilla la apunta Vincular, no esto.
     public int? Guardar(Rutina rutina, IReadOnlyList<RevisionRutina> revisiones,
         IReadOnlyList<ResultadoRutina> resultados, IReadOnlyList<ObservacionRutina> observaciones, int usuarioId)
     {
@@ -203,8 +199,7 @@ public class RutinaRepositorio
         }
         else
         {
-            // Se actualiza aunque las observaciones no cambien: así la versión cambia y
-            // quien tenga la ronda abierta no pisa estas casillas
+            // Siempre, aunque no cambie nada: así cambia la versión y nadie pisa estas casillas
             const string sqlActualizar = @"
                 UPDATE RUTINA SET caja_operario = @caja_operario, caja_estado = @caja_estado, depositos = @depositos
                 WHERE id = @id AND version = @version;";
@@ -217,8 +212,7 @@ public class RutinaRepositorio
             id = rutina.Id;
         }
 
-        // Se guardan las revisiones hasta la última que tiene alguna casilla: una nueva sin
-        // marcar nada no se guarda, y las vacías del final se quitan
+        // Se guardan hasta la última revisión con casillas; las vacías del final se quitan
         int ultima = resultados.Select(r => r.Revision).DefaultIfEmpty(1).Max();
         GuardarRevisiones(id, revisiones, ultima, usuarioId, conexion, transaccion);
         GuardarResultados(id, resultados, conexion, transaccion);

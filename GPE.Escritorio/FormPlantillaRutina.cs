@@ -4,9 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Qué puntos se revisan en cada máquina o sección: las casillas que en la hoja estaban
-// en gris. Se pulsa una casilla para quitarla o ponerla, y una cabecera (o el nombre
-// del punto) para toda la columna (o la fila).
+// Qué puntos se revisan en cada máquina o sección (las casillas grises de la hoja).
 public class FormPlantillaRutina : Form
 {
     private readonly RutinaServicio servicio = new();

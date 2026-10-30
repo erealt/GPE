@@ -37,14 +37,11 @@ public record OpcionLista(string Valor, string? Descripcion)
     public override string ToString() => Descripcion == null ? Valor : $"{Valor} · {Descripcion}";
 }
 
-// Serie de numeración: el número es Prefijo + el siguiente de la serie
-// (Prefijo "" para 1, 2, 3...; "AC-2026-" para AC-2026-1, AC-2026-2...)
+// Número = Prefijo + siguiente de la serie ("" → 1, 2...; "AC-2026-" → AC-2026-1, AC-2026-2...)
 public record SerieNumero(string TipoRegistro, string Prefijo);
 
-// Una fila de la hoja INCIDENCIAS. Id = 0 en un registro nuevo.
-// Tipo solo se usa en las NC; McPccBpm, Parametro y Operario solo en las incidencias.
-// Version es la columna ROWVERSION tal como se leyó (null en uno nuevo): al guardar
-// se comprueba que siga igual, es decir, que nadie haya guardado mientras tanto.
+// Fila de la hoja INCIDENCIAS (Id = 0: nuevo). Tipo es solo de NC; McPccBpm, Parametro y Operario, de incidencias.
+// Version: la ROWVERSION leída, para no pisar lo que otro haya guardado.
 public record NoConformidad(
     int Id,
     string TipoRegistro,
@@ -69,8 +66,7 @@ public record NoConformidad(
     decimal? HorasManoObra,
     byte[]? Version = null);
 
-// Quién tiene abierta una ficha (tabla NC_BLOQUEO). MismoUsuario: es el usuario actual,
-// pero en otro GPE (otro equipo, u otra ventana de GPE en este).
+// Quién tiene abierta una ficha (NC_BLOQUEO). MismoUsuario: el usuario actual, en otro GPE.
 public record BloqueoNc(string Usuario, string Equipo, DateTime Desde, bool MismoUsuario);
 
 // Columna NC_ACCION.clase: en qué tabla de la ficha va la acción
@@ -82,8 +78,7 @@ public static class ClaseAccion
     public const string Seguimiento = "SEGUIMIENTO";
 }
 
-// Una acción inmediata o correctora, o un seguimiento, de un registro (tabla NC_ACCION).
-// Id = 0 si es nueva.
+// Acción inmediata, correctora o seguimiento (NC_ACCION). Id = 0 si es nueva.
 public record AccionNc(
     int Id,
     string Clase,

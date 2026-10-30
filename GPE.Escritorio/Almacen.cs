@@ -487,8 +487,7 @@ public class FormAlmacen : PantallaFase
         return Componentes.Acciones(botones.ToArray());
     }
 
-    // Si la revisión aún no se ha guardado nunca, la tabla empieza con los productos
-    // que se indicaron al crear la devolución (si se indicaron)
+    // Sin revisión guardada, se parte de los productos indicados al crear la devolución
     private void CargarRevision(bool editable)
     {
         try

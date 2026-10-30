@@ -9,8 +9,7 @@ CREATE TABLE FABRICA (
     nombre NVARCHAR(100) NOT NULL UNIQUE
 );
  
--- LOTE todavía no la usa la aplicación: está preparada para elegir el lote de una
--- lista en vez de escribirlo (hoy DEVOLUCION_PRODUCTO.lote es texto libre).
+-- LOTE aún no se usa: hoy DEVOLUCION_PRODUCTO.lote es texto libre.
 CREATE TABLE ROL (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(50) NOT NULL UNIQUE
@@ -70,8 +69,7 @@ CREATE TABLE ESTADO_DEVOLUCION (
 -- Cabecera de la devolución
 CREATE TABLE DEVOLUCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    -- Columna calculada: DEV-2026-001, DEV-2026-002... A partir de la 1000 se usan
-    -- todas las cifras (DEV-2026-1000) para que no se repitan números.
+    -- DEV-2026-001...; desde la 1000 lleva todas las cifras para no repetir números.
     numero AS ('DEV-' + CAST(YEAR(fecha_solicitud) AS NVARCHAR(4)) + '-'
                + CASE WHEN id < 1000 THEN RIGHT('000' + CAST(id AS NVARCHAR(10)), 3)
                       ELSE CAST(id AS NVARCHAR(10)) END) PERSISTED
@@ -115,8 +113,7 @@ CREATE TABLE DEVOLUCION_PRODUCTO (
     CONSTRAINT FK_devprod_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
 );
 
--- Lo que el almacén apunta al revisar la mercancía. Si de un mismo producto unas
--- unidades están bien y otras no, van en dos líneas (una apta y otra no).
+-- Revisión del almacén. Si parte de un producto está bien y parte no, van en dos líneas.
 CREATE TABLE REVISION_LINEA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
@@ -177,10 +174,7 @@ CREATE TABLE ADJUNTO (
 CREATE INDEX IX_adjunto_devolucion ON ADJUNTO (devolucion_id, tipo);
 GO
 
--- Avisos por correo pendientes de enviar. Se apuntan en la misma transacción que el
--- cambio que los provoca y la aplicación los envía después: si el correo falla,
--- el cambio se guarda igual y el aviso se reintenta.
--- Los destinatarios son los usuarios con el rol responsable del paso (ESTADO_DEVOLUCION.rol_responsable_id).
+-- Avisos pendientes: se apuntan con el cambio y se envían después; si el correo falla, se reintenta.
 CREATE TABLE AVISO_CORREO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
@@ -198,8 +192,7 @@ CREATE TABLE AVISO_CORREO (
 
 CREATE INDEX IX_aviso_pendiente ON AVISO_CORREO (enviado_en, id);
 
--- Resúmenes diarios ya enviados (GPE.Avisos): uno por día, tipo y destinatario,
--- para no repetirlo si la tarea programada se ejecuta más de una vez el mismo día
+-- Resúmenes ya enviados, para no repetirlos si la tarea se ejecuta dos veces el mismo día
 CREATE TABLE AVISO_RESUMEN (
     fecha DATE NOT NULL,
     tipo NVARCHAR(30) NOT NULL,
@@ -222,8 +215,7 @@ CREATE TABLE HISTORIAL_CAMBIOS (
     registro_id INT NOT NULL,
     accion NVARCHAR(20) NOT NULL,
 
-    -- Los cambios de una misma transacción (un mismo "Guardar") comparten este id;
-    -- la pantalla de historial los agrupa en una sola entrada.
+    -- Los cambios de un mismo "Guardar" comparten id y salen juntos en el historial.
     transaccion_id BIGINT NULL,
 
     fecha DATETIME2 NOT NULL
@@ -235,8 +227,7 @@ CREATE TABLE HISTORIAL_CAMBIOS (
     CONSTRAINT FK_historial_usuario
         FOREIGN KEY (usuario_id) REFERENCES USUARIO(id),
 
-    -- devolucion_id no lleva FK a propósito: así se conserva el historial
-    -- aunque la devolución se borre.
+    -- Sin FK a propósito: el historial se conserva aunque se borre la devolución.
 
     CONSTRAINT CK_historial_accion
         CHECK (accion IN ('INSERT', 'UPDATE', 'DELETE'))
@@ -245,11 +236,8 @@ CREATE TABLE HISTORIAL_CAMBIOS (
 CREATE INDEX IX_historial_devolucion ON HISTORIAL_CAMBIOS (devolucion_id, fecha);
 GO
 
-/* La aplicación indica el usuario al abrir cada conexión con:
-       EXEC sp_set_session_context @key = N'usuario_id', @value = <id>;
-   Para modificar datos a mano desde SSMS hay que ejecutar esa misma línea antes.
-
-   Los UPDATE que no cambian ningún valor no se registran. */
+-- Para cambiar datos a mano desde SSMS, antes: EXEC sp_set_session_context @key = N'usuario_id', @value = <id>;
+-- Los UPDATE que no cambian nada no se registran.
 
 CREATE OR ALTER TRIGGER TR_DEVOLUCION_HISTORIAL ON DEVOLUCION
 AFTER INSERT, UPDATE, DELETE
@@ -366,8 +354,7 @@ BEGIN
 END;
 GO
 
--- A diferencia de los otros, no usa "d.*": así el contenido del archivo
--- (columna contenido) no se copia al historial.
+-- Sin "d.*", para no copiar el contenido del archivo al historial.
 CREATE OR ALTER TRIGGER TR_ADJUNTO_HISTORIAL ON ADJUNTO
 AFTER INSERT, UPDATE, DELETE
 AS
@@ -399,15 +386,11 @@ BEGIN
 END;
 GO
 
--- Datos iniciales
--- Sin estos datos la aplicación no funciona: las fases del proceso, la fábrica
--- (la aplicación usa de momento la fábrica 1) y los roles que reciben los avisos.
--- Usuarios, clientes, productos y transportistas se dan de alta después.
+-- Datos iniciales imprescindibles: fases, fábrica 1 y roles.
 
 INSERT INTO FABRICA (nombre) VALUES (N'Fábrica Principal');
 
--- Administración da de alta las devoluciones y registra los abonos.
--- Calidad no interviene en las devoluciones: solo ve las no conformidades y la rutina.
+-- Calidad no interviene en las devoluciones, solo en no conformidades y rutina.
 INSERT INTO ROL (nombre) VALUES (N'Administración'), (N'Transporte'), (N'Almacén'), (N'Calidad');
 
 -- rol_responsable_id: quién hace el paso que lleva a esa fase (recibe los avisos por correo)

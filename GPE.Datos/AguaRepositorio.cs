@@ -59,8 +59,7 @@ public class AguaRepositorio
         return controles;
     }
 
-    // Guarda los cambios de un día de una vez: borra, cambia (Id <> 0) y da de alta (Id = 0).
-    // false si otro ha cambiado o borrado alguno mientras tanto: entonces no se guarda nada.
+    // Guarda el día en una transacción. false si otro lo ha cambiado mientras tanto (no se guarda nada).
     public bool GuardarDia(IReadOnlyList<ControlAgua> cambiados, IReadOnlyList<ControlAgua> borrados, int usuarioId)
     {
         using var conexion = Conexion.Abrir();

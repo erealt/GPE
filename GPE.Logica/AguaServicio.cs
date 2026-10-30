@@ -3,8 +3,7 @@ using System.Globalization;
 
 namespace GPE.Logica;
 
-// Control de agua de calidad: la hoja AGUA (MT-RG09). Cada día se apuntan los puntos de
-// agua que se han revisado, con el cloro y los organolépticos (sabor, olor, color, turbidez).
+// Control de agua de calidad (hoja AGUA, MT-RG09): cloro y organolépticos de cada punto revisado.
 public class AguaServicio
 {
     private readonly AguaRepositorio repositorio = new();
@@ -63,9 +62,7 @@ public class AguaServicio
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
         "Apunta lo que hayas escrito y pulsa \"Recargar\" para ver lo último.";
 
-    // Guarda los controles de un día tal como están en pantalla.
-    // controles: todas las filas; originales: las que había al cargar el día.
-    // Solo se escriben las nuevas, las que han cambiado y las quitadas.
+    // Solo escribe las filas nuevas, las cambiadas y las quitadas respecto a originales.
     public void GuardarDia(DateTime fecha, IEnumerable<ControlAgua> controles, IReadOnlyList<ControlAgua> originales)
     {
         if (Sesion.UsuarioActual is not Usuario usuario)

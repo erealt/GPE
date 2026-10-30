@@ -2,8 +2,7 @@ using Microsoft.Data.SqlClient;
 
 namespace GPE.Datos;
 
-// Incidencias, no conformidades y acciones de mejora (tablas NO_CONFORMIDAD, NC_ACCION y CALIDAD_LISTA).
-// NC_ACCION guarda las acciones inmediatas, las correctoras y los seguimientos.
+// Incidencias, NC y acciones de mejora (NO_CONFORMIDAD, NC_ACCION y CALIDAD_LISTA).
 public class NoConformidadRepositorio
 {
     // Lectura
@@ -69,8 +68,7 @@ public class NoConformidadRepositorio
         return lista;
     }
 
-    // Fecha prevista de cada registro abierto (sin fecha fin), para contar los que
-    // están fuera de plazo sin leer todos los registros
+    // Fecha prevista de los abiertos, para contar los fuera de plazo sin leerlos enteros
     public List<DateTime?> ObtenerPlazosAbiertos()
     {
         const string sql = "SELECT fecha_prevista FROM NO_CONFORMIDAD WHERE fecha_fin IS NULL;";
@@ -162,17 +160,15 @@ public class NoConformidadRepositorio
         return nombres;
     }
 
-    // Número que tocaría ahora en una serie. Solo para enseñarlo en la ficha: el
-    // definitivo se calcula al guardar, por si otro usuario guarda antes.
+    // Número que tocaría ahora, solo para mostrarlo: el definitivo se calcula al guardar.
     public string SiguienteNumero(SerieNumero serie)
     {
         using var conexion = Conexion.Abrir();
         return SiguienteNumero(serie, conexion, null);
     }
 
-    // Prefijo + (el mayor número de la serie + 1): 558, AC-2026-3, AI-20/04/26-14...
-    // Los números de otro formato (LC25-06...) no cuentan. Dentro de una transacción,
-    // UPDLOCK y HOLDLOCK hacen esperar a quien quiera numerar a la vez en la misma serie.
+    // Prefijo + (mayor de la serie + 1); los de otro formato (LC25-06...) no cuentan.
+    // UPDLOCK/HOLDLOCK: quien numere a la vez en la misma serie espera.
     private static string SiguienteNumero(SerieNumero serie, SqlConnection conexion, SqlTransaction? transaccion)
     {
         const string sql = @"
@@ -229,10 +225,8 @@ public class NoConformidadRepositorio
         return id;
     }
 
-    // Guarda los cambios y las acciones. Con serie, se le da un número nuevo de esa serie; sin ella,
-    // se guarda el número que trae. false si el registro ya no existe (otro usuario lo ha borrado)
-    // o si su versión ya no es la que trae nc (otro usuario lo ha guardado mientras tanto).
-    // Las acciones se guardan siempre junto con la cabecera, así que su versión también las cubre.
+    // Guarda la cabecera y sus acciones (con serie, le da número nuevo). false si otro lo ha
+    // borrado o guardado mientras tanto; la versión de la cabecera cubre también las acciones.
     public bool Actualizar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? numerarEn)
     {
         const string sql = @"
@@ -270,8 +264,7 @@ public class NoConformidadRepositorio
         return true;
     }
 
-    // Deja en NC_ACCION justo estas acciones: borra las que se han quitado, actualiza
-    // las que ya estaban (Id > 0) y añade las nuevas. El orden es el de la lista.
+    // Deja en NC_ACCION justo estas acciones, en el orden de la lista.
     private static void GuardarAcciones(int noConformidadId, IReadOnlyList<AccionNc> acciones,
         SqlConnection conexion, SqlTransaction transaccion)
     {
@@ -301,7 +294,7 @@ public class NoConformidadRepositorio
                 responsable = @responsable, observaciones = @observaciones, hecha = @hecha
             WHERE id = @id AND no_conformidad_id = @nc;";
 
-        // El orden cuenta dentro de cada tabla (inmediatas 1, 2...; correctoras 1, 2...; seguimientos 1, 2...)
+        // El orden se cuenta por separado en cada clase (inmediatas 1, 2...; correctoras 1, 2...)
         foreach (var grupo in acciones.GroupBy(a => a.Clase))
         {
             int orden = 0;
@@ -355,9 +348,7 @@ public class NoConformidadRepositorio
 
     // Bloqueos (quién tiene abierta cada ficha)
 
-    // Apunta que este GPE (sesion) tiene abierta la ficha, o renueva su ultimo_aviso si ya
-    // la tenía. Se la queda también si el bloqueo de otro lleva más de caducidadSegundos
-    // sin renovarse. Devuelve null si la ficha es de este GPE, o quién la tiene si no.
+    // Bloquea la ficha para este GPE o lo renueva (se queda la de otro si ha caducado). null si es suya; si no, quién la tiene.
     // HOLDLOCK: si dos la abren a la vez, el segundo espera y ve el bloqueo del primero.
     public BloqueoNc? Bloquear(int noConformidadId, int usuarioId, Guid sesion, string equipo, int caducidadSegundos)
     {

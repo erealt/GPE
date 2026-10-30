@@ -493,8 +493,7 @@ public class FormAbono : PantallaFase
               $"con fecha {dtpFecha.Value.ToString("dd/MM/yyyy", Componentes.Es)}"
             : "Se registrará que esta devolución no tiene abono";
 
-        // Un nº de abono repetido suele ser un error al copiarlo, pero un mismo abono
-        // puede cubrir varias devoluciones: solo se avisa, no se impide
+        // Un abono puede cubrir varias devoluciones: el repetido solo se avisa
         string avisoRepetido = "";
         if (hayAbono)
         {

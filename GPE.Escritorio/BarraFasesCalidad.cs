@@ -1,8 +1,7 @@
 namespace GPE.Escritorio;
 
-// Pestañas con las fases de un registro de calidad (registro, acción inmediata, análisis...):
-// un botón por fase, pegados. La elegida (la que se ve en la ficha), en morado; las
-// hechas llevan ✓ y las opcionales van en gris. Al pulsar una se avisa con FasePulsada.
+// Pestañas con las fases de un registro de calidad: la elegida en morado, las hechas con ✓
+// y las opcionales en gris.
 public class BarraFasesCalidad : FlowLayoutPanel
 {
     private readonly List<Button> botones = new();

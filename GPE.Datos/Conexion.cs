@@ -10,8 +10,7 @@ internal static class Conexion
         Environment.GetEnvironmentVariable("GPE_CONEXION")
         ?? "Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;";
 
-    // Abre la conexión e indica a SQL Server qué usuario de la aplicación la usa;
-    // los triggers de historial lo leen con SESSION_CONTEXT(N'usuario_id').
+    // Los triggers de historial leen el usuario de SESSION_CONTEXT(N'usuario_id').
     public static SqlConnection Abrir()
     {
         var conexion = new SqlConnection(CadenaConexion);

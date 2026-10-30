@@ -29,12 +29,10 @@ public static class Planta
     public static string Nombre(string planta) => planta == Baja ? "Planta baja" : "Planta superior";
 }
 
-// Una columna de la hoja: máquina o sección que se recorre. SeccionCalidad es la sección
-// de las incidencias que le corresponde (null si no hay una clara).
+// Columna de la hoja (máquina o sección). SeccionCalidad: la de sus incidencias, o null.
 public record RutinaSeccion(int Id, string Nombre, string Planta, string? SeccionCalidad);
 
-// Una fila de la hoja: lo que se revisa. Los numéricos llevan un valor (PESOS).
-// McPccBpm es el valor de esa lista que se propone al abrir una incidencia.
+// Fila de la hoja. Los numéricos llevan valor (PESOS); McPccBpm se propone al abrir una incidencia.
 public record RutinaPunto(int Id, string Nombre, bool Numerico, string? McPccBpm);
 
 // Qué se revisa: secciones y puntos activos en su orden, y en qué secciones toca cada punto
@@ -43,9 +41,8 @@ public record PlantillaRutina(
     List<RutinaPunto> Puntos,
     HashSet<(int PuntoId, int SeccionId)> Aplica);
 
-// La ronda de un día. Id = 0 si todavía no se ha guardado nada ese día.
-// Version: la de RUTINA tal como se leyó, para no pisar lo que haya guardado otro.
-// CajaOperario, CajaEstado y Depositos son las observaciones fijas del pie de la hoja.
+// Ronda de un día (Id = 0 si no se ha guardado). Version: para no pisar lo que haya guardado otro.
+// CajaOperario, CajaEstado y Depositos son las observaciones del pie de la hoja.
 public record Rutina(
     int Id,
     DateTime Fecha,
@@ -55,16 +52,15 @@ public record Rutina(
     string? CreadoPor,
     byte[]? Version = null);
 
-// Una pasada por la fábrica dentro de la ronda del día. La 1 es la ronda completa; las
-// siguientes, las veces que se vuelve a revisar. Hora: cuándo se empezó (null mientras no
-// se ha tocado nada en la revisión 1 de una ronda nueva). CreadoPor es null si no se ha guardado.
+// Una pasada por la fábrica: la 1 es la ronda completa, las siguientes son repasos.
+// Hora: cuándo se empezó (null si aún no se ha tocado). CreadoPor: null si no se ha guardado.
 public record RevisionRutina(int Numero, TimeSpan? Hora, string? CreadoPor = null);
 
 // Observación de una sección en el pie de la hoja ("EMB2 · Sigue dando el fallo de envío")
 public record ObservacionRutina(int SeccionId, string Texto);
 
-// Una casilla rellenada en una revisión. Los puntos normales llevan Estado y los numéricos, Valor.
-// NoConformidadId: incidencia abierta desde la casilla (NumeroIncidencia, su número, solo para enseñarlo).
+// Casilla rellenada: Estado en los puntos normales, Valor en los numéricos.
+// NoConformidadId: incidencia abierta desde la casilla (NumeroIncidencia solo para mostrarla).
 public record ResultadoRutina(
     int PuntoId,
     int SeccionId,

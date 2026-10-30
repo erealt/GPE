@@ -1,7 +1,6 @@
 namespace GPE.Escritorio;
 
-// Ventanas de mensaje de todas las pantallas, para que todas avisen y pregunten igual.
-// El título dice qué ha pasado ("No se pudo guardar"); el mensaje, el porqué.
+// Mensajes comunes: el título dice qué ha pasado ("No se pudo guardar") y el texto, el porqué.
 public static class Mensajes
 {
     // Algo que el usuario tiene que corregir o tener en cuenta (p. ej. una ReglaNegocioException)

@@ -3,9 +3,7 @@ using System.Drawing.Drawing2D;
 
 namespace GPE.Escritorio;
 
-// Ventana principal: menú lateral con los módulos, barra superior con el usuario y,
-// a la derecha, el módulo elegido. Al arrancar se ve el inicio.
-// Para añadir un módulo: una entrada más en CrearModulos. Cada usuario ve los de sus roles.
+// Ventana principal. Para añadir un módulo, una entrada más en CrearModulos.
 public class FormPrincipal : Form
 {
     // Un módulo de la aplicación: su opción del menú y, la primera vez que se elige, su contenido
@@ -50,8 +48,7 @@ public class FormPrincipal : Form
         if (devoluciones != null) PrepararAvisoAbonos(devoluciones);
     }
 
-    // Las devoluciones se meten en la ventana desde el principio (ocultas) para que el
-    // aviso de abonos retrasados funcione aunque no se haya entrado en el módulo
+    // Devoluciones se crea al arrancar para que el aviso de abonos funcione sin entrar en el módulo
     private void PrepararAvisoAbonos(ModuloDevoluciones devoluciones)
     {
         var moduloDevoluciones = modulos.First(m => m.Contenido == devoluciones);
@@ -117,9 +114,7 @@ public class FormPrincipal : Form
         MarcarElegido();
     }
 
-    // Pantalla completa, para tablas grandes como la rutina de calidad: sin menú, sin barra
-    // superior y sin bordes, ocupando también la barra de tareas de Windows. Al salir, todo
-    // queda como estaba (con el menú oculto si ya lo estaba).
+    // Pantalla completa (sin menú, barra ni bordes) para tablas grandes; al salir queda todo como estaba.
     private (bool Menu, FormWindowState Estado)? antesDePantallaCompleta;
 
     public void PantallaCompleta(bool activar)
@@ -241,7 +236,7 @@ public class FormPrincipal : Form
             Padding = new Padding(0, 0, 30, 0)
         };
 
-        // ☰ oculta o muestra el menú lateral, para dejar más sitio a tablas anchas como la rutina de calidad
+        // ☰ oculta o muestra el menú lateral
         var btnMenu = new Button
         {
             Text = "☰",

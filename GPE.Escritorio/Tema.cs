@@ -18,8 +18,7 @@ public static class Tema
     public static readonly Color AvisoFondo = Color.FromArgb(255, 241, 214);
     public static readonly Color Aviso = Color.FromArgb(150, 90, 0);
 
-    // Fuentes compartidas: no se deben liberar con Dispose, las usan todas las pantallas.
-    // Todas las pantallas sacan de aquí sus fuentes, para que los tamaños sean los mismos en todas.
+    // Fuentes compartidas por todas las pantallas: no liberarlas con Dispose.
     public static readonly Font Fuente = new("Segoe UI", 10);
     public static readonly Font FuenteNegrita = new("Segoe UI", 10, FontStyle.Bold);
     public static readonly Font FuentePequena = new("Segoe UI", 9);

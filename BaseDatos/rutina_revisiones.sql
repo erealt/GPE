@@ -1,11 +1,8 @@
 USE GPE;
 GO
 
-/*
-   Varias revisiones por día en la rutina de calidad (RUTINA_REVISION y RUTINA_RESULTADO.revision).
-   Solo para bases de datos creadas antes con rutina_calidad.sql, que ya lo trae.
-   Se puede ejecutar más de una vez. Lo ya guardado pasa a ser la revisión 1.
-*/
+-- Varias revisiones por día en la rutina. Solo para bases creadas antes con rutina_calidad.sql.
+-- Se puede ejecutar más de una vez; lo ya guardado pasa a ser la revisión 1.
 
 -- Usuario que figura en el historial por las revisiones 1 que se crean aquí
 EXEC sp_set_session_context @key = N'usuario_id', @value = 1;

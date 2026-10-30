@@ -4,8 +4,7 @@ using System.Diagnostics;
 
 namespace GPE.Escritorio;
 
-// Muestra las fotos de una devolución dentro de la app, con anterior / siguiente.
-// Teclas: ← y → para cambiar de foto, Esc para cerrar.
+// Fotos de una devolución: ← y → para cambiar, Esc para cerrar.
 public class FormVisorImagen : Form
 {
     private readonly List<AdjuntoInfo> fotos;

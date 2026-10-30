@@ -7,16 +7,10 @@ using MimeKit;
 
 namespace GPE.Logica;
 
-// Envía los avisos por correo apuntados en AVISO_CORREO y el resumen diario al almacén.
-// La cuenta de envío se configura en cada ordenador con variables de entorno
-// (la contraseña nunca va en el código ni en la base de datos):
-//   GPE_SMTP_USUARIO   cuenta que envía, p. ej. avisos@empresa.com
-//   GPE_SMTP_CLAVE     contraseña de aplicación de esa cuenta
-//   GPE_SMTP_SERVIDOR  opcional, por defecto smtp.gmail.com
-//   GPE_SMTP_PUERTO    opcional, por defecto 465 (SSL directo; con 587 se usa STARTTLS)
-// Sin configurar, los avisos se quedan pendientes y no se envía nada.
-// Se usa MailKit y no System.Net.Mail.SmtpClient, que Microsoft ya no recomienda
-// (con Gmail cortaba la conexión sin dar el motivo).
+// Envía los avisos de AVISO_CORREO y los resúmenes diarios. Cuenta por variables de entorno:
+//   GPE_SMTP_USUARIO, GPE_SMTP_CLAVE (contraseña de aplicación),
+//   GPE_SMTP_SERVIDOR (smtp.gmail.com), GPE_SMTP_PUERTO (465 SSL; con 587, STARTTLS)
+// Sin configurar no se envía nada. MailKit porque SmtpClient cortaba la conexión con Gmail.
 public static class AvisoServicio
 {
     private static readonly AvisoRepositorio repositorio = new();
@@ -76,13 +70,8 @@ public static class AvisoServicio
         }
     }
 
-    // Resúmenes diarios, un correo por persona y tipo, mientras quede algo pendiente:
-    //   - al almacén, las devoluciones con la mercancía recibida y sin revisar (fase 3)
-    //   - a administración, las revisadas que esperan el abono (fase 4)
-    // Lo lanza GPE.Avisos (tarea programada de Windows), sin necesidad de abrir GPE.
-    // A quien ya recibió hoy un resumen no se le repite.
-    // Devuelve cuántos correos se han enviado (uno por persona y tipo de resumen);
-    // lanza la excepción si no se puede conectar.
+    // Al almacén, las de la fase 3 sin revisar; a administración, las de la 4 sin abono.
+    // Uno por persona y tipo, sin repetir en el día. Devuelve cuántos ha enviado.
     public static int EnviarResumenDiario()
     {
         if (!Configurado(out string remitente, out _))

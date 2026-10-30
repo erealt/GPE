@@ -1,15 +1,10 @@
 USE GPE;
 GO
 
-/*
-   CALIDAD: CONTROL DE AGUA (hoja AGUA, MT-RG09)
-   Cada día se apuntan los puntos de agua que se han revisado, con el cloro y los
-   organolépticos. Se ejecuta una vez, después de no_conformidades.sql.
-   Con sqlcmd hay que ejecutarlo con -f 65001 (el archivo está en UTF-8, por las tildes).
-*/
+-- Control de agua (hoja AGUA, MT-RG09). Se ejecuta una vez, después de no_conformidades.sql.
+-- Con sqlcmd, usar -f 65001 (UTF-8, por las tildes).
 
--- Puntos de agua que se pueden elegir. cloro_min / cloro_max: rango admitido en ppm;
--- mientras estén en NULL no se comprueba (se rellenan cuando calidad dé el rango).
+-- cloro_min / cloro_max en ppm; en NULL no se comprueba (falta que calidad dé el rango).
 CREATE TABLE AGUA_TOMA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(100) NOT NULL,
@@ -21,9 +16,7 @@ CREATE TABLE AGUA_TOMA (
     CONSTRAINT CK_agua_toma_rango CHECK (cloro_min IS NULL OR cloro_max IS NULL OR cloro_min <= cloro_max)
 );
 
--- Un control: una fila de la hoja. El cloro no se mide todos los días.
--- Un mismo punto puede revisarse más de una vez el mismo día.
--- Los organolépticos: 1 = Ok, 0 = no correcto.
+-- Una fila de la hoja; un punto puede repetirse el mismo día. Organolépticos: 1 = Ok, 0 = no correcto.
 CREATE TABLE AGUA_CONTROL (
     id INT IDENTITY(1,1) PRIMARY KEY,
     fecha DATE NOT NULL,

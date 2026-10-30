@@ -4,8 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Pantalla de inicio: saludo y una tarjeta por módulo con un dato del momento
-// (se vuelve a calcular cada vez que se entra en el inicio).
+// Inicio: una tarjeta por módulo con un dato que se recalcula al entrar.
 public class ModuloInicio : UserControl
 {
     private readonly List<(Label Etiqueta, Func<string?> Calcular)> resumenes = new();

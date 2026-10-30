@@ -2,9 +2,7 @@ using GPE.Datos;
 
 namespace GPE.Escritorio;
 
-// Panel que sale al pulsar una casilla de la rutina (o una fila o máquina entera): los estados
-// de la leyenda con sus colores y la incidencia de la casilla. No toca la ronda: la pantalla
-// lee después lo elegido (Estado, SoloVacias...) y lo apunta.
+// Panel de una casilla (o fila o máquina) de la rutina. No toca la ronda: la pantalla lee lo elegido.
 public class OpcionesCasilla : PanelEmergente
 {
     // Lo elegido. EligioEstado: se pulsó un estado o "Vaciar" (Estado null = vaciar).
@@ -13,9 +11,7 @@ public class OpcionesCasilla : PanelEmergente
     public bool SoloVacias { get; private set; }   // "Todo correcto": solo en las que están vacías
     public bool PideIncidencia { get; private set; }
 
-    // titulo: la casilla ("PESOS · ENVASADORA 1") o lo seleccionado ("12 casillas · ENVASADORA 1").
-    // estadoActual, solo si es una casilla. incidencia: texto del botón de la incidencia
-    // ("Abrir incidencia…", "Ver incidencia 45") o null si no lleva.
+    // incidencia: texto del botón ("Abrir incidencia…", "Ver incidencia 45") o null si no lleva
     public OpcionesCasilla(string titulo, int casillas, bool numerico, string? estadoActual, string? incidencia)
     {
         var pila = Rejilla();

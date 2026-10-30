@@ -4,8 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Módulo de calidad: la lista de incidencias, no conformidades y acciones de mejora
-// (la hoja INCIDENCIAS del Excel) con sus filtros. Vive dentro de FormPrincipal.
+// Lista de incidencias, NC y acciones de mejora (hoja INCIDENCIAS) con sus filtros.
 public class ModuloNoConformidades : UserControl
 {
     private const int ColumnaTipo = 2;
@@ -348,8 +347,7 @@ public class ModuloNoConformidades : UserControl
         grid.Rows.AddRange(visibles.Select(nc => CrearFila(grid, nc)).ToArray());
         grid.ClearSelection();
 
-        // Primero el contador, que vuelve a mostrar la tabla si estaba oculta (lista vacía):
-        // en una tabla oculta no se puede desplazar hasta una fila
+        // Primero el contador, que vuelve a mostrar la tabla: oculta no se puede desplazar
         ActualizarContador(visibles, dtpDesde.Checked && dtpHasta.Checked && dtpDesde.Value.Date > dtpHasta.Value.Date);
 
         if (seleccionar != null)

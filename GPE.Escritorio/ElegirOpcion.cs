@@ -1,14 +1,11 @@
 namespace GPE.Escritorio;
 
-// Panel para elegir una opción de una lista con botones grandes (el punto de agua, la sección
-// de una observación, el operario de la caja...). Con muchas opciones salen en más columnas
-// y, si aun así no caben, con scroll. Las no disponibles (ya apuntadas...) salen desactivadas.
+// Panel para elegir una opción con botones grandes; con muchas, en varias columnas y con scroll.
 public class ElegirOpcion : PanelEmergente
 {
     private const int AltoOpcion = 52;
 
-    // La clave de la opción elegida; null si se cerró sin elegir. Quitar: se pulsó el botón
-    // de quitar lo elegido (textoQuitar).
+    // null si se cerró sin elegir. Quitar: se pulsó el botón de quitar (textoQuitar).
     public string? Elegida { get; private set; }
     public bool Quitar { get; private set; }
 

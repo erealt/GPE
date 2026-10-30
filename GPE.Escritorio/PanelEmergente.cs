@@ -1,9 +1,7 @@
 namespace GPE.Escritorio;
 
-// Ventanita que sale junto a una casilla al pulsarla, con botones grandes para poder usarla
-// con el dedo en una tablet (opciones de la rutina, punto de agua, teclado del cloro...).
-// Se cierra al pulsar fuera o con Esc, como un menú. Por eso se abre con Abrir (Show) y no
-// con ShowDialog: con ShowDialog no se puede pulsar fuera.
+// Ventanita junto a una casilla, para usar con el dedo. Se cierra al pulsar fuera o con Esc,
+// por eso se abre con Show y no con ShowDialog.
 public class PanelEmergente : Form
 {
     // Ancho de los botones grandes; dos juntos con su separación miden AnchoDoble
@@ -41,8 +39,7 @@ public class PanelEmergente : Form
         };
     }
 
-    // Lo abre junto a ese punto de la pantalla (sin salirse de ella) y, al cerrarse, llama a
-    // alCerrar y se libera
+    // Sin salirse de la pantalla; al cerrarse llama a alCerrar y se libera
     public void Abrir(Control dueno, Point donde, Action alCerrar)
     {
         var area = Screen.FromPoint(donde).WorkingArea;

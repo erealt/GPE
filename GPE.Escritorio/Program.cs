@@ -7,8 +7,7 @@ static class Program
     {
         ApplicationConfiguration.Initialize();
 
-        // Red de seguridad: un error que ninguna pantalla haya previsto se enseña
-        // en un mensaje en vez de cerrar la aplicación de golpe
+        // Un error no previsto se enseña en un mensaje en vez de cerrar la aplicación
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (s, e) => MostrarErrorInesperado(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>

@@ -13,8 +13,7 @@ public static class EstadoRegistro
     public static readonly string[] Todos = { EnPlazo, FueraPlazo, SinPlazo, Cerrada };
 }
 
-// Fases de un registro. Tampoco se guardan: cada una está hecha o no según lo rellenado,
-// y se pueden completar en cualquier orden.
+// Fases de un registro: no se guardan, salen de lo rellenado y se completan en cualquier orden.
 public static class FaseCalidad
 {
     public const string Registro = "Registro";
@@ -81,13 +80,11 @@ public class NoConformidadServicio
         };
     }
 
-    // Un registro conserva su número mientras siga en la misma serie. Si no tiene
-    // o cambia de serie (de incidencia a NC, a una auditoría...), toca uno nuevo.
+    // Conserva su número mientras siga en la misma serie; si no tiene o cambia de serie, toca uno nuevo.
     private static bool Renumerar(NoConformidad? anterior, SerieNumero? serie) =>
         serie != null && (anterior?.Numero == null || Serie(anterior) != serie);
 
-    // Número que se enseña en la ficha antes de guardar (null: no lleva número).
-    // El definitivo se calcula al guardar, por si otro usuario guarda antes.
+    // Número que se enseña antes de guardar (null: no lleva). El definitivo se calcula al guardar.
     public string? NumeroPrevisto(NoConformidad nc, NoConformidad? anterior)
     {
         var serie = Serie(Normalizar(nc));
@@ -95,8 +92,7 @@ public class NoConformidadServicio
         return Renumerar(anterior, serie) ? repositorio.SiguienteNumero(serie) : anterior!.Numero;
     }
 
-    // Con fecha fin está cerrada; si no, se mira la fecha prevista. En el Excel una
-    // abierta sin fecha prevista salía "fuera de plazo"; aquí se distingue como "sin plazo".
+    // Cerrada si tiene fecha fin; si no, según la prevista (sin ella es "sin plazo", no "fuera de plazo").
     public static string Estado(DateTime? fechaPrevista, DateTime? fechaFin)
     {
         if (fechaFin != null) return EstadoRegistro.Cerrada;
@@ -121,10 +117,8 @@ public class NoConformidadServicio
 
     // Fases
 
-    // Fases del registro y si están hechas. Todos los tipos tienen las cinco, pero una NC
-    // las necesita todas; una incidencia se resuelve con la acción inmediata (análisis y
-    // corrección, opcionales) y una acción de mejora, con sus acciones (acción inmediata y
-    // análisis, opcionales).
+    // Todos los tipos tienen las cinco fases, pero solo la NC las necesita todas: a la incidencia
+    // le basta la acción inmediata, y a la acción de mejora, sus acciones.
     public static List<EstadoFase> Fases(NoConformidad nc, IEnumerable<AccionNc> acciones)
     {
         var lista = acciones.ToList();
@@ -151,7 +145,6 @@ public class NoConformidadServicio
     // Validación
 
     // Quita espacios, deja en null lo vacío y borra los campos que no son de este tipo
-    // (Tipo es solo de las NC; MC/PCC/BPM, parámetro y operario, solo de las incidencias)
     public static NoConformidad Normalizar(NoConformidad nc)
     {
         static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
@@ -178,8 +171,7 @@ public class NoConformidadServicio
         };
     }
 
-    // Todos los errores de un registro ya normalizado. El campo es el nombre de la
-    // propiedad (nameof), para que la pantalla ponga cada mensaje debajo de su control.
+    // Errores de un registro ya normalizado; el campo es el nameof de la propiedad, para ponerlo bajo su control.
     public static List<(string Campo, string Mensaje)> Errores(NoConformidad nc)
     {
         var errores = new List<(string, string)>();
@@ -239,9 +231,8 @@ public class NoConformidadServicio
         };
     }
 
-    // Error de una acción o seguimiento ya normalizado (null si está bien).
-    // Un seguimiento nuevo sin fecha no sirve: es lo que se comprobó en un día concreto.
-    // Los ya guardados pueden no tenerla: vienen del texto antiguo (nc_seguimientos.sql).
+    // Error de una acción ya normalizada (null si está bien). Un seguimiento nuevo necesita fecha;
+    // los antiguos (nc_seguimientos.sql) pueden no tenerla.
     public static string? ErrorAccion(AccionNc accion, DateTime fechaDetectado)
     {
         bool esSeguimiento = accion.Clase == ClaseAccion.Seguimiento;
@@ -262,8 +253,7 @@ public class NoConformidadServicio
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
         "Copia lo que hayas escrito, cierra la ficha y vuelve a abrirla para ver lo último.";
 
-    // Crea el registro (Id = 0) o guarda los cambios, con sus acciones. Devuelve su id.
-    // El número no lo pone la pantalla: se calcula aquí según su serie.
+    // Crea o guarda el registro con sus acciones y devuelve su id. El número se calcula aquí.
     public int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones)
     {
         nc = Normalizar(nc);
@@ -298,16 +288,14 @@ public class NoConformidadServicio
 
     // Fichas abiertas
 
-    // Mientras una ficha está abierta, la pantalla renueva el bloqueo cada minuto. Si pasan
-    // estos segundos sin renovarlo (GPE se cerró de golpe, se cortó la red...), deja de contar.
+    // La pantalla renueva el bloqueo cada minuto; si pasan estos segundos sin renovarlo, caduca.
     public const int SegundosRenovarBloqueo = 60;
     private const int CaducidadBloqueo = 180;
 
     // Identifica este GPE abierto: el mismo usuario puede tener GPE en dos equipos
     private static readonly Guid EsteGpe = Guid.NewGuid();
 
-    // Apunta que este GPE tiene abierta la ficha (o lo renueva). Devuelve null si se puede
-    // editar, o quién la tiene abierta si no.
+    // Bloquea la ficha para este GPE (o lo renueva). null si se puede editar; si no, quién la tiene.
     public BloqueoNc? Bloquear(int noConformidadId)
     {
         if (Sesion.UsuarioActual is not Usuario usuario)

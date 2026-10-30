@@ -2,9 +2,8 @@ using GPE.Datos;
 
 namespace GPE.Logica;
 
-// Rutina diaria del supervisor de calidad: la hoja "CHEQUEOS DIARIOS - PCC" que se
-// rellena al recorrer la fábrica. Una ronda por día; cada casilla es un punto de
-// control (fila) en una máquina o sección (columna).
+// Rutina diaria del supervisor de calidad (hoja "CHEQUEOS DIARIOS - PCC"): una ronda por día;
+// cada casilla es un punto (fila) en una máquina o sección (columna).
 public class RutinaServicio
 {
     private readonly RutinaRepositorio repositorio = new();
@@ -13,8 +12,7 @@ public class RutinaServicio
 
     public PlantillaRutina ObtenerPlantilla() => repositorio.ObtenerPlantilla();
 
-    // La ronda del día con sus revisiones, sus casillas y sus observaciones por sección.
-    // Si aún no hay, una en blanco (Id = 0) con la revisión 1 sin empezar.
+    // La ronda del día con todo lo suyo; si aún no hay, una en blanco (Id = 0).
     public (Rutina Rutina, List<RevisionRutina> Revisiones, List<ResultadoRutina> Resultados,
         List<ObservacionRutina> Observaciones) ObtenerRutina(DateTime fecha)
     {
@@ -75,8 +73,7 @@ public class RutinaServicio
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
         "Apunta lo que hayas marcado y pulsa \"Recargar\" para ver lo último.";
 
-    // Crea la ronda o guarda sus cambios con todas sus revisiones, casillas y observaciones.
-    // Devuelve su id. Las observaciones sin texto no se guardan.
+    // Crea o guarda la ronda y devuelve su id. Las observaciones vacías no se guardan.
     public int Guardar(Rutina rutina, IReadOnlyList<RevisionRutina> revisiones, IEnumerable<ResultadoRutina> resultados,
         IEnumerable<ObservacionRutina> observaciones, PlantillaRutina plantilla)
     {

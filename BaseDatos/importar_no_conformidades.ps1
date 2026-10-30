@@ -134,8 +134,7 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
     $registros.Add($r)
 }
 
-# Las incidencias no tienen número en el Excel. Se numeran 1, 2, 3... por fecha (como hará la
-# aplicación con las nuevas); si no, la aplicación les daría número al editarlas.
+# Las incidencias no tienen número en el Excel: se numeran por fecha, como hace la aplicación.
 $n = 0
 foreach ($r in ($registros | Where-Object { $_.TipoRegistro -eq 'INCIDENCIA' -and -not $_.Numero } |
                 Sort-Object FechaDetectado, Fila)) {

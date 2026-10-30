@@ -5,9 +5,7 @@ using System.Diagnostics;
 
 namespace GPE.Escritorio;
 
-// Lista de archivos de una devolución con botones Añadir / Ver / Quitar.
-// Se usa para el recibo de la agencia (RECIBO), las fotos del almacén (FOTO) y el documento del abono (ABONO).
-// Los cambios se guardan en la base de datos al momento, sin esperar a otro botón.
+// Archivos de una devolución (RECIBO, FOTO o ABONO). Los cambios se guardan al momento.
 public class ControlAdjuntos : UserControl
 {
 

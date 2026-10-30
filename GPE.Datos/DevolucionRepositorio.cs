@@ -117,8 +117,7 @@ public class DevolucionRepositorio
         return usuarios;
     }
 
-    // De momento la aplicación trabaja con una sola fábrica, así que cuentan los roles
-    // de cualquier fábrica
+    // De momento hay una sola fábrica: cuentan los roles de cualquiera
     public List<string> ObtenerRoles(int usuarioId)
     {
         const string sql = @"
@@ -271,8 +270,7 @@ public class DevolucionRepositorio
 
         using var conexion = Conexion.Abrir();
 
-        // Si ocurre una excepción antes del Commit, al salir del método la transacción
-        // se deshace sola (Rollback automático al hacer Dispose).
+        // Sin Commit, la transacción se deshace sola al salir
         using var transaccion = conexion.BeginTransaction();
 
         int idDevolucion;
@@ -308,9 +306,7 @@ public class DevolucionRepositorio
 
     // Almacén
 
-    // Pasa la devolución de "Recogida solicitada" (fase 2) a "Mercancía recibida" (fase 3)
-    // y guarda el recibo de la agencia, todo en una transacción.
-    // Devuelve false si ya no estaba en la fase 2 (otro usuario la cambió antes).
+    // Fase 2 → 3 con el recibo de la agencia. false si ya no estaba en la 2.
     public bool MarcarRecibida(int devolucionId, DateTime fechaLlegada, List<ArchivoNuevo> recibo)
     {
         const string sql = @"
@@ -412,11 +408,8 @@ public class DevolucionRepositorio
         return comando.ExecuteScalar() as string;
     }
 
-    // Vuelve de la fase actual a la anterior guardando el motivo (sale en el historial).
-    // Al volver de la 3 a la 2 se borra la fecha de llegada; lo rellenado en la
-    // revisión se conserva. Desde el cierre (6) se vuelve a la 4, porque abono y cierre
-    // se registran juntos: los datos del abono se conservan para corregirlos.
-    // Devuelve false si la devolución ya no estaba en esa fase.
+    // Vuelve a la fase anterior con el motivo. De la 3 a la 2 borra la fecha de llegada; del cierre (6)
+    // vuelve a la 4 conservando el abono. false si ya no estaba en esa fase.
     public bool Reabrir(int devolucionId, int faseActual, string motivo)
     {
         const string sql = @"
@@ -464,9 +457,7 @@ public class DevolucionRepositorio
             Transportista: lector.IsDBNull(3) ? null : lector.GetString(3));
     }
 
-    // Guarda la revisión (cabecera y líneas) y pasa la devolución de la fase 3 a la 4,
-    // todo en una transacción. Las líneas se sustituyen enteras por las nuevas.
-    // Devuelve false si ya no estaba en la fase 3.
+    // Guarda la revisión (sustituye las líneas) y pasa de la 3 a la 4. false si ya no estaba en la 3.
     public bool FinalizarRevision(DatosRevision datos)
     {
         const string sqlDevolucion = @"
@@ -568,8 +559,7 @@ public class DevolucionRepositorio
         return comando.ExecuteScalar() as string;
     }
 
-    // Guarda el abono y cierra la devolución (fase 4 → 6) en un solo UPDATE, y avisa
-    // al almacén, todo en una transacción. Devuelve false si ya no estaba en la fase 4.
+    // Guarda el abono, cierra (fase 4 → 6) y avisa al almacén. false si ya no estaba en la 4.
     public bool RegistrarAbono(DatosAbono datos, DateTime fechaCierre)
     {
         const string sql = @"
@@ -694,9 +684,8 @@ public class DevolucionRepositorio
         comando.ExecuteNonQuery();
     }
 
-    // Crea la recogida (o la actualiza si ya existe) y pasa la devolución a
-    // "Recogida solicitada" con su fecha de recogida, todo en una transacción.
-    // Devuelve false si la mercancía ya ha llegado: entonces la recogida no se puede cambiar
+    // Crea o actualiza la recogida y pasa a "Recogida solicitada".
+    // false si la mercancía ya ha llegado (la recogida ya no se puede cambiar).
     public bool GuardarRecogida(DatosRecogida datos)
     {
         const string sqlRecogida = @"
@@ -760,8 +749,7 @@ public class DevolucionRepositorio
             devolucion.ExecuteNonQuery();
         }
 
-        // Solo la primera vez (al pasar a "Recogida solicitada"), no al modificar la recogida:
-        // aviso a quien recibe la mercancía (el siguiente paso)
+        // Solo la primera vez, no al modificar la recogida: aviso a quien recibe la mercancía
         if (faseActual == Fase.SolicitudRecibida)
             AvisoRepositorio.Apuntar(conexion, transaccion, datos.DevolucionId,
                 TipoAviso.RecogidaSolicitada, Fase.MercanciaRecibida);

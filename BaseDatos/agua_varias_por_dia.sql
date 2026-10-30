@@ -1,11 +1,8 @@
 USE GPE;
 GO
 
-/*
-   Control de agua: permite apuntar el mismo punto más de una vez en el mismo día.
-   Solo para bases de datos creadas antes con control_agua.sql, que ya lo trae.
-   Se puede ejecutar más de una vez.
-*/
+-- Permite apuntar el mismo punto de agua varias veces el mismo día.
+-- Solo para bases creadas antes con control_agua.sql. Se puede ejecutar más de una vez.
 
 IF OBJECT_ID('UQ_agua_control', 'UQ') IS NOT NULL
     ALTER TABLE AGUA_CONTROL DROP CONSTRAINT UQ_agua_control;
