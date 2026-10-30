@@ -52,11 +52,10 @@ public class NoConformidadServicio
     private const string AuditoriaInterna = "A. INTERNA";
     private const string AuditoriaCliente = "A. CLIENTE";
 
-    // Origen A = auditoría: en una NC, la sección solo puede ser una de las de auditoría
+    // Origen A = auditoría: la sección solo puede ser una de las de auditoría
     public static readonly string[] SeccionesAuditoria = { AuditoriaInterna, AuditoriaExterna, AuditoriaCliente };
 
-    public static bool SoloSeccionesAuditoria(string tipoRegistro, string? origen) =>
-        tipoRegistro == TipoRegistro.NoConformidad && origen == "A";
+    public static bool SoloSeccionesAuditoria(string? origen) => origen == "A";
 
     // Serie en la que se numera un registro, como en el Excel:
     //   incidencias          1, 2, 3...
@@ -185,8 +184,8 @@ public class NoConformidadServicio
             Error(nameof(nc.Origen), "Elige el origen de la no conformidad.");
         if (nc.Seccion == null)
             Error(nameof(nc.Seccion), "Elige la sección.");
-        else if (SoloSeccionesAuditoria(nc.TipoRegistro, nc.Origen) && !SeccionesAuditoria.Contains(nc.Seccion))
-            Error(nameof(nc.Seccion), "En una NC de auditoría, la sección es A. INTERNA, A. EXTERNA o A. CLIENTE.");
+        else if (SoloSeccionesAuditoria(nc.Origen) && !SeccionesAuditoria.Contains(nc.Seccion))
+            Error(nameof(nc.Seccion), "Con origen auditoría, la sección es A. INTERNA, A. EXTERNA o A. CLIENTE.");
         if (esNc && nc.Tipo == null)
             Error(nameof(nc.Tipo), "Elige el tipo de no conformidad.");
 

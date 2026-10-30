@@ -676,10 +676,10 @@ public class FormNoConformidad : Form
         control.Focus();
     }
 
-    // En una NC de auditoría solo se ofrecen las secciones de auditoría
+    // Con origen auditoría solo se ofrecen las secciones de auditoría
     private void ActualizarSecciones()
     {
-        bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(TipoElegido, Valor(cmbOrigen));
+        bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(Valor(cmbOrigen));
         string? seccion = Valor(cmbSeccion);
         if (soloAuditoria && !NoConformidadServicio.SeccionesAuditoria.Contains(seccion))
             seccion = null;
