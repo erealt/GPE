@@ -93,6 +93,12 @@ public class FormPrincipal : Form
                 () => new ModuloControlAgua()));
         }
 
+        // De prueba: la ve todo el mundo y no guarda nada
+        lista.Add(new Modulo("Máquina",
+            "Marcha y paradas de una máquina, con el motivo de cada parada (prueba).",
+            () => null,
+            () => new ModuloMaquina()));
+
         return lista;
     }
 
