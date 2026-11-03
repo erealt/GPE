@@ -2,7 +2,7 @@
 <section class="tarjeta">
     <div class="titulo-tarjeta">
         <div>
-            <h2>@Titulo</h2>
+            <h2><span class="paso">@Numero</span>@Titulo</h2>
             <p class="suave">@Subtitulo</p>
         </div>
     </div>
@@ -38,6 +38,7 @@
 </section>
 
 @code {
+    [Parameter, EditorRequired] public string Numero { get; set; } = "";
     [Parameter, EditorRequired] public string Titulo { get; set; } = "";
     [Parameter] public string Subtitulo { get; set; } = "";
     [Parameter, EditorRequired] public ParteFormulario Parte { get; set; } = new();

@@ -64,15 +64,15 @@
     </section>
 }
 
-<TarjetaParte Titulo="1   Remitente" Subtitulo="Quién envía la mercancía" Parte="remitente"
+<TarjetaParte Numero="1" Titulo="Remitente" Subtitulo="Quién envía la mercancía" Parte="remitente"
               Errores="errores" Prefijo="remitente" Cambio="MarcarCambio" />
-<TarjetaParte Titulo="2   Destinatario" Subtitulo="Quién la recibe" Parte="destinatario"
+<TarjetaParte Numero="2" Titulo="Destinatario" Subtitulo="Quién la recibe" Parte="destinatario"
               Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" />
 
 <section class="tarjeta">
     <div class="titulo-tarjeta">
         <div>
-            <h2>3   Transporte</h2>
+            <h2><span class="paso">3</span>Transporte</h2>
             <p class="suave">Quién lleva la mercancía y cuándo se carga</p>
         </div>
     </div>
@@ -95,7 +95,7 @@
 <section class="tarjeta">
     <div class="titulo-tarjeta">
         <div>
-            <h2>4   Mercancía y palets</h2>
+            <h2><span class="paso">4</span>Mercancía y palets</h2>
             <p class="suave">
                 @palets.Count @(palets.Count == 1 ? "palet" : "palets")  ·
                 @palets.Sum(p => p.NumCajas ?? 0).ToString("N0") cajas  ·
@@ -140,7 +140,8 @@
     </Campo>
 </section>
 
-<div class="acciones">
+<div class="acciones fija">
+    <span class="estado-cambios">@(hayCambios ? "Hay cambios sin guardar" : "")</span>
     <button class="principal" disabled="@guardando" @onclick="Guardar">
         @(existente == null ? "Guardar DeCA" : "Guardar cambios")
     </button>
