@@ -2,18 +2,14 @@
 USE GPE;
 GO
  
-/* ============================================================
-   1) TABLAS BASE
-   ============================================================ */
+-- Tablas base
  
 CREATE TABLE FABRICA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(100) NOT NULL UNIQUE
 );
  
--- ROL, USUARIO_ROL y LOTE todavía no los usa la aplicación: están preparadas para
--- cuando haya login con permisos por rol y fábrica, y para elegir el lote de una
--- lista en vez de escribirlo (hoy DEVOLUCION_PRODUCTO.lote es texto libre).
+-- LOTE aún no se usa: hoy DEVOLUCION_PRODUCTO.lote es texto libre.
 CREATE TABLE ROL (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(50) NOT NULL UNIQUE
@@ -27,13 +23,15 @@ CREATE TABLE USUARIO (
  
 CREATE TABLE CLIENTE (
     id INT IDENTITY(1,1) PRIMARY KEY,
+    codigo NVARCHAR(20) NOT NULL CONSTRAINT UQ_cliente_codigo UNIQUE,
     nombre NVARCHAR(100) NOT NULL
 );
  
 CREATE TABLE PRODUCTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     codigo NVARCHAR(30) NOT NULL UNIQUE,
-    nombre NVARCHAR(100) NOT NULL
+    nombre NVARCHAR(100) NOT NULL,
+    formato NVARCHAR(50) NULL   -- presentación, p. ej. "Caja 12 × 500 g"
 );
  
 CREATE TABLE USUARIO_ROL (
@@ -57,9 +55,7 @@ CREATE TABLE LOTE (
     CONSTRAINT UQ_lote_producto_codigo UNIQUE (producto_id, codigo)
 );
  
-/* ============================================================
-   2) DEVOLUCIONES
-   ============================================================ */
+-- Devoluciones
  
 -- Estados del proceso; "fase" (1-6) alimenta la barra de progreso
 CREATE TABLE ESTADO_DEVOLUCION (
@@ -73,8 +69,7 @@ CREATE TABLE ESTADO_DEVOLUCION (
 -- Cabecera de la devolución
 CREATE TABLE DEVOLUCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    -- Columna calculada: DEV-2026-001, DEV-2026-002... A partir de la 1000 se usan
-    -- todas las cifras (DEV-2026-1000) para que no se repitan números.
+    -- DEV-2026-001...; desde la 1000 lleva todas las cifras para no repetir números.
     numero AS ('DEV-' + CAST(YEAR(fecha_solicitud) AS NVARCHAR(4)) + '-'
                + CASE WHEN id < 1000 THEN RIGHT('000' + CAST(id AS NVARCHAR(10)), 3)
                       ELSE CAST(id AS NVARCHAR(10)) END) PERSISTED
@@ -82,12 +77,14 @@ CREATE TABLE DEVOLUCION (
     fabrica_id INT NOT NULL,
     cliente_id INT NOT NULL,
     estado_id INT NOT NULL,
-    albaran NVARCHAR(30) NULL,
     motivo NVARCHAR(50) NOT NULL,
     observaciones NVARCHAR(MAX) NULL,
     fecha_solicitud DATE NOT NULL,
-    fecha_recogida DATE NULL,
+    fecha_recogida DATE NULL,                    -- fecha de recogida prevista
     fecha_llegada DATE NULL,
+    -- Revisión del almacén
+    revisada_por NVARCHAR(100) NULL,             -- quién revisó la mercancía (puede no ser usuario de GPE)
+    agencia NVARCHAR(100) NULL,                  -- agencia que trajo la mercancía
     observaciones_revision NVARCHAR(MAX) NULL,   -- observaciones generales del almacén
     motivo_reapertura NVARCHAR(500) NULL,        -- motivo de la última vez que se volvió a un paso anterior
     -- Abono y cierre (se rellenan juntos al registrar el abono)
@@ -104,22 +101,33 @@ CREATE TABLE DEVOLUCION (
     CONSTRAINT FK_devolucion_estado  FOREIGN KEY (estado_id)  REFERENCES ESTADO_DEVOLUCION(id)
 );
  
--- Líneas de producto de cada devolución (el lote es texto libre)
+-- Productos que el cliente dijo que iba a devolver (opcional; el lote es texto libre)
 CREATE TABLE DEVOLUCION_PRODUCTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
     producto_id INT NOT NULL,
     lote NVARCHAR(30) NULL,
     cantidad_esperada INT NOT NULL CHECK (cantidad_esperada > 0),
-    cantidad_recibida INT NULL CHECK (cantidad_recibida >= 0),  -- la rellena el almacén
-    cantidad_apta INT NULL,             -- de lo recibido, lo que se puede volver a vender
-    observaciones NVARCHAR(500) NULL,   -- por qué no es apto, daños, etc.
-    CONSTRAINT CK_devprod_apta CHECK (cantidad_apta IS NULL
-        OR (cantidad_apta >= 0 AND cantidad_recibida IS NOT NULL AND cantidad_apta <= cantidad_recibida)),
     CONSTRAINT FK_devprod_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
     CONSTRAINT FK_devprod_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
 );
+
+-- Revisión del almacén. Si parte de un producto está bien y parte no, van en dos líneas.
+CREATE TABLE REVISION_LINEA (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    devolucion_id INT NOT NULL,
+    producto_id INT NOT NULL,
+    lote NVARCHAR(30) NULL,
+    caducidad DATE NULL,
+    cantidad INT NOT NULL CONSTRAINT CK_revlinea_cantidad CHECK (cantidad > 0),
+    apto BIT NOT NULL,   -- 1 = está bien para servir
+    CONSTRAINT FK_revlinea_devolucion FOREIGN KEY (devolucion_id)
+        REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
+    CONSTRAINT FK_revlinea_producto FOREIGN KEY (producto_id) REFERENCES PRODUCTO(id)
+);
+
+CREATE INDEX IX_revlinea_devolucion ON REVISION_LINEA (devolucion_id);
 GO
 
 -- Transportistas que pueden hacer las recogidas
@@ -135,10 +143,11 @@ CREATE TABLE RECOGIDA (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
     transportista_id INT NOT NULL,
-    fecha_recogida DATE NOT NULL,
+    fecha_recogida DATE NOT NULL,                -- fecha de recogida prevista
     direccion NVARCHAR(200) NOT NULL,
     telefono_contacto NVARCHAR(30) NULL,
     observaciones NVARCHAR(MAX) NULL,
+    -- Cuándo se registró el transportista (se rellena sola al crear la recogida)
     creada_en DATETIME2 NOT NULL CONSTRAINT DF_recogida_creada DEFAULT SYSDATETIME(),
     CONSTRAINT FK_recogida_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
@@ -146,7 +155,7 @@ CREATE TABLE RECOGIDA (
         REFERENCES TRANSPORTISTA(id)
 );
 
--- Archivos de una devolución: fotos de la revisión y documento del abono
+-- Archivos de una devolución: recibo de la agencia, fotos de la revisión y documento del abono
 CREATE TABLE ADJUNTO (
     id INT IDENTITY(1,1) PRIMARY KEY,
     devolucion_id INT NOT NULL,
@@ -156,7 +165,7 @@ CREATE TABLE ADJUNTO (
     contenido VARBINARY(MAX) NOT NULL,
     usuario_id INT NOT NULL,
     subido_en DATETIME2 NOT NULL CONSTRAINT DF_adjunto_subido DEFAULT SYSDATETIME(),
-    CONSTRAINT CK_adjunto_tipo CHECK (tipo IN ('FOTO', 'ABONO')),
+    CONSTRAINT CK_adjunto_tipo CHECK (tipo IN ('FOTO', 'ABONO', 'RECIBO')),
     CONSTRAINT FK_adjunto_devolucion FOREIGN KEY (devolucion_id)
         REFERENCES DEVOLUCION(id) ON DELETE CASCADE,
     CONSTRAINT FK_adjunto_usuario FOREIGN KEY (usuario_id) REFERENCES USUARIO(id)
@@ -165,9 +174,35 @@ CREATE TABLE ADJUNTO (
 CREATE INDEX IX_adjunto_devolucion ON ADJUNTO (devolucion_id, tipo);
 GO
 
-/* ============================================================
-   3) HISTORIAL DE CAMBIOS
-   ============================================================ */
+-- Avisos pendientes: se apuntan con el cambio y se envían después; si el correo falla, se reintenta.
+CREATE TABLE AVISO_CORREO (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    devolucion_id INT NOT NULL,
+    tipo NVARCHAR(30) NOT NULL,
+    destinatario NVARCHAR(150) NOT NULL,
+    creado_en DATETIME2 NOT NULL CONSTRAINT DF_aviso_creado DEFAULT SYSDATETIME(),
+    enviado_en DATETIME2 NULL,
+    intentos INT NOT NULL CONSTRAINT DF_aviso_intentos DEFAULT 0,
+    ultimo_error NVARCHAR(1000) NULL,
+    bloqueado_hasta DATETIME2 NULL,   -- mientras un ordenador lo está enviando
+    CONSTRAINT CK_aviso_tipo CHECK (tipo IN ('NUEVA_DEVOLUCION', 'RECOGIDA_SOLICITADA', 'REVISION_FINALIZADA', 'ABONO_REGISTRADO')),
+    CONSTRAINT FK_aviso_devolucion FOREIGN KEY (devolucion_id)
+        REFERENCES DEVOLUCION(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IX_aviso_pendiente ON AVISO_CORREO (enviado_en, id);
+
+-- Resúmenes ya enviados, para no repetirlos si la tarea se ejecuta dos veces el mismo día
+CREATE TABLE AVISO_RESUMEN (
+    fecha DATE NOT NULL,
+    tipo NVARCHAR(30) NOT NULL,
+    destinatario NVARCHAR(150) NOT NULL,
+    enviado_en DATETIME2 NOT NULL CONSTRAINT DF_resumen_enviado DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_aviso_resumen PRIMARY KEY (fecha, tipo, destinatario)
+);
+GO
+
+-- Historial de cambios
 
 -- Quién modificó qué y cuándo. Lo rellenan los triggers de abajo.
 CREATE TABLE HISTORIAL_CAMBIOS (
@@ -180,8 +215,7 @@ CREATE TABLE HISTORIAL_CAMBIOS (
     registro_id INT NOT NULL,
     accion NVARCHAR(20) NOT NULL,
 
-    -- Los cambios de una misma transacción (un mismo "Guardar") comparten este id;
-    -- la pantalla de historial los agrupa en una sola entrada.
+    -- Los cambios de un mismo "Guardar" comparten id y salen juntos en el historial.
     transaccion_id BIGINT NULL,
 
     fecha DATETIME2 NOT NULL
@@ -193,8 +227,7 @@ CREATE TABLE HISTORIAL_CAMBIOS (
     CONSTRAINT FK_historial_usuario
         FOREIGN KEY (usuario_id) REFERENCES USUARIO(id),
 
-    -- devolucion_id no lleva FK a propósito: así se conserva el historial
-    -- aunque la devolución se borre.
+    -- Sin FK a propósito: el historial se conserva aunque se borre la devolución.
 
     CONSTRAINT CK_historial_accion
         CHECK (accion IN ('INSERT', 'UPDATE', 'DELETE'))
@@ -203,11 +236,8 @@ CREATE TABLE HISTORIAL_CAMBIOS (
 CREATE INDEX IX_historial_devolucion ON HISTORIAL_CAMBIOS (devolucion_id, fecha);
 GO
 
-/* La aplicación indica el usuario al abrir cada conexión con:
-       EXEC sp_set_session_context @key = N'usuario_id', @value = <id>;
-   Para modificar datos a mano desde SSMS hay que ejecutar esa misma línea antes.
-
-   Los UPDATE que no cambian ningún valor no se registran. */
+-- Para cambiar datos a mano desde SSMS, antes: EXEC sp_set_session_context @key = N'usuario_id', @value = <id>;
+-- Los UPDATE que no cambian nada no se registran.
 
 CREATE OR ALTER TRIGGER TR_DEVOLUCION_HISTORIAL ON DEVOLUCION
 AFTER INSERT, UPDATE, DELETE
@@ -266,6 +296,35 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER TRIGGER TR_REVISION_LINEA_HISTORIAL ON REVISION_LINEA
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted) RETURN;
+
+    DECLARE @usuario INT = CAST(SESSION_CONTEXT(N'usuario_id') AS INT);
+    IF @usuario IS NULL
+        THROW 50001, 'No se ha indicado el usuario que realiza el cambio (sp_set_session_context).', 1;
+
+    INSERT INTO HISTORIAL_CAMBIOS
+        (devolucion_id, usuario_id, tabla_afectada, registro_id, accion, valores_anteriores, valores_nuevos, transaccion_id)
+    SELECT c.devolucion_id, @usuario, 'REVISION_LINEA', c.registro_id, c.accion, c.anteriores, c.nuevos, CURRENT_TRANSACTION_ID()
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.id = i.id
+    CROSS APPLY (SELECT
+        COALESCE(i.id, d.id) AS registro_id,
+        COALESCE(i.devolucion_id, d.devolucion_id) AS devolucion_id,
+        CASE WHEN i.id IS NULL THEN 'DELETE' WHEN d.id IS NULL THEN 'INSERT' ELSE 'UPDATE' END AS accion,
+        CASE WHEN d.id IS NULL THEN NULL
+             ELSE (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS anteriores,
+        CASE WHEN i.id IS NULL THEN NULL
+             ELSE (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) END AS nuevos
+    ) c
+    WHERE c.accion <> 'UPDATE' OR c.anteriores <> c.nuevos;
+END;
+GO
+
 CREATE OR ALTER TRIGGER TR_RECOGIDA_HISTORIAL ON RECOGIDA
 AFTER INSERT, UPDATE, DELETE
 AS
@@ -295,8 +354,7 @@ BEGIN
 END;
 GO
 
--- A diferencia de los otros, no usa "d.*": así el contenido del archivo
--- (columna contenido) no se copia al historial.
+-- Sin "d.*", para no copiar el contenido del archivo al historial.
 CREATE OR ALTER TRIGGER TR_ADJUNTO_HISTORIAL ON ADJUNTO
 AFTER INSERT, UPDATE, DELETE
 AS
@@ -396,4 +454,21 @@ CREATE TABLE DECA_PALET (
     CONSTRAINT FK_deca_palet_deca FOREIGN KEY (deca_id) REFERENCES DECA(id) ON DELETE CASCADE,
     CONSTRAINT UQ_deca_palet_orden UNIQUE (deca_id, orden)
 );
+GO
+
+-- Datos iniciales imprescindibles: fases, fábrica 1 y roles.
+
+INSERT INTO FABRICA (nombre) VALUES (N'Fábrica Principal');
+
+-- Calidad no interviene en las devoluciones, solo en no conformidades y rutina.
+INSERT INTO ROL (nombre) VALUES (N'Administración'), (N'Transporte'), (N'Almacén'), (N'Calidad');
+
+-- rol_responsable_id: quién hace el paso que lleva a esa fase (recibe los avisos por correo)
+INSERT INTO ESTADO_DEVOLUCION (nombre, fase, rol_responsable_id) VALUES
+    (N'Solicitud recibida',  1, (SELECT id FROM ROL WHERE nombre = N'Administración')),
+    (N'Recogida solicitada', 2, (SELECT id FROM ROL WHERE nombre = N'Transporte')),
+    (N'Mercancía recibida',  3, (SELECT id FROM ROL WHERE nombre = N'Almacén')),
+    (N'Revisada almacén',    4, (SELECT id FROM ROL WHERE nombre = N'Almacén')),
+    (N'Abono realizado',     5, (SELECT id FROM ROL WHERE nombre = N'Administración')),
+    (N'Cierre',              6, (SELECT id FROM ROL WHERE nombre = N'Administración'));
 GO

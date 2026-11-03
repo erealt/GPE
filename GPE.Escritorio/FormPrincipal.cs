@@ -3,9 +3,7 @@ using System.Drawing.Drawing2D;
 
 namespace GPE.Escritorio;
 
-// Ventana principal: menú lateral con los módulos, barra superior con el usuario y,
-// a la derecha, el módulo elegido. Al arrancar se ve el inicio.
-// Para añadir un módulo: una entrada más en CrearModulos.
+// Ventana principal. Para añadir un módulo, una entrada más en CrearModulos.
 public class FormPrincipal : Form
 {
     // Un módulo de la aplicación: su opción del menú y, la primera vez que se elige, su contenido
@@ -21,8 +19,11 @@ public class FormPrincipal : Form
 
     private readonly Panel zonaModulo = new() { Dock = DockStyle.Fill };
     private readonly FlowLayoutPanel menu = new();
+    private Control menuLateral = null!;
+    private Control barraSuperior = null!;
     private readonly List<Modulo> modulos;
-    private readonly ModuloDevoluciones devoluciones = new();
+    // null si el usuario no ve las devoluciones (rol Calidad)
+    private readonly ModuloDevoluciones? devoluciones = Sesion.VeDevoluciones ? new() : null;
     private Modulo? actual;
 
     public FormPrincipal()
@@ -31,22 +32,28 @@ public class FormPrincipal : Form
         Size = new Size(1400, 800);
         MinimumSize = new Size(1350, 650);
         StartPosition = FormStartPosition.CenterScreen;
+        // Se abre ocupando toda la pantalla; al restaurarla se queda con el tamaño de arriba
+        WindowState = FormWindowState.Maximized;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         modulos = CrearModulos();
 
         Controls.Add(zonaModulo);
-        Controls.Add(CrearBarraSuperior());
-        Controls.Add(CrearMenuLateral());
+        Controls.Add(barraSuperior = CrearBarraSuperior());
+        Controls.Add(menuLateral = CrearMenuLateral());
 
-        // Las devoluciones se meten en la ventana desde el principio (ocultas) para que el
-        // aviso de abonos retrasados funcione aunque no se haya entrado en el módulo
+        Mostrar(modulos[0]);
+
+        if (devoluciones != null) PrepararAvisoAbonos(devoluciones);
+    }
+
+    // Devoluciones se crea al arrancar para que el aviso de abonos funcione sin entrar en el módulo
+    private void PrepararAvisoAbonos(ModuloDevoluciones devoluciones)
+    {
         var moduloDevoluciones = modulos.First(m => m.Contenido == devoluciones);
         devoluciones.Visible = false;
         zonaModulo.Controls.Add(devoluciones);
-
-        Mostrar(modulos[0]);
 
         devoluciones.PideMostrarse += () => Mostrar(moduloDevoluciones);
         Shown += (s, e) => devoluciones.MostrarAvisoAbonos();
@@ -62,10 +69,29 @@ public class FormPrincipal : Form
             () => new ModuloInicio(lista.Skip(1).Select(m => (m.Nombre, m.Descripcion, m.Resumen,
                 (Action)(() => Mostrar(m)))).ToList())));
 
-        lista.Add(new Modulo("Devoluciones",
-            "Seguimiento de las devoluciones de clientes, de la solicitud al abono.",
-            ModuloInicio.ResumenDevoluciones,
-            () => devoluciones) { Contenido = devoluciones });
+        if (devoluciones != null)
+            lista.Add(new Modulo("Devoluciones",
+                "Seguimiento de las devoluciones de clientes, de la solicitud al abono.",
+                ModuloInicio.ResumenDevoluciones,
+                () => devoluciones) { Contenido = devoluciones });
+
+        if (Sesion.VeCalidad)
+        {
+            lista.Add(new Modulo("No conformidades",
+                "Incidencias, no conformidades y acciones de mejora de calidad.",
+                ModuloInicio.ResumenNoConformidades,
+                () => new ModuloNoConformidades()));
+
+            lista.Add(new Modulo("Rutina de calidad",
+                "Chequeos diarios y PCC del supervisor de calidad al recorrer la fábrica.",
+                ModuloInicio.ResumenRutina,
+                () => new ModuloRutinaCalidad()));
+
+            lista.Add(new Modulo("Control de agua",
+                "Cloro y organolépticos de los puntos de agua (MT-RG09).",
+                ModuloInicio.ResumenAgua,
+                () => new ModuloControlAgua()));
+        }
 
         lista.Add(new Modulo("DeCA",
             "Documento de control del transporte, con su PDF y su código QR.",
@@ -93,7 +119,36 @@ public class FormPrincipal : Form
         MarcarElegido();
     }
 
-    // ---------- Menú lateral ----------
+    // Pantalla completa (sin menú, barra ni bordes) para tablas grandes; al salir queda todo como estaba.
+    private (bool Menu, FormWindowState Estado)? antesDePantallaCompleta;
+
+    public void PantallaCompleta(bool activar)
+    {
+        if (activar == (antesDePantallaCompleta != null)) return;
+
+        SuspendLayout();
+        if (activar)
+        {
+            antesDePantallaCompleta = (menuLateral.Visible, WindowState);
+            menuLateral.Visible = barraSuperior.Visible = false;
+            // Sin bordes y vuelta a maximizar, para que Windows la extienda sobre la barra de tareas
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.None;
+            WindowState = FormWindowState.Maximized;
+        }
+        else if (antesDePantallaCompleta is (var menu, var estado))
+        {
+            menuLateral.Visible = menu;
+            barraSuperior.Visible = true;
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            WindowState = estado;
+            antesDePantallaCompleta = null;
+        }
+        ResumeLayout();
+    }
+
+    // Menú lateral
 
     private Control CrearMenuLateral()
     {
@@ -117,7 +172,7 @@ public class FormPrincipal : Form
             Height = 60,
             Padding = new Padding(24, 0, 0, 0),
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 16, FontStyle.Bold),
+            Font = Tema.FuenteLogo,
             ForeColor = Tema.Acento
         };
 
@@ -158,9 +213,6 @@ public class FormPrincipal : Form
         return boton;
     }
 
-    private static readonly Font FuenteMenu = new("Segoe UI", 10.5f);
-    private static readonly Font FuenteMenuElegido = new("Segoe UI", 10.5f, FontStyle.Bold);
-
     private void MarcarElegido()
     {
         foreach (var m in modulos)
@@ -170,13 +222,16 @@ public class FormPrincipal : Form
             boton.BackColor = elegido ? Tema.AcentoSuave : Color.White;
             boton.FlatAppearance.MouseOverBackColor = elegido ? Tema.AcentoSuave : Tema.CabeceraTabla;
             boton.ForeColor = elegido ? Tema.Acento : Tema.Texto;
-            boton.Font = elegido ? FuenteMenuElegido : FuenteMenu;
+            boton.Font = elegido ? Tema.FuenteMenuElegido : Tema.FuenteMenu;
         }
     }
 
-    // ---------- Barra superior ----------
+    // Barra superior
 
-    private static Panel CrearBarraSuperior()
+    // Se pulsó "Salir": Program vuelve a pedir el usuario en vez de cerrar la aplicación
+    public bool CambiarUsuario { get; private set; }
+
+    private Panel CrearBarraSuperior()
     {
         var barra = new Panel
         {
@@ -185,6 +240,27 @@ public class FormPrincipal : Form
             BackColor = Color.White,
             Padding = new Padding(0, 0, 30, 0)
         };
+
+        // ☰ oculta o muestra el menú lateral
+        var btnMenu = new Button
+        {
+            Text = "☰",
+            Dock = DockStyle.Left,
+            Width = 60,
+            FlatStyle = FlatStyle.Flat,
+            FlatAppearance = { BorderSize = 0, MouseOverBackColor = Tema.CabeceraTabla },
+            Font = Tema.FuenteIcono,
+            ForeColor = Tema.Texto,
+            Cursor = Cursors.Hand
+        };
+        var ayuda = new ToolTip();
+        ayuda.SetToolTip(btnMenu, "Ocultar el menú");
+        btnMenu.Click += (s, e) =>
+        {
+            menuLateral.Visible = !menuLateral.Visible;
+            ayuda.SetToolTip(btnMenu, menuLateral.Visible ? "Ocultar el menú" : "Mostrar el menú");
+        };
+        barra.Controls.Add(btnMenu);
 
         var lblFecha = new Label
         {
@@ -201,7 +277,7 @@ public class FormPrincipal : Form
         {
             Dock = DockStyle.Right,
             Width = 50,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold)
+            Font = Tema.FuenteNegrita
         };
         lblUsuario.Paint += (s, e) =>
         {
@@ -224,9 +300,21 @@ public class FormPrincipal : Form
             Text = Sesion.UsuarioActual?.Nombre ?? ""
         };
 
+        // Cierra la sesión y vuelve a la pantalla de elegir usuario
+        var btnSalir = Tema.BotonSecundario("Salir", 90);
+        btnSalir.Dock = DockStyle.Fill;
+        btnSalir.Click += (s, e) =>
+        {
+            CambiarUsuario = true;
+            Close();
+        };
+        var marcoSalir = new Panel { Dock = DockStyle.Right, Width = 90 + 15, Padding = new Padding(15, 13, 0, 13) };
+        marcoSalir.Controls.Add(btnSalir);
+
         barra.Controls.Add(lblFecha);
         barra.Controls.Add(lblNombre);
         barra.Controls.Add(lblUsuario);
+        barra.Controls.Add(marcoSalir);
         return barra;
     }
 }

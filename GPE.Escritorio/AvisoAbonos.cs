@@ -3,8 +3,7 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Aviso de devoluciones que llegaron hace días y siguen sin abono.
-// ModuloDevoluciones lo muestra al entrar y lo repite cada cierto tiempo mientras quede alguna.
+// Aviso de devoluciones que llegaron hace días y siguen sin abono (lo lanza ModuloDevoluciones).
 public class FormAvisoAbonos : Form
 {
 
@@ -24,7 +23,7 @@ public class FormAvisoAbonos : Form
         StartPosition = FormStartPosition.CenterParent;
         ShowInTaskbar = false;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         int n = retrasadas.Count;
         var lblTitulo = new Label
@@ -37,12 +36,12 @@ public class FormAvisoAbonos : Form
             Padding = new Padding(20, 15, 20, 0),
             BackColor = Tema.AvisoFondo,
             ForeColor = Tema.Aviso,
-            Font = new Font("Segoe UI", 13, FontStyle.Bold)
+            Font = Tema.FuenteAviso
         };
         var lblExplicacion = new Label
         {
-            Text = $"La mercancía llegó hace {DevolucionServicio.DiasAvisoAbono} días o más y el cliente sigue " +
-                   "esperando. Revisa la devolución y registra el abono. Este aviso se repetirá hasta que se registre.",
+            Text = "La mercancía ya está en el almacén y el cliente está esperando el abono. " +
+                   "Revisa la devolución y registra el abono. Este aviso se repetirá hasta que se registre.",
             Dock = DockStyle.Top,
             Height = 60,
             Padding = new Padding(20, 10, 20, 0),
@@ -58,10 +57,9 @@ public class FormAvisoAbonos : Form
         lista.Columns.Add("Nº devolución", 130);
         lista.Columns.Add("Cliente", 190);
         lista.Columns.Add("Llegada", 100);
-        lista.Columns.Add("Sin abono", 90);
+        lista.Columns.Add("Llegó hace", 90);
         lista.Columns.Add("Pendiente de", 180);
 
-        // Primero las que más llevan esperando
         foreach (var d in retrasadas.OrderByDescending(d => DevolucionServicio.DiasSinAbono(d)))
         {
             int dias = DevolucionServicio.DiasSinAbono(d) ?? 0;
@@ -70,7 +68,7 @@ public class FormAvisoAbonos : Form
                 d.Numero,
                 d.Cliente,
                 d.FechaLlegada?.ToString("dd/MM/yyyy", Componentes.Es) ?? "",
-                $"{dias} días",
+                DevolucionServicio.TextoDias(dias),
                 d.Fase == Fase.MercanciaRecibida ? "Revisión del almacén" : "Registrar el abono"
             }) { Tag = d });
         }

@@ -4,8 +4,7 @@ using System.Diagnostics;
 
 namespace GPE.Escritorio;
 
-// Muestra las fotos de una devolución dentro de la app, con anterior / siguiente.
-// Teclas: ← y → para cambiar de foto, Esc para cerrar.
+// Fotos de una devolución: ← y → para cambiar, Esc para cerrar.
 public class FormVisorImagen : Form
 {
     private readonly List<AdjuntoInfo> fotos;
@@ -27,8 +26,9 @@ public class FormVisorImagen : Form
         Size = new Size(1100, 800);
         MinimumSize = new Size(600, 450);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this);
         BackColor = Color.FromArgb(30, 30, 30);
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
         KeyPreview = true;
 
         imagen.Dock = DockStyle.Fill;
@@ -160,8 +160,7 @@ public class FormVisorImagen : Form
         }
         catch (Exception ex) when (ex is DbException or IOException or System.ComponentModel.Win32Exception)
         {
-            MessageBox.Show(this, "No se pudo abrir el archivo.\n\n" + ex.Message, "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.Error(this, "No se pudo abrir el archivo.", ex);
         }
     }
 }

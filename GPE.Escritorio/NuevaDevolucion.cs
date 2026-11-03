@@ -16,11 +16,10 @@ public class FormNuevaDevolucion : Form
     private List<Producto> productos = new();
     private bool cargaCorrecta;
 
-    // 1. Datos de la devolución
+    private readonly TextBox txtCodigoCliente = new();
     private readonly ComboBox cmbCliente = new();
     private readonly DateTimePicker dtpSolicitud = new();
     private readonly ComboBox cmbMotivo = new();
-    private readonly TextBox txtAlbaran = new();
     private readonly TextBox txtObservaciones = new();
 
     private record FilaProducto(
@@ -29,7 +28,6 @@ public class FormNuevaDevolucion : Form
         NumericUpDown Cantidad,
         TextBox Lote);
 
-    // Mensajes de error que aparecen debajo de cada campo
     private readonly CamposFormulario campos = new();
     private readonly Label lblErrorProductos = CamposFormulario.EtiquetaError();
 
@@ -43,15 +41,16 @@ public class FormNuevaDevolucion : Form
         Size = new Size(1200, 750);
         MinimumSize = new Size(1150, 600);
         StartPosition = FormStartPosition.CenterParent;
+        Componentes.AjustarAPantalla(this);
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         PrepararControles();
 
         Controls.Add(CrearContenido());
     }
 
-    // ---------- Preparación de controles ----------
+    // Preparación de controles
 
     private void PrepararControles()
     {
@@ -68,9 +67,7 @@ public class FormNuevaDevolucion : Form
         }
         catch (DbException ex)   
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar los clientes y productos de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los clientes y productos de la base de datos.", ex);
         }
 
         cmbMotivo.Items.AddRange(new object[]
@@ -79,15 +76,25 @@ public class FormNuevaDevolucion : Form
         dtpSolicitud.Format = DateTimePickerFormat.Short;
         dtpSolicitud.MaxDate = DateTime.Today;   // no se admiten solicitudes futuras
 
-        txtAlbaran.PlaceholderText = "Ej. ALB-45872";
-        txtAlbaran.MaxLength = 30;   // DEVOLUCION.albaran es NVARCHAR(30)
+        // El código y el cliente van a la par: al escribir el código se elige el cliente y al revés
+        txtCodigoCliente.PlaceholderText = "Escribe el código del cliente";
+        txtCodigoCliente.MaxLength = 20;   // CLIENTE.codigo es NVARCHAR(20)
+        txtCodigoCliente.TextChanged += (s, e) =>
+        {
+            if (!txtCodigoCliente.Focused) return;   // el cambio viene del desplegable
+            string codigo = txtCodigoCliente.Text.Trim();
+            cmbCliente.SelectedItem = cmbCliente.Items.Cast<Cliente>()
+                .FirstOrDefault(c => c.Codigo.Equals(codigo, StringComparison.OrdinalIgnoreCase));
+        };
+        cmbCliente.SelectionChangeCommitted += (s, e) =>
+            txtCodigoCliente.Text = (cmbCliente.SelectedItem as Cliente)?.Codigo ?? "";
         txtObservaciones.PlaceholderText = "Añade cualquier información relevante sobre la solicitud...";
         txtObservaciones.Multiline = true;
         txtObservaciones.Height = 80;
         txtObservaciones.ScrollBars = ScrollBars.Vertical;
     }
 
-    // ---------- Estructura general ----------
+    // Estructura general
 
     private Panel CrearContenido()
     {
@@ -104,17 +111,17 @@ public class FormNuevaDevolucion : Form
         return scroll;
     }
 
-    // ---------- Tarjeta 1: datos ----------
+    // Tarjeta 1: datos
 
     private Control CrearTarjetaDatos()
     {
         var tarjeta = Componentes.Tarjeta("1   Datos de la devolución", "Información general de la solicitud del cliente");
 
         var rejilla = Componentes.Rejilla(2);
+        rejilla.Controls.Add(campos.Campo("Código de cliente", txtCodigoCliente));
         rejilla.Controls.Add(campos.Campo("Cliente", cmbCliente));
         rejilla.Controls.Add(campos.Campo("Fecha de solicitud", dtpSolicitud));
         rejilla.Controls.Add(campos.Campo("Motivo de devolución", cmbMotivo));
-        rejilla.Controls.Add(campos.Campo("Albarán relacionado", txtAlbaran));
 
         var campoObservaciones = campos.Campo("Observaciones", txtObservaciones);
         rejilla.Controls.Add(campoObservaciones);
@@ -124,14 +131,15 @@ public class FormNuevaDevolucion : Form
         return tarjeta;
     }
 
-    // ---------- Tarjeta: productos esperados ----------
+    // Tarjeta: productos esperados
 
     private Control CrearTarjetaProductos()
     {
         var btnAnadir = Tema.BotonSecundario("+  Añadir producto", 190);
         btnAnadir.Click += (s, e) => AnadirFilaProducto();
 
-        var tarjeta = Componentes.Tarjeta("2   Productos esperados", "", btnAnadir, lblResumenProductos);
+        var tarjeta = Componentes.Tarjeta("2   Productos esperados (opcional)",
+            "Si todavía no se sabe qué va a devolver el cliente, déjalo vacío.", btnAnadir, lblResumenProductos);
 
         contenedorFilas.Dock = DockStyle.Fill;
         contenedorFilas.AutoSize = true;
@@ -161,18 +169,26 @@ public class FormNuevaDevolucion : Form
         return Componentes.Acciones(btnGuardar, btnCancelar);
     }
 
-    // ---------- Guardado ----------
+    // Guardado
 
     private void Guardar()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         LimpiarErrores();
         Control? primerError = null;
 
         if (cmbCliente.SelectedItem is not Cliente)
         {
-            campos.MarcarError(cmbCliente, "Selecciona un cliente.");
-            primerError ??= cmbCliente;
+            if (txtCodigoCliente.Text.Trim() != "")
+            {
+                campos.MarcarError(txtCodigoCliente, "No hay ningún cliente con ese código.");
+                primerError ??= txtCodigoCliente;
+            }
+            else
+            {
+                campos.MarcarError(cmbCliente, "Indica el código o selecciona un cliente.");
+                primerError ??= cmbCliente;
+            }
         }
 
         if (cmbMotivo.SelectedItem is not string)
@@ -181,15 +197,13 @@ public class FormNuevaDevolucion : Form
             primerError ??= cmbMotivo;
         }
 
-        var filasSinProducto = filas.Where(f => f.Producto.SelectedItem is not Producto).ToList();
-        if (filasSinProducto.Count == filas.Count)
+        // Las filas vacías se ignoran, pero una con lote tiene que llevar producto
+        var filasSinProducto = filas
+            .Where(f => f.Producto.SelectedItem is not Producto && !string.IsNullOrWhiteSpace(f.Lote.Text))
+            .ToList();
+        if (filasSinProducto.Count > 0)
         {
-            MostrarErrorProductos("Añade al menos un producto a la devolución.");
-            primerError ??= filas[0].Producto;
-        }
-        else if (filasSinProducto.Count > 0)
-        {
-            MostrarErrorProductos("Hay filas sin producto: elige uno o quítalas con ✕.");
+            MostrarErrorProductos("Hay filas con lote pero sin producto: elige uno o quítalas con ✕.");
             primerError ??= filasSinProducto[0].Producto;
         }
 
@@ -210,12 +224,10 @@ public class FormNuevaDevolucion : Form
                 string.IsNullOrWhiteSpace(f.Lote.Text) ? null : f.Lote.Text.Trim()))
             .ToList();
 
-        // 2. Guardar en la base de datos
         var datos = new DatosNuevaDevolucion(
             FabricaProvisional,
             cliente.Id,
             motivo,
-            string.IsNullOrWhiteSpace(txtAlbaran.Text) ? null : txtAlbaran.Text.Trim(),
             string.IsNullOrWhiteSpace(txtObservaciones.Text) ? null : txtObservaciones.Text.Trim(),
             dtpSolicitud.Value,
             lineas);
@@ -226,21 +238,19 @@ public class FormNuevaDevolucion : Form
         }
         catch (ReglaNegocioException ex)   
         {
-            MessageBox.Show(this, ex.Message, "Faltan datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Faltan datos", ex.Message);
             return;
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudo guardar la devolución.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo guardar la devolución.", ex);
             return;
         }
 
         DialogResult = DialogResult.OK;
     }
 
-    // ---------- Mensajes de error ----------
+    // Mensajes de error
 
     private void MostrarErrorProductos(string mensaje)
     {
@@ -254,7 +264,7 @@ public class FormNuevaDevolucion : Form
         lblErrorProductos.Visible = false;
     }
 
-    // ---------- Filas de producto ----------
+    // Filas de producto
 
     private static TableLayoutPanel PlantillaFilaProducto()
     {
@@ -280,7 +290,7 @@ public class FormNuevaDevolucion : Form
                 Height = 40,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+                Font = Tema.FuenteEtiqueta
             }, i, 0);
         }
         return encabezado;
@@ -346,7 +356,7 @@ public class FormNuevaDevolucion : Form
         int unidades = (int)conProducto.Sum(f => f.Cantidad.Value);
 
         lblResumenProductos.Text = conProducto.Count == 0
-            ? "Aún no hay productos"
+            ? "Sin productos indicados"
             : $"{conProducto.Count} {(conProducto.Count == 1 ? "producto" : "productos")} · {unidades} unidades";
     }
 }

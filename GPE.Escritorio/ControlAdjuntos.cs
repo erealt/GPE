@@ -5,9 +5,7 @@ using System.Diagnostics;
 
 namespace GPE.Escritorio;
 
-// Lista de archivos de una devolución con botones Añadir / Ver / Quitar.
-// Se usa para las fotos del almacén (FOTO) y para el documento del abono (ABONO).
-// Los cambios se guardan en la base de datos al momento, sin esperar a otro botón.
+// Archivos de una devolución (RECIBO, FOTO o ABONO). Los cambios se guardan al momento.
 public class ControlAdjuntos : UserControl
 {
 
@@ -124,7 +122,7 @@ public class ControlAdjuntos : UserControl
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "Archivo no válido", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Archivo no válido", ex.Message);
             return;
         }
         catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException)
@@ -176,13 +174,17 @@ public class ControlAdjuntos : UserControl
     {
         if (Seleccionado() is not AdjuntoInfo adjunto) return;
 
-        if (MessageBox.Show(this, $"¿Quitar \"{adjunto.NombreArchivo}\"?", "Quitar archivo",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        if (!Mensajes.Confirmar(this, "Quitar archivo", $"¿Quitar \"{adjunto.NombreArchivo}\"?"))
             return;
 
         try
         {
-            servicio.EliminarAdjunto(adjunto.Id);
+            servicio.EliminarAdjunto(adjunto.Id, tipo);
+        }
+        catch (ReglaNegocioException ex)
+        {
+            Mensajes.Aviso(this, "Sin permiso", ex.Message);
+            return;
         }
         catch (DbException ex)
         {
@@ -200,8 +202,7 @@ public class ControlAdjuntos : UserControl
         btnVer.Enabled = btnQuitar.Enabled = Seleccionado() != null;
     }
 
-    private void Error(string mensaje, Exception ex) =>
-        MessageBox.Show(this, mensaje + "\n\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    private void Error(string mensaje, Exception ex) => Mensajes.Error(this, mensaje, ex);
 
     private static string FormatoTamano(int bytes) =>
         bytes >= 1024 * 1024 ? $"{bytes / (1024.0 * 1024):0.0} MB" : $"{Math.Max(1, bytes / 1024)} KB";

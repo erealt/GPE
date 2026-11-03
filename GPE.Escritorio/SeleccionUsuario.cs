@@ -23,12 +23,12 @@ public class FormSeleccionUsuario : Form
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         var lblTitulo = new Label
         {
             Text = "¿Quién eres?",
-            Font = new Font("Segoe UI", 18, FontStyle.Bold),
+            Font = Tema.FuenteTituloVentana,
             ForeColor = Tema.Texto,
             Location = new Point(30, 20),
             AutoSize = true
@@ -64,17 +64,14 @@ public class FormSeleccionUsuario : Form
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this,
-                "No se pudieron cargar los usuarios de la base de datos.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los usuarios de la base de datos.", ex);
             Close();
             return;
         }
 
         if (cmbUsuario.Items.Count == 0)
         {
-            MessageBox.Show(this, "No hay usuarios dados de alta en la tabla USUARIO.",
-                "Sin usuarios", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "Sin usuarios", "No hay usuarios dados de alta en la tabla USUARIO.");
             Close();
             return;
         }
@@ -85,6 +82,20 @@ public class FormSeleccionUsuario : Form
     private void Entrar()
     {
         if (cmbUsuario.SelectedItem is not Usuario usuario) return;
+
+        try
+        {
+            Sesion.Roles = servicio.ObtenerRoles(usuario.Id).ToHashSet();
+        }
+        catch (DbException ex)
+        {
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los permisos del usuario.", ex);
+            return;
+        }
+
+        if (Sesion.Roles.Count == 0)
+            Mensajes.Informacion(this, "Sin permisos",
+                $"{usuario.Nombre} no tiene ningún rol asignado: podrá consultar las devoluciones, pero no hacer ningún paso.");
 
         Sesion.UsuarioActual = usuario;
         DialogResult = DialogResult.OK;

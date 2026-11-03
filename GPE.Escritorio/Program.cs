@@ -2,18 +2,12 @@ namespace GPE.Escritorio;
 
 static class Program
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
     [STAThread]
     static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
 
-        // Red de seguridad: un error que ninguna pantalla haya previsto se enseña
-        // en un mensaje en vez de cerrar la aplicación de golpe
+        // Un error no previsto se enseña en un mensaje en vez de cerrar la aplicación
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (s, e) => MostrarErrorInesperado(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
@@ -21,13 +15,25 @@ static class Program
             if (e.ExceptionObject is Exception ex) MostrarErrorInesperado(ex);
         };
 
-        // Sin usuario no se puede registrar el historial, así que no se entra
-        using (var seleccion = new FormSeleccionUsuario())
+        // Con "Salir" se vuelve a elegir usuario; al cerrar la ventana se acaba
+        while (true)
         {
-            if (seleccion.ShowDialog() != DialogResult.OK) return;
-        }
+            // Sin usuario no se puede registrar el historial, así que no se entra
+            using (var seleccion = new FormSeleccionUsuario())
+            {
+                if (seleccion.ShowDialog() != DialogResult.OK) return;
+            }
 
-        Application.Run(new FormPrincipal());
+            // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)
+            GPE.Logica.AvisoServicio.EnviarPendientesEnSegundoPlano();
+
+            using var principal = new FormPrincipal();
+            Application.Run(principal);
+            if (!principal.CambiarUsuario) return;
+
+            GPE.Datos.Sesion.UsuarioActual = null;
+            GPE.Datos.Sesion.Roles = new();
+        }
     }
 
     private static void MostrarErrorInesperado(Exception ex) =>

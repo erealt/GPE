@@ -4,8 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Pantalla de inicio: saludo y una tarjeta por módulo con un dato del momento
-// (se vuelve a calcular cada vez que se entra en el inicio).
+// Inicio: una tarjeta por módulo con un dato que se recalcula al entrar.
 public class ModuloInicio : UserControl
 {
     private readonly List<(Label Etiqueta, Func<string?> Calcular)> resumenes = new();
@@ -54,7 +53,7 @@ public class ModuloInicio : UserControl
         {
             AutoSize = true,
             ForeColor = Tema.Acento,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Font = Tema.FuenteNegrita,
             Margin = new Padding(0, 0, 0, 8)
         };
         resumenes.Add((lblResumen, resumen));
@@ -63,7 +62,7 @@ public class ModuloInicio : UserControl
         {
             Text = titulo,
             AutoSize = true,
-            Font = new Font("Segoe UI", 15, FontStyle.Bold),
+            Font = Tema.FuenteTituloTarjeta,
             ForeColor = Tema.Texto,
             Margin = new Padding(0, 0, 0, 6)
         });
@@ -79,7 +78,7 @@ public class ModuloInicio : UserControl
             Text = "Abrir  →",
             AutoSize = true,
             ForeColor = Tema.Texto,
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Font = Tema.FuenteOpcionElegida,
             Margin = new Padding(0)
         });
 
@@ -115,15 +114,15 @@ public class ModuloInicio : UserControl
         }
     }
 
-    // ---------- Datos de cada tarjeta (null si no se pueden leer) ----------
+    // Datos de cada tarjeta (null si no se pueden leer)
 
     public static string? ResumenDevoluciones()
     {
         try
         {
-            var lista = new DevolucionServicio().ObtenerDevoluciones();
-            int enCurso = lista.Count(d => d.Fase < Fase.Cierre);
-            int retrasadas = lista.Count(DevolucionServicio.AbonoRetrasado);
+            var lista = new DevolucionServicio().ObtenerDevolucionesEnCurso();
+            int enCurso = lista.Count;
+            int retrasadas = Sesion.TieneRol(Rol.Administracion) ? lista.Count(DevolucionServicio.AbonoRetrasado) : 0;
             return $"{enCurso} en curso" + (retrasadas > 0 ? $"  ·  ⚠ {retrasadas} esperando abono" : "");
         }
         catch (DbException)
@@ -141,6 +140,44 @@ public class ModuloInicio : UserControl
                                         && d.FechaCarga.Month == DateTime.Today.Month);
             int sinPdf = lista.Count(d => !d.PdfAlDia);
             return $"{esteMes} este mes" + (sinPdf > 0 ? $"  ·  {sinPdf} con el PDF por generar" : "");
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
+
+    public static string? ResumenNoConformidades()
+    {
+        try
+        {
+            var (abiertas, fuera) = new NoConformidadServicio().ContarAbiertas();
+            return $"{abiertas} {(abiertas == 1 ? "abierta" : "abiertas")}"
+                + (fuera > 0 ? $"  ·  ⚠ {fuera} fuera de plazo" : "");
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
+
+    public static string? ResumenRutina()
+    {
+        try
+        {
+            return new RutinaServicio().ResumenHoy();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
+
+    public static string? ResumenAgua()
+    {
+        try
+        {
+            return new AguaServicio().ResumenHoy();
         }
         catch (DbException)
         {

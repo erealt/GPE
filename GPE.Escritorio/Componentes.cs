@@ -12,6 +12,20 @@ public static class Componentes
     // Fecha como se enseña en resúmenes y tablas: "20 oct 2026", o "—" si no hay
     public static string Fecha(DateTime? fecha) => fecha?.ToString("dd MMM yyyy", Es) ?? "—";
 
+    // Ventanas aparte: ocupan casi toda la pantalla de la principal, sin bajar del tamaño mínimo
+    // ni pasarse de la pantalla.
+    public static void AjustarAPantalla(Form ventana, double proporcion = 0.9)
+    {
+        ventana.Load += (s, e) =>
+        {
+            var area = Screen.FromControl(ventana.Owner ?? ventana).WorkingArea;
+            int ancho = Math.Min(area.Width, Math.Max(ventana.Width, (int)(area.Width * proporcion)));
+            int alto = Math.Min(area.Height, Math.Max(ventana.Height, (int)(area.Height * proporcion)));
+            ventana.Bounds = new Rectangle(
+                area.X + (area.Width - ancho) / 2, area.Y + (area.Height - alto) / 2, ancho, alto);
+        };
+    }
+
     // Panel con scroll y una columna donde se van apilando las secciones
     public static (Panel Scroll, TableLayoutPanel Pila) Pagina()
     {
@@ -51,7 +65,7 @@ public static class Componentes
             Text = titulo,
             Dock = DockStyle.Top,
             Height = 50,
-            Font = new Font("Segoe UI", 22, FontStyle.Bold),
+            Font = Tema.FuenteTitulo,
             ForeColor = Tema.Texto
         };
         var lblRuta = new Label
@@ -60,7 +74,7 @@ public static class Componentes
             Dock = DockStyle.Top,
             Height = 25,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            Font = Tema.FuenteEtiqueta
         };
 
         // El último añadido queda arriba
@@ -108,7 +122,7 @@ public static class Componentes
                 Text = etiqueta,
                 AutoSize = true,
                 ForeColor = Tema.Suave,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+                Font = Tema.FuenteEtiqueta
             });
             dato.Controls.Add(new Label
             {
@@ -123,9 +137,7 @@ public static class Componentes
         return resumen;
     }
 
-    // Tarjeta blanca con título y subtítulo; el contenido se añade después con Controls.Add.
-    // Opcional: un botón a la derecha del título, y la etiqueta del subtítulo si la
-    // pantalla quiere cambiar su texto después.
+    // Tarjeta blanca con título, subtítulo y, si se pasa, un botón a la derecha del título.
     public static TableLayoutPanel Tarjeta(string titulo, string subtitulo,
         Control? accion = null, Label? etiquetaSubtitulo = null)
     {
@@ -145,14 +157,14 @@ public static class Componentes
         {
             Text = titulo,
             AutoSize = true,
-            Font = new Font("Segoe UI", 13),
+            Font = Tema.FuenteApartado,
             ForeColor = Tema.Texto
         };
         var lblSubtitulo = etiquetaSubtitulo ?? new Label();
         lblSubtitulo.Text = subtitulo;
         lblSubtitulo.AutoSize = true;
         lblSubtitulo.ForeColor = Tema.Suave;
-        lblSubtitulo.Font = new Font("Segoe UI", 9);
+        lblSubtitulo.Font = Tema.FuentePequena;
         lblSubtitulo.Margin = new Padding(0, 2, 0, 15);
 
         if (accion == null)
@@ -193,7 +205,6 @@ public static class Componentes
     }
 
     // Aspecto común de las tablas: sin bordes, cabecera gris y una línea entre filas.
-    // Cada pantalla ajusta después lo suyo (edición, selección, columnas...).
     public static void EstiloTabla(DataGridView grid, int altoFila = 40)
     {
         grid.BackgroundColor = Color.White;
@@ -217,7 +228,7 @@ public static class Componentes
         cabecera.SelectionBackColor = Tema.CabeceraTabla;
         cabecera.ForeColor = Tema.Suave;
         cabecera.SelectionForeColor = Tema.Suave;
-        cabecera.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        cabecera.Font = Tema.FuenteEtiqueta;
 
         grid.DefaultCellStyle.ForeColor = Tema.Texto;
         grid.DefaultCellStyle.SelectionBackColor = Color.White;
@@ -242,7 +253,7 @@ public static class Componentes
             Dock = DockStyle.Top,
             Height = 22,
             ForeColor = Tema.Suave,
-            Font = new Font("Segoe UI", 9)
+            Font = Tema.FuentePequena
         };
         control.Dock = DockStyle.Top;
         campo.Controls.Add(control);
@@ -250,15 +261,14 @@ public static class Componentes
         return campo;
     }
 
-    // Dibuja el valor de una celda como una etiqueta redondeada de color (el estado de
-    // una devolución, el del PDF de un DeCA...). Se llama desde CellPainting.
+    // Pinta la celda como una etiqueta redondeada de color. Se llama desde CellPainting.
     public static void PintarEtiqueta(DataGridViewCellPaintingEventArgs e, string texto, Color fondo, Color colorTexto)
     {
         if (e.Graphics == null) return;
 
         e.PaintBackground(e.CellBounds, (e.State & DataGridViewElementStates.Selected) != 0);
 
-        using var fuente = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        var fuente = Tema.FuenteEtiqueta;
         var medida = TextRenderer.MeasureText(texto, fuente);
         var etiqueta = new Rectangle(
             e.CellBounds.X + 10,

@@ -28,7 +28,7 @@ public class FormAbono : PantallaFase
 
     private bool hayCambios;   // para avisar al cerrar sin registrar
 
-    private bool Editable => devolucion.Fase == Fase.RevisadaAlmacen;
+    private bool Editable => devolucion.Fase == Fase.RevisadaAlmacen && Sesion.TieneRol(Rol.Administracion);
 
     public FormAbono(DevolucionFila devolucion, int paso)
     {
@@ -40,7 +40,7 @@ public class FormAbono : PantallaFase
         MinimumSize = new Size(950, 600);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Tema.Fondo;
-        Font = new Font("Segoe UI", 10);
+        Font = Tema.Fuente;
 
         FormClosing += AvisarCambiosSinGuardar;
 
@@ -63,8 +63,7 @@ public class FormAbono : PantallaFase
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudieron cargar los datos de la devolución.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudieron cargar los datos de la devolución.", ex);
         }
 
         var (scroll, pila) = Componentes.Pagina();
@@ -81,7 +80,7 @@ public class FormAbono : PantallaFase
         var resumen = new List<(string, string)>
         {
             ("CLIENTE", devolucion.Cliente),
-            ("ALBARÁN", devolucion.Albaran ?? "—"),
+            ("CÓD. CLIENTE", devolucion.CodigoCliente),
             ("MOTIVO", devolucion.Motivo),
             ("FECHA LLEGADA", Componentes.Fecha(devolucion.FechaLlegada))
         };
@@ -106,31 +105,44 @@ public class FormAbono : PantallaFase
         ResumeLayout();
     }
 
-    // ---------- Resumen de la revisión ----------
+    // Resumen de la revisión
 
     private Control CrearTarjetaRevision()
     {
         var tarjeta = Componentes.Tarjeta("Resultado de la revisión",
-            "Lo que el almacén ha recibido y lo que está en buen estado, para decidir el abono.");
+            "Lo que el almacén ha recibido y si está bien para servir, para decidir el abono.");
 
-        tarjeta.Controls.Add(CrearTablaRevision());
-
-        string? observaciones = null;
+        CabeceraRevision? cabecera = null;
         try
         {
-            observaciones = servicio.ObtenerObservacionesRevision(devolucion.Id);
+            cabecera = servicio.ObtenerCabeceraRevision(devolucion.Id);
         }
         catch (DbException)
         {
-            // Las observaciones son informativas: sin ellas la pantalla sigue siendo útil
+            // Son datos informativos: sin ellos la pantalla sigue siendo útil
         }
+
+        if (cabecera != null)
+        {
+            tarjeta.Controls.Add(new Label
+            {
+                Text = $"Agencia: {cabecera.Agencia ?? "—"}     ·     Revisada por: {cabecera.RevisadaPor ?? "—"}",
+                AutoSize = true,
+                ForeColor = Tema.Texto,
+                Margin = new Padding(0, 0, 0, 10)
+            });
+        }
+
+        tarjeta.Controls.Add(CrearTablaRevision());
+
+        string? observaciones = cabecera?.Observaciones;
         if (!string.IsNullOrWhiteSpace(observaciones))
         {
             tarjeta.Controls.Add(new Label
             {
                 Text = "Observaciones del almacén",
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Font = Tema.FuentePequenaNegrita,
                 Margin = new Padding(0, 15, 0, 4)
             });
             tarjeta.Controls.Add(new Label
@@ -146,7 +158,7 @@ public class FormAbono : PantallaFase
         {
             Text = "Fotos de la revisión (doble clic para verlas)",
             AutoSize = true,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Font = Tema.FuentePequenaNegrita,
             Margin = new Padding(0, 15, 0, 4)
         });
         tarjeta.Controls.Add(new ControlAdjuntos(devolucion.Id, TipoAdjunto.Foto, "Añadir foto")
@@ -166,9 +178,9 @@ public class FormAbono : PantallaFase
 
         foreach (var (titulo, peso, numero) in new[]
                  {
-                     ("PRODUCTO", 26f, false), ("LOTE", 11f, false), ("SOLICITADA", 11f, true),
-                     ("RECIBIDA", 10f, true), ("APTA", 9f, true), ("NO APTA", 10f, true),
-                     ("OBSERVACIONES", 30f, false)
+                     ("CÓDIGO", 12f, false), ("DESCRIPCIÓN", 28f, false), ("FORMATO", 15f, false),
+                     ("LOTE", 12f, false), ("CADUCIDAD", 12f, false), ("CANTIDAD", 10f, true),
+                     ("APTO PARA SERVIR", 13f, false)
                  })
         {
             var columna = new DataGridViewTextBoxColumn
@@ -183,35 +195,32 @@ public class FormAbono : PantallaFase
 
         foreach (var linea in lineas)
         {
-            int? noApta = linea.Recibida - linea.Apta;
-            int i = grid.Rows.Add(linea.Producto, linea.Lote ?? "—", linea.Solicitada,
-                linea.Recibida?.ToString() ?? "—", linea.Apta?.ToString() ?? "—",
-                noApta?.ToString() ?? "—", linea.Observaciones ?? "");
+            int i = grid.Rows.Add(linea.Codigo, linea.Producto, linea.Formato ?? "—", linea.Lote ?? "—",
+                Componentes.Fecha(linea.Caducidad), linea.Cantidad, linea.Apto ? "Sí" : "No");
 
-            // Diferencias en ámbar, como en la revisión del almacén
-            if (linea.Recibida != linea.Solicitada)
-                grid.Rows[i].Cells[3].Style.BackColor = Tema.FondoDiferencia;
-            if (noApta > 0)
-                grid.Rows[i].Cells[5].Style.BackColor = Tema.FondoDiferencia;
+            // Lo que no está bien para servir, en ámbar
+            if (!linea.Apto)
+                grid.Rows[i].Cells[6].Style.BackColor = Tema.FondoDiferencia;
         }
 
-        int total = grid.Rows.Add("Total", "",
-            lineas.Sum(l => l.Solicitada), lineas.Sum(l => l.Recibida ?? 0),
-            lineas.Sum(l => l.Apta ?? 0), lineas.Sum(l => (l.Recibida ?? 0) - (l.Apta ?? 0)), "");
+        int aptas = lineas.Where(l => l.Apto).Sum(l => l.Cantidad);
+        int noAptas = lineas.Where(l => !l.Apto).Sum(l => l.Cantidad);
+        int total = grid.Rows.Add("Total", "", "", "", "", aptas + noAptas, $"{aptas} sí · {noAptas} no");
         grid.Rows[total].DefaultCellStyle.BackColor = Tema.FondoSoloLectura;
-        grid.Rows[total].DefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+        grid.Rows[total].DefaultCellStyle.Font = Tema.FuenteNegrita;
 
         Componentes.AjustarAltoTabla(grid);
         grid.ClearSelection();
         return grid;
     }
 
-    // ---------- Datos del abono ----------
+    // Datos del abono
 
     private Control CrearTarjetaAbono()
     {
         var tarjeta = Componentes.Tarjeta("Abono", Editable
             ? "Al registrar el abono la devolución queda cerrada. El documento se guarda al momento."
+            : !Sesion.TieneRol(Rol.Administracion) ? SoloConsulta(Rol.Administracion)
             : "Abono registrado: solo consulta.");
 
         panelResultado = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
@@ -318,7 +327,7 @@ public class FormAbono : PantallaFase
             numImporte.Value = Math.Min(abono.Importe ?? 0, numImporte.Maximum);
             txtObservaciones.Text = abono.Observaciones ?? "";
         }
-        else if (lineas.Count > 0 && lineas.All(l => l.Recibida == l.Solicitada && l.Apta == l.Recibida))
+        else if (Editable && lineas.Count > 0 && lineas.All(l => l.Apto))
         {
             rbTotal.Checked = true;   
         }
@@ -360,7 +369,7 @@ public class FormAbono : PantallaFase
         }
     }
 
-    // ---------- Botones ----------
+    // Botones
 
     private Control CrearAccionesRegistro()
     {
@@ -371,21 +380,34 @@ public class FormAbono : PantallaFase
         btnCancelar.DialogResult = DialogResult.Cancel;
         CancelButton = btnCancelar;
 
-        var btnReabrir = BotonReabrir("Reabrir revisión", 180, () =>
-            Reabrir("Reabrir revisión",
-                "La devolución volverá a \"Mercancía recibida\" para poder corregir la revisión. " +
-                "Lo que hayas rellenado aquí sin registrar se perderá; el documento del abono se conserva.",
-                () => IrAPaso(FormAlmacen.PasoRevision)));
+        // Reabrir la revisión es cosa del almacén
+        if (!Sesion.TieneRol(Rol.Almacen))
+            return Componentes.Acciones(btnRegistrar, btnCancelar);
 
-        return Componentes.Acciones(btnRegistrar, btnCancelar, btnReabrir);
+        return Componentes.Acciones(btnRegistrar, btnCancelar, BotonReabrirRevision(
+            "Lo que hayas rellenado aquí sin registrar se perderá; el documento del abono se conserva."));
     }
 
-    private Control CrearAccionesConsulta() =>
-        Componentes.Acciones(BotonCerrar(), BotonReabrir("Reabrir abono", 170, () =>
-            Reabrir("Reabrir abono",
-                "La devolución dejará de estar cerrada y volverá a \"Revisada almacén\" para poder corregir el abono. " +
-                "Los datos del abono se conservan.",
-                () => Recargar(PasoAbono))));
+    // Sin poder registrar: el abono ya está registrado o el usuario no es de administración
+    private Control CrearAccionesConsulta()
+    {
+        var botones = new List<Button> { BotonCerrar() };
+        if (devolucion.Fase == Fase.Cierre && Sesion.TieneRol(Rol.Administracion))
+            botones.Insert(0, BotonReabrir("Reabrir abono", 170, () =>
+                Reabrir("Reabrir abono",
+                    "La devolución dejará de estar cerrada y volverá a \"Revisada almacén\" para poder corregir el abono. " +
+                    "Los datos del abono se conservan.",
+                    () => Recargar(PasoAbono))));
+        else if (devolucion.Fase == Fase.RevisadaAlmacen && Sesion.TieneRol(Rol.Almacen))
+            botones.Insert(0, BotonReabrirRevision("El documento del abono, si ya se ha adjuntado, se conserva."));
+        return Componentes.Acciones(botones.ToArray());
+    }
+
+    private Button BotonReabrirRevision(string queSeConserva) =>
+        BotonReabrir("Reabrir revisión", 180, () =>
+            Reabrir("Reabrir revisión",
+                "La devolución volverá a \"Mercancía recibida\" para poder corregir la revisión. " + queSeConserva,
+                () => IrAPaso(FormAlmacen.PasoRevision)));
 
     private void Reabrir(string titulo, string explicacion, Action despues)
     {
@@ -398,13 +420,12 @@ public class FormAbono : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo reabrir", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo reabrir", ex.Message);
             return;
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo reabrir.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo reabrir.", ex);
             return;
         }
 
@@ -426,11 +447,11 @@ public class FormAbono : PantallaFase
         Construir();
     }
 
-    // ---------- Registrar ----------
+    // Registrar
 
     private void RegistrarAbono()
     {
-        // 1. Validaciones: se marcan todos los campos con error a la vez
+        // Se marcan todos los campos con error a la vez
         campos.LimpiarErrores();
         Control? primerError = null;
 
@@ -467,14 +488,12 @@ public class FormAbono : PantallaFase
             return;
         }
 
-        // 2. Confirmación
         string pregunta = hayAbono
             ? $"Se registrará el abono {numero} de {importe.ToString("C", Componentes.Es)} " +
               $"con fecha {dtpFecha.Value.ToString("dd/MM/yyyy", Componentes.Es)}"
             : "Se registrará que esta devolución no tiene abono";
 
-        // Un nº de abono repetido suele ser un error al copiarlo, pero un mismo abono
-        // puede cubrir varias devoluciones: solo se avisa, no se impide
+        // Un abono puede cubrir varias devoluciones: el repetido solo se avisa
         string avisoRepetido = "";
         if (hayAbono)
         {
@@ -490,14 +509,12 @@ public class FormAbono : PantallaFase
             }
         }
 
-        if (MessageBox.Show(this,
+        if (!Mensajes.Confirmar(this, "Registrar abono y cerrar",
                 avisoRepetido + pregunta + " y la devolución quedará cerrada.\n" +
                 "Si hay algún error podrás reabrir el abono.\n\n¿Registrar y cerrar?",
-                "Registrar abono y cerrar", MessageBoxButtons.YesNo,
-                avisoRepetido == "" ? MessageBoxIcon.Question : MessageBoxIcon.Warning) != DialogResult.Yes)
+                aviso: avisoRepetido != ""))
             return;
 
-        // 3. Guardar
         var datos = new DatosAbono(
             devolucion.Id,
             resultado!,
@@ -512,13 +529,12 @@ public class FormAbono : PantallaFase
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(this, ex.Message, "No se pudo registrar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Mensajes.Aviso(this, "No se pudo registrar", ex.Message);
             return;
         }
         catch (DbException ex)
         {
-            MessageBox.Show(this, "No se pudo registrar el abono.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Mensajes.ErrorBaseDatos(this, "No se pudo registrar el abono.", ex);
             return;
         }
 
@@ -531,10 +547,9 @@ public class FormAbono : PantallaFase
     {
         if (!hayCambios || DialogResult == DialogResult.OK) return;
 
-        if (MessageBox.Show(this,
+        if (!Mensajes.DescartarCambios(this,
                 "Los datos del abono solo se guardan al registrarlo.\n" +
-                "Si sales ahora se perderán (el documento adjunto sí se ha guardado).\n\n¿Salir de todos modos?",
-                "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                "Si sales ahora se perderán (el documento adjunto sí se ha guardado).\n\n¿Salir de todos modos?"))
         {
             e.Cancel = true;
             DialogResult = DialogResult.None;

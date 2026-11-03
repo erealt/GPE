@@ -2,14 +2,16 @@ using GPE.Datos;
 
 namespace GPE.Escritorio;
 
-// Pantalla de un paso de la devolución (solicitud, recogida, almacén...).
-// Al pulsar otro paso en la barra de progreso se cierra indicando a cuál ir,
-// y ModuloDevoluciones abre la pantalla de ese paso.
 public class PantallaFase : Form
 {
     public int? PasoSolicitado { get; private set; }
 
-    // Barra de progreso en la que se pueden pulsar los pasos completados y el actual
+    public PantallaFase()
+    {
+        Componentes.AjustarAPantalla(this);
+    }
+
+
     protected Control Progreso(DevolucionFila devolucion, int pasoVisto)
     {
         var barra = (BarraProgresoDevolucion)Componentes.Progreso(devolucion.Fase);
@@ -23,17 +25,17 @@ public class PantallaFase : Form
     protected void IrAPaso(int paso)
     {
         PasoSolicitado = paso;
-        Close();   // en una ventana modal el cierre se completa después, al volver al bucle de mensajes
+        Close();   
     }
 
-    // Si alguien cancela el cierre (p. ej. "cambios sin guardar" → No), se olvida el paso pedido
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        base.OnFormClosing(e);   // aquí se ejecutan los manejadores de FormClosing de la pantalla
+        base.OnFormClosing(e);  
         if (e.Cancel) PasoSolicitado = null;
     }
 
-    // Botón "Cerrar" de las pantallas de consulta; también responde a Esc
+  
+    protected static string SoloConsulta(string rol) => $"Solo consulta: este paso lo hace el rol {rol}.";
     protected Button BotonCerrar()
     {
         var boton = Tema.BotonSecundario("Cerrar", 130);
@@ -42,7 +44,7 @@ public class PantallaFase : Form
         return boton;
     }
 
-    // Botón en rojo para volver a un paso anterior (deshacer recepción, reabrir...)
+
     protected static Button BotonReabrir(string texto, int ancho, Action accion)
     {
         var boton = Tema.BotonSecundario(texto, ancho);
@@ -51,7 +53,6 @@ public class PantallaFase : Form
         return boton;
     }
 
-    // Pide el motivo para volver a un paso anterior. Devuelve null si se cancela.
     protected string? PedirMotivo(string titulo, string explicacion)
     {
         using var dialogo = new Form
@@ -63,7 +64,7 @@ public class PantallaFase : Form
             MinimizeBox = false,
             StartPosition = FormStartPosition.CenterParent,
             BackColor = Tema.Fondo,
-            Font = new Font("Segoe UI", 10)
+            Font = Tema.Fuente
         };
 
         var lblExplicacion = new Label
