@@ -1,0 +1,78 @@
+@* Remitente o destinatario: los dos tienen los mismos campos *@
+<section class="tarjeta">
+    <div class="titulo-tarjeta">
+        <div>
+            <h2>@Titulo</h2>
+            <p class="suave">@Subtitulo</p>
+        </div>
+        @if (Usados.Count > 0)
+        {
+            <select class="sugerencias" value="-1" @onchange="Rellenar">
+                <option value="-1">Rellenar con uno ya usado...</option>
+                @for (int i = 0; i < Usados.Count; i++)
+                {
+                    <option value="@i">@Usados[i]</option>
+                }
+            </select>
+        }
+    </div>
+
+    <div class="rejilla">
+        <Campo Etiqueta="Nombre" Error="@ErrorDe(nameof(Parte.Nombre))" Clase="doble">
+            <input maxlength="150" placeholder="Nombre o razón social" @bind="Parte.Nombre" @bind:after="() => Cambiar(nameof(Parte.Nombre))" />
+        </Campo>
+        <Campo Etiqueta="NIF" Error="@ErrorDe(nameof(Parte.Nif))">
+            <input maxlength="20" placeholder="B12345674" @bind="Parte.Nif" @bind:after="() => Cambiar(nameof(Parte.Nif))" />
+        </Campo>
+        <Campo Etiqueta="Teléfono" Error="@ErrorDe(nameof(Parte.Telefono))">
+            <input maxlength="30" placeholder="Opcional" @bind="Parte.Telefono" @bind:after="() => Cambiar(nameof(Parte.Telefono))" />
+        </Campo>
+
+        <Campo Etiqueta="Dirección" Error="@ErrorDe(nameof(Parte.Direccion))" Clase="doble">
+            <input maxlength="200" placeholder="Calle, número, piso..." @bind="Parte.Direccion" @bind:after="() => Cambiar(nameof(Parte.Direccion))" />
+        </Campo>
+        <Campo Etiqueta="Código postal" Error="@ErrorDe(nameof(Parte.CodigoPostal))">
+            <input maxlength="10" placeholder="02001" @bind="Parte.CodigoPostal" @bind:after="() => Cambiar(nameof(Parte.CodigoPostal))" />
+        </Campo>
+        <Campo Etiqueta="Población" Error="@ErrorDe(nameof(Parte.Poblacion))">
+            <input maxlength="100" @bind="Parte.Poblacion" @bind:after="() => Cambiar(nameof(Parte.Poblacion))" />
+        </Campo>
+
+        <Campo Etiqueta="Provincia" Error="@ErrorDe(nameof(Parte.Provincia))">
+            <input maxlength="100" placeholder="Opcional" @bind="Parte.Provincia" @bind:after="() => Cambiar(nameof(Parte.Provincia))" />
+        </Campo>
+        <Campo Etiqueta="País" Error="@ErrorDe(nameof(Parte.Pais))">
+            <input maxlength="60" @bind="Parte.Pais" @bind:after="() => Cambiar(nameof(Parte.Pais))" />
+        </Campo>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Titulo { get; set; } = "";
+    [Parameter] public string Subtitulo { get; set; } = "";
+    [Parameter, EditorRequired] public ParteFormulario Parte { get; set; } = new();
+    [Parameter] public List<ParteEnvio> Usados { get; set; } = [];
+
+    // Errores de todo el formulario; los de esta tarjeta van con la clave "Prefijo.Campo"
+    [Parameter, EditorRequired] public Dictionary<string, string> Errores { get; set; } = new();
+    [Parameter, EditorRequired] public string Prefijo { get; set; } = "";
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private string? ErrorDe(string campo) => Errores.GetValueOrDefault($"{Prefijo}.{campo}");
+
+    // El error de un campo se quita en cuanto se toca
+    private Task Cambiar(string campo)
+    {
+        Errores.Remove($"{Prefijo}.{campo}");
+        return Cambio.InvokeAsync();
+    }
+
+    private async Task Rellenar(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out int i) || i < 0) return;
+        Parte.Rellenar(Usados[i]);
+        foreach (var (campo, _) in Parte.Comprobaciones())
+            Errores.Remove($"{Prefijo}.{campo}");
+        await Cambio.InvokeAsync();
+    }
+}

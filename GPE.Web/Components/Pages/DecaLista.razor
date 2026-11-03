@@ -1,0 +1,136 @@
+@page "/"
+@page "/deca"
+@inject NavigationManager Navegacion
+
+<PageTitle>DeCA</PageTitle>
+
+<div class="cabecera">
+    <div>
+        <h1>DeCA</h1>
+        <p class="suave">Documentos de control del transporte, con su PDF y su código QR.</p>
+    </div>
+    <a class="boton principal" href="deca/nuevo">+ Nuevo DeCA</a>
+</div>
+
+<div class="tarjeta filtros">
+    <label>
+        Buscar
+        <input type="search" placeholder="Nº, remitente, destinatario o transportista"
+               @bind="texto" @bind:event="oninput" />
+    </label>
+    <label>
+        Carga desde
+        <input type="date" @bind="desde" />
+    </label>
+    <label>
+        Carga hasta
+        <input type="date" @bind="hasta" />
+    </label>
+    <button class="secundario" @onclick="LimpiarFiltros">Limpiar filtros</button>
+</div>
+
+@if (error != null)
+{
+    <div class="aviso error">@error</div>
+}
+else if (decas == null)
+{
+    <p class="suave">Cargando...</p>
+}
+else
+{
+    var visibles = Filtrados().ToList();
+    <p class="suave contador">@visibles.Count @(visibles.Count == 1 ? "documento" : "documentos")</p>
+
+    @if (visibles.Count == 0)
+    {
+        <div class="tarjeta vacio @(FechasCruzadas ? "error" : "")">
+            @(FechasCruzadas ? "La fecha \"desde\" es posterior a la fecha \"hasta\"."
+              : decas.Count == 0 ? "Todavía no hay ningún DeCA. Crea el primero con \"+ Nuevo DeCA\"."
+              : "No hay ningún DeCA que coincida con los filtros.")
+        </div>
+    }
+    else
+    {
+        <div class="tarjeta tabla">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nº DECA</th>
+                        <th>FECHA CARGA</th>
+                        <th>REMITENTE</th>
+                        <th>DESTINATARIO</th>
+                        <th>TRANSPORTISTA</th>
+                        <th class="num">PALETS</th>
+                        <th class="num">CAJAS</th>
+                        <th class="num">PESO (KG)</th>
+                        <th>PDF</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in visibles)
+                    {
+                        <tr @onclick='() => Navegacion.NavigateTo($"deca/{d.Id}")'>
+                            <td class="numero">@d.Numero</td>
+                            <td>@d.FechaCarga.ToString("dd MMM yyyy")</td>
+                            <td>@d.Remitente</td>
+                            <td>@d.Destinatario</td>
+                            <td>@d.Transportista</td>
+                            <td class="num">@d.Palets</td>
+                            <td class="num">@d.Cajas.ToString("N0")</td>
+                            <td class="num">@d.PesoKg.ToString("N2")</td>
+                            <td>
+                                <span class="etiqueta @(d.PdfAlDia ? "verde" : "ambar")">
+                                    @(d.PdfAlDia ? "Al día" : "Por generar")
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private readonly DecaServicio servicio = new();
+
+    private List<DecaFila>? decas;
+    private string? error;
+
+    private string texto = "";
+    private DateTime? desde;
+    private DateTime? hasta;
+
+    private bool FechasCruzadas => desde != null && hasta != null && desde > hasta;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            decas = servicio.ObtenerDecas();
+        }
+        catch (DbException ex)
+        {
+            error = "No se pudieron cargar los DeCA de la base de datos. " + ex.Message;
+        }
+    }
+
+    // Los filtros se aplican al momento, sin botón de "Filtrar"
+    private IEnumerable<DecaFila> Filtrados()
+    {
+        string buscar = texto.Trim();
+        return decas!.Where(d =>
+            (buscar == "" || new[] { d.Numero, d.Remitente, d.Destinatario, d.Transportista }
+                .Any(v => v.Contains(buscar, StringComparison.OrdinalIgnoreCase)))
+            && (desde == null || d.FechaCarga >= desde)
+            && (hasta == null || d.FechaCarga <= hasta));
+    }
+
+    private void LimpiarFiltros()
+    {
+        texto = "";
+        desde = null;
+        hasta = null;
+    }
+}

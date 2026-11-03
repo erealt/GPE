@@ -74,7 +74,7 @@ public class DecaServicio
         Directory.CreateDirectory(CarpetaPdf);
         string rutaPdf = Path.Combine(CarpetaPdf, archivo);
         Guardar(rutaPdf, DecaPdf.Crear(deca, url));
-        Guardar(Path.Combine(CarpetaPdf, $"{deca.Numero}-QR.png"), new PngByteQRCode(qr).GetGraphic(20));
+        Guardar(Path.Combine(CarpetaPdf, NombreArchivoQr(deca)), new PngByteQRCode(qr).GetGraphic(20));
 
         repositorio.MarcarPdfGenerado(decaId, archivo);
         return rutaPdf;
@@ -96,6 +96,8 @@ public class DecaServicio
     // nadie pueda adivinar la dirección de otro DeCA
     public static string NombreArchivoPdf(DecaGuardado deca) =>
         deca.ArchivoPdf ?? $"{deca.Numero}-{deca.CodigoPublico:N}.pdf";
+
+    public static string NombreArchivoQr(DecaGuardado deca) => $"{deca.Numero}-QR.png";
 
     public static string UrlPublica(string archivo) => UrlPublicacion.TrimEnd('/') + "/" + archivo;
 

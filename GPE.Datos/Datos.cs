@@ -71,7 +71,29 @@ public record CambioHistorial(
 // Usuario de la aplicación; se envía a SQL Server para que los triggers sepan quién cambia qué.
 public static class Sesion
 {
-    public static Usuario? UsuarioActual { get; set; }
+    // En el escritorio hay un solo usuario por programa. La web atiende a varias personas a la
+    // vez, así que cada operación indica el suyo con Como(...), que tiene preferencia.
+    private static Usuario? usuarioPrograma;
+    private static readonly AsyncLocal<Usuario?> usuarioOperacion = new();
+
+    public static Usuario? UsuarioActual
+    {
+        get => usuarioOperacion.Value ?? usuarioPrograma;
+        set => usuarioPrograma = value;
+    }
+
+    // using (Sesion.Como(usuario)) { ... }: lo que se haga dentro queda a nombre de ese usuario
+    public static IDisposable Como(Usuario usuario)
+    {
+        var anterior = usuarioOperacion.Value;
+        usuarioOperacion.Value = usuario;
+        return new Restaurar(() => usuarioOperacion.Value = anterior);
+    }
+
+    private sealed class Restaurar(Action accion) : IDisposable
+    {
+        public void Dispose() => accion();
+    }
 
     // Roles del usuario (tabla USUARIO_ROL): deciden qué pasos puede hacer
     public static HashSet<string> Roles { get; set; } = new();

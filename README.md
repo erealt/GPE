@@ -23,6 +23,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
 
 2. **Conexión**: por defecto `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos se define la variable de entorno `GPE_CONEXION`.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar `GPE.Escritorio`. Al entrar se elige el usuario (provisional hasta que haya login); queda registrado en el historial y sus roles deciden qué puede hacer.
+4. **Web del DeCA** (opcional): ejecutar `GPE.Web` y abrir `http://localhost:5265`. Ver el apartado 7.
 
 > Para modificar datos a mano desde SSMS hay que indicar antes el usuario, porque los triggers del historial lo exigen:
 > `EXEC sp_set_session_context @key = N'usuario_id', @value = 1;`
@@ -36,9 +37,9 @@ El código está en tres capas. Cada una solo conoce a la de debajo:
 ```
 GPE.Escritorio   →   GPE.Logica   →   GPE.Datos   →   SQL Server
  (pantallas)         (reglas)         (consultas)
-                         ↑
-                     GPE.Avisos
-              (resúmenes diarios por correo)
+                       ↑   ↑
+          GPE.Avisos ──┘   └── GPE.Web
+ (resúmenes diarios por correo)   (DeCA en el navegador)
 ```
 
 | Proyecto | Qué contiene |
@@ -47,6 +48,7 @@ GPE.Escritorio   →   GPE.Logica   →   GPE.Datos   →   SQL Server
 | **GPE.Logica** | Reglas de negocio y validaciones. Es lo único que llaman las pantallas. Lanza `ReglaNegocioException` con un mensaje listo para enseñar al usuario. |
 | **GPE.Escritorio** | Las pantallas (Windows Forms creadas por código, sin diseñador). |
 | **GPE.Avisos** | Programa de consola que envía los resúmenes diarios por correo (apartado 8). |
+| **GPE.Web** | El DeCA en el navegador (Blazor), para usarlo en la fábrica antes de instalar el escritorio. Usa los mismos servicios que el escritorio (apartado 7). |
 
 Ejemplo, "Finalizar revisión": `FormAlmacen` llama a `DevolucionServicio.FinalizarRevision`, que valida las líneas; `DevolucionRepositorio` las guarda y cambia la fase en una transacción, y los triggers apuntan el cambio en el historial.
 
@@ -194,6 +196,27 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
   - El archivo se llama `DECA-AAAA-NNN-<codigo_publico>.pdf` y el QR apunta a `GPE_DECA_URL` + ese nombre (por defecto `https://www.eurochoc.es/deca/`).
   - Se guarda en `GPE_DECA_CARPETA` (por defecto `Documentos\GPE\DeCA`).  - Si se modifica un DeCA que ya tenía PDF, queda *Por generar* pero conserva el nombre del archivo, para que el QR ya impreso siga sirviendo.
   - *(Pendiente: subirlo solo a la web cuando haya acceso al WordPress.)*
+
+### Web del DeCA (`GPE.Web`)
+
+Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la red de la fábrica. Usa `DecaServicio` y `DecaPdf` tal cual: solo cambian las pantallas.
+
+| Pieza | Archivo |
+|---|---|
+| Lista | [`DecaLista.razor`](GPE.Web/Components/Pages/DecaLista.razor) |
+| Formulario | [`DecaFormulario.razor`](GPE.Web/Components/Pages/DecaFormulario.razor), [`TarjetaParte.razor`](GPE.Web/Components/TarjetaParte.razor), [`Campo.razor`](GPE.Web/Components/Campo.razor), [`FormularioDeca.cs`](GPE.Web/FormularioDeca.cs) |
+| Usuario | [`UsuarioWeb.cs`](GPE.Web/UsuarioWeb.cs) |
+| PDF y QR | `/deca/{id}/pdf` y `/deca/{id}/qr` en [`Program.cs`](GPE.Web/Program.cs) |
+
+- **Usuario**: la web no pide usuario. Todo lo que se guarda desde ella queda a nombre del usuario cuyo id está en `"UsuarioWeb"` de [`appsettings.json`](GPE.Web/appsettings.json) (por defecto 1), porque cada DeCA guarda quién lo creó y lo cambió. Cada operación que guarda va dentro de `using (UsuarioWeb.Operacion())`, que usa `Sesion.Como(usuario)` solo para esa operación, sin tocar `Sesion.UsuarioActual` como hace el escritorio.
+- **PDF y QR**: el botón *Generar PDF y QR* del formulario los guarda en `GPE_DECA_CARPETA` **del servidor**; *Ver PDF* y *Ver QR* los abren en el navegador para imprimirlos o guardarlos.
+- **Instalarla en un servidor** de la fábrica (Windows):
+  1. Instalar IIS y el *ASP.NET Core Hosting Bundle* de .NET 10.
+  2. Publicar `GPE.Web` (clic derecho → *Publicar* → carpeta) y crear un sitio en IIS que apunte a esa carpeta.
+  3. Conexión a la base de datos: o se da permiso en SQL Server a la cuenta del grupo de aplicaciones de IIS (`IIS APPPOOL\<nombre>`), o se pone en `GPE_CONEXION` un usuario de SQL.
+  4. `GPE_DECA_CARPETA`: una carpeta del servidor donde esa cuenta pueda escribir.
+  5. En `appsettings.json` de la carpeta publicada, `"UsuarioWeb"` con el id del usuario a cuyo nombre se guardan los DeCA.
+  6. Se entra con `http://<servidor>/`, solo desde la red de la fábrica.
 
 ---
 

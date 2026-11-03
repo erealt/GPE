@@ -1,0 +1,18 @@
+@* Etiqueta encima del control y el error en rojo debajo, como CamposFormulario en el escritorio *@
+<div class="campo @(Error != null ? "con-error" : "") @Clase">
+    <label>
+        <span>@Etiqueta</span>
+        @ChildContent
+    </label>
+    @if (Error != null)
+    {
+        <span class="error-campo">@Error</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Etiqueta { get; set; } = "";
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Clase { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

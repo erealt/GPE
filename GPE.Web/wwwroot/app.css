@@ -1,0 +1,200 @@
+/* Mismos colores que Tema.cs del escritorio */
+:root {
+    --fondo: rgb(245, 246, 244);
+    --acento: rgb(89, 0, 246);
+    --acento-suave: rgb(240, 236, 255);
+    --texto: rgb(20, 35, 30);
+    --suave: rgb(110, 120, 115);
+    --borde: rgb(200, 205, 200);
+    --linea: rgb(230, 232, 228);
+    --cabecera-tabla: rgb(243, 244, 241);
+    --error: rgb(190, 30, 45);
+    --fondo-error: rgb(253, 228, 230);
+    --aviso: rgb(150, 90, 0);
+    --fondo-aviso: rgb(255, 241, 214);
+    --verde: rgb(20, 110, 60);
+    --fondo-verde: rgb(220, 243, 228);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--fondo);
+    color: var(--texto);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 15px;
+}
+
+a { color: var(--acento); }
+h1 { font-size: 30px; margin: 0 0 4px; }
+h1:focus { outline: none; }
+h2 { font-size: 17px; margin: 0; white-space: pre; }
+p { margin: 0; }
+.suave { color: var(--suave); }
+.pequeno { font-size: 13px; margin: 4px 0 8px; }
+
+/* ---------- Barra superior y página ---------- */
+
+.barra {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 32px;
+    background: white;
+    border-bottom: 1px solid var(--linea);
+}
+
+.marca { font-size: 20px; font-weight: 700; color: var(--texto); text-decoration: none; }
+.marca span { color: var(--acento); }
+
+.pagina { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
+
+.cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.ruta { font-size: 12px; font-weight: 700; color: var(--suave); letter-spacing: .5px; margin-bottom: 4px; }
+.ruta a { color: var(--suave); text-decoration: none; }
+
+/* ---------- Tarjetas ---------- */
+
+.tarjeta {
+    background: white;
+    border: 1px solid var(--linea);
+    padding: 22px 24px;
+    margin-bottom: 18px;
+}
+
+.titulo-tarjeta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.titulo-tarjeta p { font-size: 13px; margin-top: 2px; }
+
+.rejilla {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px 18px;
+}
+
+.rejilla .doble { grid-column: span 2; }
+
+.resumen { display: flex; flex-wrap: wrap; gap: 14px 40px; align-items: center; }
+.resumen > div { display: flex; flex-direction: column; gap: 2px; }
+.resumen .pdf { flex-direction: row; gap: 10px; margin-left: auto; }
+.etiqueta-dato { font-size: 11px; font-weight: 700; color: var(--suave); letter-spacing: .5px; }
+
+/* ---------- Campos ---------- */
+
+.campo { display: flex; flex-direction: column; margin-bottom: 12px; }
+.campo label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--suave); }
+
+input, select, textarea {
+    font: inherit;
+    color: var(--texto);
+    padding: 8px 10px;
+    border: 1px solid var(--borde);
+    background: white;
+    width: 100%;
+}
+
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--acento-suave); border-color: var(--acento); }
+
+.con-error input, .con-error textarea { border-color: var(--error); background: var(--fondo-error); }
+.error-campo { color: var(--error); font-size: 13px; margin-top: 4px; }
+
+.sugerencias { width: 320px; }
+
+/* ---------- Botones ---------- */
+
+button, .boton {
+    font: inherit;
+    font-weight: 600;
+    padding: 9px 18px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+button:disabled { opacity: .5; cursor: default; }
+
+.principal { background: var(--acento); color: white; }
+.principal:hover:not(:disabled) { filter: brightness(1.1); }
+.secundario { background: white; color: var(--texto); border-color: var(--borde); }
+.secundario:hover:not(:disabled) { border-color: var(--acento); color: var(--acento); }
+
+.acciones { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ---------- Avisos ---------- */
+
+.aviso { padding: 12px 16px; margin-bottom: 18px; }
+.aviso.error { background: var(--fondo-error); color: var(--error); }
+.aviso.bien { background: var(--fondo-verde); color: var(--verde); }
+
+/* ---------- Lista ---------- */
+
+.filtros { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; padding: 16px 20px; }
+.filtros label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--suave); }
+.filtros input[type=search] { width: 340px; }
+.filtros input[type=date] { width: 160px; }
+
+.contador { margin: 0 0 8px 2px; }
+
+.vacio { text-align: center; color: var(--suave); padding: 40px; }
+.vacio.error { color: var(--error); }
+
+.tabla { padding: 0; overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; }
+th {
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--suave);
+    background: var(--cabecera-tabla);
+    padding: 12px 14px;
+}
+td { padding: 12px 14px; border-top: 1px solid var(--linea); }
+.num { text-align: right; }
+
+.tabla tbody tr { cursor: pointer; }
+.tabla tbody tr:hover { background: var(--acento-suave); }
+.numero { color: var(--acento); font-weight: 700; white-space: nowrap; }
+
+.etiqueta { padding: 3px 10px; border-radius: 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.etiqueta.verde { background: var(--fondo-verde); color: var(--verde); }
+.etiqueta.ambar { background: var(--fondo-aviso); color: var(--aviso); }
+
+/* ---------- Palets ---------- */
+
+.palets { margin-bottom: 16px; }
+.palets th:nth-child(2), .palets th:nth-child(3) { width: 190px; }
+.palets th:nth-child(4) { width: 50px; }
+.palets td { padding: 6px 14px; border-top: none; }
+.palets td.error-campo { margin: 0; }
+.quitar { background: none; border: none; color: firebrick; padding: 4px 8px; }
+
+/* ---------- Errores de Blazor ---------- */
+
+.blazor-error-boundary { background: var(--error); color: white; padding: 1rem; }
+.blazor-error-boundary::after { content: "Ha ocurrido un error."; }
+
+/* ---------- Pantallas pequeñas ---------- */
+
+@media (max-width: 800px) {
+    .pagina { padding: 20px 16px 40px; }
+    .rejilla { grid-template-columns: 1fr 1fr; }
+    .titulo-tarjeta, .cabecera { flex-direction: column; }
+    .sugerencias, .filtros input[type=search] { width: 100%; }
+}

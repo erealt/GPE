@@ -9,3 +9,5 @@ obj/
 
 # Archivos de configuración con secretos
 appsettings.*.json
+
+.claude/
