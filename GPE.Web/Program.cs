@@ -34,13 +34,14 @@ app.MapGet("/deca/{id:int}/qr", (int id, HttpContext http) => Archivo(id, http, 
 
 app.Run();
 
-static IResult Archivo(int id, HttpContext http, Func<GPE.Datos.DecaGuardado, string> nombre, string tipo)
+static IResult Archivo(int id, HttpContext http, Func<GPE.Datos.DecaGuardado, string?> nombre, string tipo)
 {
     var deca = new DecaServicio().ObtenerDeca(id);
     if (deca == null) return Results.NotFound("Este DeCA no existe.");
 
-    string ruta = Path.Combine(DecaServicio.CarpetaPdf, nombre(deca));
-    if (!File.Exists(ruta))
+    string? archivo = nombre(deca);
+    string ruta = Path.Combine(DecaServicio.CarpetaPdf, archivo ?? "");
+    if (archivo == null || !File.Exists(ruta))
         return Results.NotFound("Todavía no se ha generado. Pulsa \"Generar PDF y QR\" en el DeCA.");
 
     http.Response.Headers.ContentDisposition = $"inline; filename=\"{Path.GetFileName(ruta)}\"";

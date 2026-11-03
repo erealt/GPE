@@ -156,7 +156,7 @@ public class ModuloDeca : UserControl
         btnGenerar.Height = 34;
         btnGenerar.Anchor = AnchorStyles.Right;
         btnGenerar.Margin = new Padding(0, 0, 10, 0);
-        btnGenerar.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) GenerarPdfYQr(d.Id); };
+        btnGenerar.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) GenerarPdfYQr(d); };
 
         btnAbrir.Height = 34;
         btnAbrir.Anchor = AnchorStyles.Right;
@@ -353,16 +353,19 @@ public class ModuloDeca : UserControl
         grid.SelectedRows.Cast<DataGridViewRow>()
             .FirstOrDefault(f => f.Visible && f.Tag is DecaFila)?.Tag as DecaFila;
 
-    // Genera el PDF y el QR y abre la carpeta con los dos. Siempre se vuelven a generar (también
-    // con "Ver"): así sirve desde cualquier ordenador aunque los archivos no estén en su carpeta,
-    // y salen iguales porque el nombre no cambia
-    private void GenerarPdfYQr(int decaId)
+    // Genera el PDF y el QR, sube el PDF a la web y abre la carpeta con los dos. Con "Ver", si ya
+    // están en la carpeta de este ordenador solo se abre; si no (se generaron en otro), se vuelven
+    // a generar: es un archivo nuevo en la web, pero el anterior sigue ahí.
+    private void GenerarPdfYQr(DecaFila fila)
     {
         string ruta;
         Cursor = Cursors.WaitCursor;
         try
         {
-            ruta = servicio.GenerarPdfYQr(decaId);
+            string? guardado = fila.PdfAlDia ? servicio.ObtenerDeca(fila.Id)?.ArchivoPdf : null;
+            ruta = guardado != null && File.Exists(Path.Combine(DecaServicio.CarpetaPdf, guardado))
+                ? Path.Combine(DecaServicio.CarpetaPdf, guardado)
+                : servicio.GenerarPdfYQr(fila.Id);
         }
         catch (ReglaNegocioException ex)
         {
@@ -380,7 +383,7 @@ public class ModuloDeca : UserControl
             Cursor = Cursors.Default;
         }
 
-        CargarDatos(decaId);
+        CargarDatos(fila.Id);
         // Explorador abierto en la carpeta con el PDF marcado; el QR está justo al lado
         System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{ruta}\"");
     }

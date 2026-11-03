@@ -184,6 +184,7 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
 | Datos | [`Datos.cs`](GPE.Datos/Datos.cs), [`DecaRepositorio.cs`](GPE.Datos/DecaRepositorio.cs) |
 | Reglas | [`DecaServicio.cs`](GPE.Logica/DecaServicio.cs), [`Nif.cs`](GPE.Logica/Nif.cs) |
 | PDF | [`DecaPdf.cs`](GPE.Logica/DecaPdf.cs) |
+| Subida a la web | [`WordPress.cs`](GPE.Logica/WordPress.cs) |
 | Pantallas | [`ModuloDeca.cs`](GPE.Escritorio/ModuloDeca.cs), [`Deca.cs`](GPE.Escritorio/Deca.cs) |
 
 - **Lista (`ModuloDeca`)**: número `DECA-AAAA-NNN`, fecha de carga, remitente, destinatario, transportista, palets, cajas, peso total y el estado del PDF (*Al día* / *Por generar*). Búsqueda por texto y fechas; doble clic o *Abrir* para modificar.
@@ -192,10 +193,14 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
   - Cada palet nuevo copia el peso y las cajas del anterior.
   - Avisa al cerrar si hay cambios sin guardar.
 - **Validaciones (`DecaServicio`)**: obligatorios, al menos un palet (peso entre 0 y 2.000 kg, cajas > 0), fecha de carga hasta 30 días atrás o adelante (solo si se cambia), CP de 5 cifras en España y el **NIF con su letra de control** (DNI, NIE, CIF y K/L/M) cuando el país es España. El NIF del transportista se comprueba si tiene forma de NIF español.
-- **PDF y QR**: botón *Generar PDF y QR* en la lista (*Ver PDF y QR* si ya están al día; los vuelve a generar igualmente). Genera a la vez el PDF y el QR suelto como imagen (`DECA-AAAA-NNN-QR.png`, para imprimirlo aparte), y abre la carpeta con los dos. El PDF es una hoja A4 con los mismos datos que el formulario y el QR arriba a la derecha; si hay muchos palets la tabla sigue en otra hoja. Se hace con PDFsharp y QRCoder (los dos MIT).
-  - El archivo se llama `DECA-AAAA-NNN-<codigo_publico>.pdf` y el QR apunta a `GPE_DECA_URL` + ese nombre (por defecto `https://www.eurochoc.es/deca/`).
-  - Se guarda en `GPE_DECA_CARPETA` (por defecto `Documentos\GPE\DeCA`).  - Si se modifica un DeCA que ya tenía PDF, queda *Por generar* pero conserva el nombre del archivo, para que el QR ya impreso siga sirviendo.
-  - *(Pendiente: subirlo solo a la web cuando haya acceso al WordPress.)*
+- **PDF y QR**: botón *Generar PDF y QR* en la lista. Genera el PDF, lo **sube a la web** (biblioteca de medios de WordPress) y guarda una copia junto con el QR suelto como imagen (`DECA-AAAA-NNN-QR.png`, para imprimirlo aparte); después abre la carpeta con los dos. El PDF es una hoja A4 con los mismos datos que el formulario y el QR arriba a la derecha; si hay muchos palets la tabla sigue en otra hoja. Se hace con PDFsharp y QRCoder (los dos MIT).
+  - Cada vez que se genera es un archivo nuevo, `DECA-AAAA-NNN-<código aleatorio>.pdf` (el código es para que no se pueda adivinar la dirección de otro DeCA). Los anteriores **se quedan en la web**: un QR ya impreso sigue llevando al PDF que se imprimió con él.
+  - El QR va dentro del PDF, así que su dirección se calcula antes de subirlo: `https://eurochoc.es/wp-content/uploads/AAAA/MM/<archivo>`, la carpeta del mes en que se sube. Si WordPress lo deja en otra carpeta, se borra y se vuelve a subir con el QR apuntando a esa.
+  - Si la subida falla, el DeCA sigue *Por generar* y se puede volver a intentar.
+  - *Ver PDF y QR* (cuando ya están al día) abre la copia de la carpeta; si no está en este ordenador, los vuelve a generar.
+  - La copia se guarda en `GPE_DECA_CARPETA` (por defecto `Documentos\GPE\DeCA`). Si se modifica un DeCA que ya tenía PDF, queda *Por generar*.
+  - La web no borra nada: los PDF se quedan publicados (como mínimo el año que deben estar disponibles) hasta que alguien los borre en WordPress.
+- **Acceso a la web**: un usuario de WordPress con permiso para subir y borrar archivos (Autor o más) y una *contraseña de aplicación* (WordPress → *Usuarios → Perfil → Contraseñas de aplicación*), nunca la contraseña normal. Se ponen en cada ordenador (y en el servidor de `GPE.Web`) con `setx GPE_WP_USUARIO "usuario"` y `setx GPE_WP_CLAVE "xxxx xxxx xxxx xxxx xxxx xxxx"`. `GPE_WP_SITIO` cambia la web (por defecto `https://eurochoc.es`).
 
 ### Web del DeCA (`GPE.Web`)
 
@@ -209,12 +214,12 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
 | PDF y QR | `/deca/{id}/pdf` y `/deca/{id}/qr` en [`Program.cs`](GPE.Web/Program.cs) |
 
 - **Usuario**: la web no pide usuario. Todo lo que se guarda desde ella queda a nombre del usuario cuyo id está en `"UsuarioWeb"` de [`appsettings.json`](GPE.Web/appsettings.json) (por defecto 1), porque cada DeCA guarda quién lo creó y lo cambió. Cada operación que guarda va dentro de `using (UsuarioWeb.Operacion())`, que usa `Sesion.Como(usuario)` solo para esa operación, sin tocar `Sesion.UsuarioActual` como hace el escritorio.
-- **PDF y QR**: el botón *Generar PDF y QR* del formulario los guarda en `GPE_DECA_CARPETA` **del servidor**; *Ver PDF* y *Ver QR* los abren en el navegador para imprimirlos o guardarlos.
+- **PDF y QR**: el botón *Generar PDF y QR* del formulario sube el PDF a la web igual que el escritorio y guarda la copia en `GPE_DECA_CARPETA` **del servidor**; *Ver PDF* y *Ver QR* los abren en el navegador para imprimirlos o guardarlos.
 - **Instalarla en un servidor** de la fábrica (Windows):
   1. Instalar IIS y el *ASP.NET Core Hosting Bundle* de .NET 10.
   2. Publicar `GPE.Web` (clic derecho → *Publicar* → carpeta) y crear un sitio en IIS que apunte a esa carpeta.
   3. Conexión a la base de datos: o se da permiso en SQL Server a la cuenta del grupo de aplicaciones de IIS (`IIS APPPOOL\<nombre>`), o se pone en `GPE_CONEXION` un usuario de SQL.
-  4. `GPE_DECA_CARPETA`: una carpeta del servidor donde esa cuenta pueda escribir.
+  4. `GPE_DECA_CARPETA`: una carpeta del servidor donde esa cuenta pueda escribir. Y `GPE_WP_USUARIO` y `GPE_WP_CLAVE` para subir los PDF a la web.
   5. En `appsettings.json` de la carpeta publicada, `"UsuarioWeb"` con el id del usuario a cuyo nombre se guardan los DeCA.
   6. Se entra con `http://<servidor>/`, solo desde la red de la fábrica.
 

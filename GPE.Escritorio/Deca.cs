@@ -126,7 +126,7 @@ public class FormDeca : Form
             pila.Controls.Add(Componentes.Cabecera($"DECA / {existente.Numero}", existente.Numero,
                 existente.ArchivoPdf == null
                     ? "Modifica los datos del envío."
-                    : "Si guardas cambios, habrá que volver a generar el PDF. El QR ya impreso seguirá sirviendo."));
+                    : "Si guardas cambios, habrá que volver a generar el PDF. El QR ya impreso seguirá llevando al PDF anterior."));
             pila.Controls.Add(Componentes.Resumen(
                 ("CREADO", $"{Componentes.Fecha(existente.CreadoEn)} · {existente.CreadoPor}"),
                 ("ÚLTIMO CAMBIO", existente.ModificadoEn == null

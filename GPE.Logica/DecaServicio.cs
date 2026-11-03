@@ -15,12 +15,8 @@ public class DecaServicio
 
     public const string PaisPorDefecto = "España";
 
-    // Dirección web donde quedarán publicados los PDF; el QR apunta a esta dirección + el nombre
-    // del archivo. Las variables de entorno permiten cambiarlas sin recompilar (como GPE_CONEXION).
-    public static readonly string UrlPublicacion =
-        Environment.GetEnvironmentVariable("GPE_DECA_URL") ?? "https://www.eurochoc.es/deca/";
-
-    // Carpeta donde se guardan los PDF generados (mientras no se suben solos a la web)
+    // Carpeta donde se guarda una copia de los PDF y QR generados (se suben a la web con WordPress).
+    // La variable de entorno permite cambiarla sin recompilar (como GPE_CONEXION).
     public static readonly string CarpetaPdf =
         Environment.GetEnvironmentVariable("GPE_DECA_CARPETA")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "GPE", "DeCA");
@@ -57,24 +53,44 @@ public class DecaServicio
             throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
     }
 
-    // Genera a la vez el PDF (con el QR dentro) y el QR suelto como imagen PNG, para imprimirlo
-    // aparte; los guarda en CarpetaPdf y devuelve la ruta del PDF. Si ya tenía PDF se reutiliza
-    // el nombre, para que el QR ya impreso siga sirviendo.
+    // Genera el PDF (con el QR dentro), lo sube a la web y guarda una copia en CarpetaPdf junto
+    // con el QR suelto como imagen PNG, para imprimirlo aparte. Devuelve la ruta del PDF.
+    // Cada vez es un archivo nuevo: los anteriores siguen en la web, así que los QR ya impresos
+    // siguen sirviendo.
     public string GenerarPdfYQr(int decaId)
     {
         var deca = repositorio.ObtenerDeca(decaId)
             ?? throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
 
-        string archivo = NombreArchivoPdf(deca);
-        string url = UrlPublica(archivo);
+        // El QR va dentro del PDF, así que su dirección se calcula antes de subirlo
+        string archivo = NombreArchivoNuevo(deca);
+        string url = WordPress.CarpetaDelMes(DateTime.Now) + archivo;
+        byte[] pdf = DecaPdf.Crear(deca, url);
+        var medio = WordPress.Subir(archivo, pdf, "application/pdf");
+
+        if (medio.Url != url)
+        {
+            // La web lo ha dejado en otra carpeta (cambió el mes justo al subirlo, o la web no
+            // usa carpetas por mes): se borra y se vuelve a subir con el QR apuntando a esa carpeta
+            WordPress.Borrar(medio.Id);
+            archivo = NombreArchivoNuevo(deca);
+            url = medio.Url[..(medio.Url.LastIndexOf('/') + 1)] + archivo;
+            pdf = DecaPdf.Crear(deca, url);
+            medio = WordPress.Subir(archivo, pdf, "application/pdf");
+            if (medio.Url != url)
+            {
+                WordPress.Borrar(medio.Id);
+                throw new ReglaNegocioException($"La web ha guardado el PDF en una dirección distinta de la esperada y el QR no serviría. No se ha publicado.\n\n{medio.Url}");
+            }
+        }
 
         using var generador = new QRCodeGenerator();
         using var qr = generador.CreateQrCode(url, QRCodeGenerator.ECCLevel.M);
 
         Directory.CreateDirectory(CarpetaPdf);
         string rutaPdf = Path.Combine(CarpetaPdf, archivo);
-        Guardar(rutaPdf, DecaPdf.Crear(deca, url));
-        Guardar(Path.Combine(CarpetaPdf, NombreArchivoQr(deca)), new PngByteQRCode(qr).GetGraphic(20));
+        Guardar(rutaPdf, pdf);
+        Guardar(Path.Combine(CarpetaPdf, $"{deca.Numero}-QR.png"), new PngByteQRCode(qr).GetGraphic(20));
 
         repositorio.MarcarPdfGenerado(decaId, archivo);
         return rutaPdf;
@@ -94,12 +110,12 @@ public class DecaServicio
 
     // DECA-2026-001-<código aleatorio>.pdf: el número para reconocerlo y el código para que
     // nadie pueda adivinar la dirección de otro DeCA
-    public static string NombreArchivoPdf(DecaGuardado deca) =>
-        deca.ArchivoPdf ?? $"{deca.Numero}-{deca.CodigoPublico:N}.pdf";
+    private static string NombreArchivoNuevo(DecaGuardado deca) => $"{deca.Numero}-{Guid.NewGuid():N}.pdf";
 
-    public static string NombreArchivoQr(DecaGuardado deca) => $"{deca.Numero}-QR.png";
+    // El último PDF generado (null si nunca se generó) y su QR
+    public static string? NombreArchivoPdf(DecaGuardado deca) => deca.ArchivoPdf;
 
-    public static string UrlPublica(string archivo) => UrlPublicacion.TrimEnd('/') + "/" + archivo;
+    public static string? NombreArchivoQr(DecaGuardado deca) => deca.ArchivoPdf == null ? null : $"{deca.Numero}-QR.png";
 
     private static int UsuarioActual() =>
         Sesion.UsuarioActual?.Id ?? throw new ReglaNegocioException("No hay ningún usuario seleccionado.");
