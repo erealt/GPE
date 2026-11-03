@@ -199,7 +199,7 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
 
 ### Web del DeCA (`GPE.Web`)
 
-Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la red de la fábrica. Usa `DecaServicio` y `DecaPdf` tal cual: solo cambian las pantallas.
+Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la red de la fábrica. Usa `DecaServicio` y `DecaPdf` tal cual: solo cambian las pantallas. No tiene el desplegable *Rellenar con uno ya usado*: todo se escribe a mano.
 
 | Pieza | Archivo |
 |---|---|

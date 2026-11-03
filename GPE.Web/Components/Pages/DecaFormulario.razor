@@ -65,9 +65,9 @@
 }
 
 <TarjetaParte Titulo="1   Remitente" Subtitulo="Quién envía la mercancía" Parte="remitente"
-              Usados="partesUsadas" Errores="errores" Prefijo="remitente" Cambio="MarcarCambio" />
+              Errores="errores" Prefijo="remitente" Cambio="MarcarCambio" />
 <TarjetaParte Titulo="2   Destinatario" Subtitulo="Quién la recibe" Parte="destinatario"
-              Usados="partesUsadas" Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" />
+              Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" />
 
 <section class="tarjeta">
     <div class="titulo-tarjeta">
@@ -75,16 +75,6 @@
             <h2>3   Transporte</h2>
             <p class="suave">Quién lleva la mercancía y cuándo se carga</p>
         </div>
-        @if (transportistasUsados.Count > 0)
-        {
-            <select class="sugerencias" value="-1" @onchange="RellenarTransportista">
-                <option value="-1">Rellenar con uno ya usado...</option>
-                @for (int i = 0; i < transportistasUsados.Count; i++)
-                {
-                    <option value="@i">@transportistasUsados[i]</option>
-                }
-            </select>
-        }
     </div>
     <div class="rejilla">
         <Campo Etiqueta="Fecha de carga" Error="@errores.GetValueOrDefault("fecha")">
@@ -174,9 +164,6 @@
     private string observaciones = "";
     private List<PaletFormulario> palets = [];
 
-    private List<ParteEnvio> partesUsadas = [];
-    private List<TransportistaDeca> transportistasUsados = [];
-
     private readonly Dictionary<string, string> errores = new();
     private string? mensaje;
     private bool mensajeEsError;
@@ -191,16 +178,6 @@
         mensaje = Navegacion.Uri.EndsWith("?guardado") ? "DeCA guardado." : null;
         mensajeEsError = false;
         errores.Clear();
-
-        try
-        {
-            partesUsadas = servicio.ObtenerPartesUsadas();
-            transportistasUsados = servicio.ObtenerTransportistasUsados();
-        }
-        catch (DbException)
-        {
-            // Sin sugerencias se puede seguir escribiendo a mano
-        }
 
         if (Id == null)
         {
@@ -259,19 +236,6 @@
     private void CambiarPalet(PaletFormulario palet)
     {
         palet.Error = null;
-        MarcarCambio();
-    }
-
-    private void RellenarTransportista(ChangeEventArgs e)
-    {
-        if (!int.TryParse(e.Value?.ToString(), out int i) || i < 0) return;
-        var t = transportistasUsados[i];
-        transportista = t.Nombre;
-        nifTransportista = t.Nif;
-        matricula = t.Matricula;
-        errores.Remove("transportista");
-        errores.Remove("nifTransportista");
-        errores.Remove("matricula");
         MarcarCambio();
     }
 

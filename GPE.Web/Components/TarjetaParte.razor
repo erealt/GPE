@@ -5,16 +5,6 @@
             <h2>@Titulo</h2>
             <p class="suave">@Subtitulo</p>
         </div>
-        @if (Usados.Count > 0)
-        {
-            <select class="sugerencias" value="-1" @onchange="Rellenar">
-                <option value="-1">Rellenar con uno ya usado...</option>
-                @for (int i = 0; i < Usados.Count; i++)
-                {
-                    <option value="@i">@Usados[i]</option>
-                }
-            </select>
-        }
     </div>
 
     <div class="rejilla">
@@ -51,7 +41,6 @@
     [Parameter, EditorRequired] public string Titulo { get; set; } = "";
     [Parameter] public string Subtitulo { get; set; } = "";
     [Parameter, EditorRequired] public ParteFormulario Parte { get; set; } = new();
-    [Parameter] public List<ParteEnvio> Usados { get; set; } = [];
 
     // Errores de todo el formulario; los de esta tarjeta van con la clave "Prefijo.Campo"
     [Parameter, EditorRequired] public Dictionary<string, string> Errores { get; set; } = new();
@@ -65,14 +54,5 @@
     {
         Errores.Remove($"{Prefijo}.{campo}");
         return Cambio.InvokeAsync();
-    }
-
-    private async Task Rellenar(ChangeEventArgs e)
-    {
-        if (!int.TryParse(e.Value?.ToString(), out int i) || i < 0) return;
-        Parte.Rellenar(Usados[i]);
-        foreach (var (campo, _) in Parte.Comprobaciones())
-            Errores.Remove($"{Prefijo}.{campo}");
-        await Cambio.InvokeAsync();
     }
 }

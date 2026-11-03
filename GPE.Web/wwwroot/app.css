@@ -112,8 +112,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--acento-suav
 .con-error input, .con-error textarea { border-color: var(--error); background: var(--fondo-error); }
 .error-campo { color: var(--error); font-size: 13px; margin-top: 4px; }
 
-.sugerencias { width: 320px; }
-
 /* ---------- Botones ---------- */
 
 button, .boton {
@@ -196,5 +194,5 @@ td { padding: 12px 14px; border-top: 1px solid var(--linea); }
     .pagina { padding: 20px 16px 40px; }
     .rejilla { grid-template-columns: 1fr 1fr; }
     .titulo-tarjeta, .cabecera { flex-direction: column; }
-    .sugerencias, .filtros input[type=search] { width: 100%; }
+    .filtros input[type=search] { width: 100%; }
 }
