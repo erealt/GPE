@@ -9,3 +9,6 @@ obj/
 
 # Archivos de configuración con secretos
 appsettings.*.json
+
+# Configuración local de Claude Code
+.claude/
