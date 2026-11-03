@@ -165,7 +165,7 @@ public class RutinaServicio
 
         return new NoConformidad(
             Id: 0, TipoRegistro: TipoRegistro.Incidencia, Numero: null, FechaDetectado: fecha.Date,
-            Origen: null, Seccion: seccion.SeccionCalidad, Tipo: null, Problema: problema,
+            Origen: null, Seccion: seccion.SeccionCalidad, Subseccion: null, Tipo: null, Problema: problema,
             DescripcionCausa: null, Responsable: null, FechaPrevista: null, FechaFin: null,
             Cliente: null, Proveedor: null, McPccBpm: punto.McPccBpm, Parametro: null, Operario: null,
             CapituloNorma: null, AnalisisCausaRaiz: null, CosteEconomico: null, HorasManoObra: null);

@@ -152,6 +152,7 @@ public class NoConformidadServicio
             Numero = Limpio(nc.Numero),
             Origen = Limpio(nc.Origen),
             Seccion = Limpio(nc.Seccion),
+            Subseccion = Limpio(nc.Subseccion),
             Tipo = esNc ? Limpio(nc.Tipo) : null,
             Problema = nc.Problema.Trim(),
             DescripcionCausa = Limpio(nc.DescripcionCausa),

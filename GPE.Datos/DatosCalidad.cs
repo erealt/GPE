@@ -23,6 +23,7 @@ public static class ListaCalidad
 {
     public const string Origen = "ORIGEN";
     public const string Seccion = "SECCION";
+    public const string Subseccion = "SUBSECCION";
     public const string Tipo = "TIPO";
     public const string Persona = "PERSONA";
     public const string McPccBpm = "MC_PCC_BPM";
@@ -49,6 +50,7 @@ public record NoConformidad(
     DateTime FechaDetectado,
     string? Origen,
     string? Seccion,
+    string? Subseccion,
     string? Tipo,
     string Problema,
     string? DescripcionCausa,

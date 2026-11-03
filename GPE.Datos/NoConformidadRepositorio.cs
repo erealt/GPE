@@ -9,7 +9,7 @@ public class NoConformidadRepositorio
 
     // En el mismo orden que el record NoConformidad
     private const string SqlRegistros = @"
-            SELECT id, tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
+            SELECT id, tipo_registro, numero, fecha_detectado, origen, seccion, subseccion, tipo,
                    problema, descripcion_causa, responsable,
                    fecha_prevista, fecha_fin, cliente, proveedor,
                    mc_pcc_bpm, parametro, operario,
@@ -47,22 +47,23 @@ public class NoConformidadRepositorio
                 FechaDetectado: lector.GetDateTime(3),
                 Origen: Texto(4),
                 Seccion: Texto(5),
-                Tipo: Texto(6),
-                Problema: lector.GetString(7),
-                DescripcionCausa: Texto(8),
-                Responsable: Texto(9),
-                FechaPrevista: Fecha(10),
-                FechaFin: Fecha(11),
-                Cliente: Texto(12),
-                Proveedor: Texto(13),
-                McPccBpm: Texto(14),
-                Parametro: Texto(15),
-                Operario: Texto(16),
-                CapituloNorma: Texto(17),
-                AnalisisCausaRaiz: Texto(18),
-                CosteEconomico: Numero(19),
-                HorasManoObra: Numero(20),
-                Version: (byte[])lector[21]));
+                Subseccion: Texto(6),
+                Tipo: Texto(7),
+                Problema: lector.GetString(8),
+                DescripcionCausa: Texto(9),
+                Responsable: Texto(10),
+                FechaPrevista: Fecha(11),
+                FechaFin: Fecha(12),
+                Cliente: Texto(13),
+                Proveedor: Texto(14),
+                McPccBpm: Texto(15),
+                Parametro: Texto(16),
+                Operario: Texto(17),
+                CapituloNorma: Texto(18),
+                AnalisisCausaRaiz: Texto(19),
+                CosteEconomico: Numero(20),
+                HorasManoObra: Numero(21),
+                Version: (byte[])lector[22]));
         }
 
         return lista;
@@ -189,14 +190,14 @@ public class NoConformidadRepositorio
     {
         const string sql = @"
             INSERT INTO NO_CONFORMIDAD
-                (tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
+                (tipo_registro, numero, fecha_detectado, origen, seccion, subseccion, tipo,
                  problema, descripcion_causa, responsable,
                  fecha_prevista, fecha_fin, cliente, proveedor,
                  mc_pcc_bpm, parametro, operario,
                  capitulo_norma, analisis_causa_raiz,
                  coste_economico, horas_mano_obra, creado_por)
             VALUES
-                (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
+                (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @subseccion, @tipo,
                  @problema, @descripcion_causa, @responsable,
                  @fecha_prevista, @fecha_fin, @cliente, @proveedor,
                  @mc_pcc_bpm, @parametro, @operario,
@@ -232,7 +233,7 @@ public class NoConformidadRepositorio
         const string sql = @"
             UPDATE NO_CONFORMIDAD SET
                 tipo_registro = @tipo_registro, numero = @numero, fecha_detectado = @fecha_detectado,
-                origen = @origen, seccion = @seccion, tipo = @tipo,
+                origen = @origen, seccion = @seccion, subseccion = @subseccion, tipo = @tipo,
                 problema = @problema, descripcion_causa = @descripcion_causa,
                 responsable = @responsable,
                 fecha_prevista = @fecha_prevista, fecha_fin = @fecha_fin,
@@ -329,6 +330,7 @@ public class NoConformidadRepositorio
         Valor("@fecha_detectado", nc.FechaDetectado.Date);
         Valor("@origen", nc.Origen);
         Valor("@seccion", nc.Seccion);
+        Valor("@subseccion", nc.Subseccion);
         Valor("@tipo", nc.Tipo);
         Valor("@problema", nc.Problema);
         Valor("@descripcion_causa", nc.DescripcionCausa);

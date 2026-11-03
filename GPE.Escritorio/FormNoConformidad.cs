@@ -27,14 +27,26 @@ public class FormNoConformidad : Form
     // Opción vacía de los desplegables que no son obligatorios
     private static readonly OpcionLista SinIndicar = new("—", null);
 
+    // Botones del origen: valor guardado (el de la lista ORIGEN) y texto del botón
+    private static readonly (string Valor, string Texto)[] Origenes =
+    {
+        ("I", "Interna"),
+        ("R", "Reclamación del cliente"),
+        ("A", "Auditoría"),
+        ("P", "Proveedor"),
+        ("I. SEMANAL", "I. Semanal")
+    };
+
     // Identificación
     private readonly FlowLayoutPanel selectorTipo = new();
     private readonly Dictionary<string, RadioButton> botonesTipo = new();
     private readonly DateTimePicker dtpDetectado = new();
     private readonly TextBox txtNumero = new();
     private readonly Label lblNumero = new();
-    private readonly ComboBox cmbOrigen = new();
+    private readonly FlowLayoutPanel selectorOrigen = new();
+    private readonly Dictionary<string, RadioButton> botonesOrigen = new();
     private readonly ComboBox cmbSeccion = new();
+    private readonly ComboBox cmbSubseccion = new();
     private readonly ComboBox cmbTipo = new();
     private readonly TextBox txtCliente = new();
     private readonly TextBox txtProveedor = new();
@@ -102,7 +114,8 @@ public class FormNoConformidad : Form
         ActualizarEstado();
 
         // Las NC de auditoría se numeran por año o por fecha: el número cambia con ellas
-        cmbOrigen.SelectedIndexChanged += (s, e) => ActualizarSecciones();
+        foreach (var boton in botonesOrigen.Values)
+            boton.CheckedChanged += (s, e) => ActualizarSecciones();
         cmbSeccion.SelectedIndexChanged += (s, e) => ActualizarNumero();
         dtpDetectado.ValueChanged += (s, e) => ActualizarNumero();
 
@@ -245,6 +258,7 @@ public class FormNoConformidad : Form
         }
 
         PrepararSelectorTipo();
+        PrepararSelectorOrigen();
 
         dtpDetectado.Format = DateTimePickerFormat.Short;
         dtpDetectado.MaxDate = DateTime.Today;
@@ -306,17 +320,64 @@ public class FormNoConformidad : Form
             };
             boton.CheckedChanged += (s, e) =>
             {
-                PintarBotonTipo(boton);
+                PintarBotonOpcion(boton);
                 if (boton.Checked) ActualizarSegunTipo();
             };
-            PintarBotonTipo(boton);
+            PintarBotonOpcion(boton);
 
             botonesTipo[tipo] = boton;
             selectorTipo.Controls.Add(boton);
         }
     }
 
-    private static void PintarBotonTipo(RadioButton boton)
+    private void PrepararSelectorOrigen()
+    {
+        // Si la ventana es estrecha, los botones pasan a una segunda línea en vez de cortarse
+        selectorOrigen.AutoSize = true;
+        selectorOrigen.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        selectorOrigen.WrapContents = true;
+        selectorOrigen.Margin = new Padding(0);
+
+        foreach (var (valor, texto) in Origenes)
+            AnadirBotonOrigen(valor, texto);
+    }
+
+    // El origen no es obligatorio en incidencias: pulsar el botón marcado lo desmarca
+    private void AnadirBotonOrigen(string valor, string texto)
+    {
+        int ancho = TextRenderer.MeasureText(texto, Tema.FuenteDeOpcion(true)).Width + 24;
+        var boton = new RadioButton
+        {
+            Text = texto,
+            Appearance = Appearance.Button,
+            AutoCheck = false,
+            FlatStyle = FlatStyle.Flat,
+            FlatAppearance = { BorderColor = Tema.Borde, CheckedBackColor = Tema.Acento },
+            TextAlign = ContentAlignment.MiddleCenter,
+            Size = new Size(Math.Max(100, ancho), 34),
+            Margin = new Padding(0, 0, 6, 4),
+            Cursor = Cursors.Hand
+        };
+        boton.Click += (s, e) => ElegirOrigen(boton.Checked ? null : valor);
+        boton.CheckedChanged += (s, e) => PintarBotonOpcion(boton);
+        PintarBotonOpcion(boton);
+
+        botonesOrigen[valor] = boton;
+        selectorOrigen.Controls.Add(boton);
+    }
+
+    // Un origen antiguo que ya no tiene botón (OBRADOR, ALMACEN...) se añade para no perderlo
+    private void ElegirOrigen(string? valor)
+    {
+        if (valor != null && !botonesOrigen.ContainsKey(valor))
+            AnadirBotonOrigen(valor, valor);
+        foreach (var (clave, boton) in botonesOrigen)
+            boton.Checked = clave == valor;
+    }
+
+    private string? OrigenElegido => botonesOrigen.FirstOrDefault(b => b.Value.Checked).Key;
+
+    private static void PintarBotonOpcion(RadioButton boton)
     {
         boton.BackColor = boton.Checked ? Tema.Acento : Color.White;
         boton.ForeColor = boton.Checked ? Color.White : Tema.Texto;
@@ -444,20 +505,24 @@ public class FormNoConformidad : Form
         rejilla.Controls.Add(campoTipoRegistro, 0, 0);
         rejilla.SetColumnSpan(campoTipoRegistro, 2);
         rejilla.Controls.Add(campos.Campo("Nº", txtNumero, lblNumero), 2, 0);
-        rejilla.Controls.Add(campos.Campo("Fecha detectado", dtpDetectado), 0, 1);
-        rejilla.Controls.Add(campos.Campo("Origen", cmbOrigen), 1, 1);
-        rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 2, 1);
-        rejilla.Controls.Add(campos.Campo("Cliente", txtCliente), 0, 2);
-        rejilla.Controls.Add(campos.Campo("Proveedor", txtProveedor), 1, 2);
+        // Los botones del origen tampoco caben en una columna; la fecha, debajo del número
+        var campoOrigen = campos.Campo("Origen", selectorOrigen);
+        rejilla.Controls.Add(campoOrigen, 0, 1);
+        rejilla.SetColumnSpan(campoOrigen, 2);
+        rejilla.Controls.Add(campos.Campo("Fecha detectado", dtpDetectado), 2, 1);
+        rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 0, 2);
+        rejilla.Controls.Add(campos.Campo("Subsección", cmbSubseccion), 1, 2);
         // Al final de su fila, para que al ocultarse (no es NC) no deje un hueco en medio
         rejilla.Controls.Add(campoTipo = campos.Campo("Tipo de no conformidad", cmbTipo), 2, 2);
+        rejilla.Controls.Add(campos.Campo("Cliente", txtCliente), 0, 3);
+        rejilla.Controls.Add(campos.Campo("Proveedor", txtProveedor), 1, 3);
 
         var problema = campos.Campo("Problema", txtProblema);
-        rejilla.Controls.Add(problema, 0, 3);
+        rejilla.Controls.Add(problema, 0, 4);
         rejilla.SetColumnSpan(problema, 3);
 
-        rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 4);
-        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 4);
+        rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 5);
+        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 5);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -556,8 +621,9 @@ public class FormNoConformidad : Form
         // Un registro antiguo puede tener una fecha que ya no cabe en MaxDate (no pasa, pero por si acaso)
         dtpDetectado.Value = nc == null ? DateTime.Today : Min(nc.FechaDetectado, DateTime.Today);
 
-        LlenarLista(cmbOrigen, ListaCalidad.Origen, nc?.Origen);
+        ElegirOrigen(nc?.Origen);
         LlenarLista(cmbSeccion, ListaCalidad.Seccion, nc?.Seccion);
+        LlenarLista(cmbSubseccion, ListaCalidad.Subseccion, nc?.Subseccion);
         LlenarLista(cmbTipo, ListaCalidad.Tipo, nc?.Tipo);
         LlenarLista(cmbResponsable, ListaCalidad.Persona, nc?.Responsable);
         LlenarLista(cmbMcPccBpm, ListaCalidad.McPccBpm, nc?.McPccBpm);
@@ -676,16 +742,16 @@ public class FormNoConformidad : Form
         control.Focus();
     }
 
-    // Con origen auditoría solo se ofrecen las secciones de auditoría
+    // Con origen auditoría solo se ofrecen las secciones de auditoría, y con los demás orígenes, el resto
     private void ActualizarSecciones()
     {
-        bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(Valor(cmbOrigen));
+        bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(OrigenElegido);
         string? seccion = Valor(cmbSeccion);
         if (soloAuditoria && !NoConformidadServicio.SeccionesAuditoria.Contains(seccion))
             seccion = null;
 
         LlenarLista(cmbSeccion, ListaCalidad.Seccion, seccion,
-            soloAuditoria ? o => NoConformidadServicio.SeccionesAuditoria.Contains(o.Valor) : null);
+            o => NoConformidadServicio.SeccionesAuditoria.Contains(o.Valor) == soloAuditoria);
     }
 
     // El número es automático: depende del tipo, la sección (auditorías) y la fecha
@@ -718,7 +784,7 @@ public class FormNoConformidad : Form
 
     // Registro en blanco para calcular el número de uno nuevo
     private static readonly NoConformidad Vacio = new(
-        0, TipoRegistro.Incidencia, null, DateTime.Today, null, null, null, "",
+        0, TipoRegistro.Incidencia, null, DateTime.Today, null, null, null, null, "",
         null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     private void ActualizarEstado()
@@ -762,8 +828,9 @@ public class FormNoConformidad : Form
             TipoRegistro: TipoElegido,
             Numero: original?.Numero,   // el servicio decide el número al guardar
             FechaDetectado: dtpDetectado.Value.Date,
-            Origen: Valor(cmbOrigen),
+            Origen: OrigenElegido,
             Seccion: Valor(cmbSeccion),
+            Subseccion: Valor(cmbSubseccion),
             Tipo: Valor(cmbTipo),
             Problema: txtProblema.Text,
             DescripcionCausa: txtCausa.Text,
@@ -796,7 +863,7 @@ public class FormNoConformidad : Form
             {
                 [nameof(NoConformidad.TipoRegistro)] = selectorTipo,
                 [nameof(NoConformidad.FechaDetectado)] = dtpDetectado,
-                [nameof(NoConformidad.Origen)] = cmbOrigen,
+                [nameof(NoConformidad.Origen)] = selectorOrigen,
                 [nameof(NoConformidad.Seccion)] = cmbSeccion,
                 [nameof(NoConformidad.Tipo)] = cmbTipo,
                 [nameof(NoConformidad.Cliente)] = txtCliente,
