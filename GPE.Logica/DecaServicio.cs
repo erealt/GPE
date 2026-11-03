@@ -1,4 +1,5 @@
 using GPE.Datos;
+using QRCoder;
 
 namespace GPE.Logica;
 
@@ -56,29 +57,39 @@ public class DecaServicio
             throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
     }
 
-    // Genera el PDF con su QR, lo guarda en CarpetaPdf y devuelve la ruta del archivo.
-    // Si ya tenía PDF se reutiliza el nombre, para que el QR ya impreso siga sirviendo.
-    public string GenerarPdf(int decaId)
+    // Genera a la vez el PDF (con el QR dentro) y el QR suelto como imagen PNG, para imprimirlo
+    // aparte; los guarda en CarpetaPdf y devuelve la ruta del PDF. Si ya tenía PDF se reutiliza
+    // el nombre, para que el QR ya impreso siga sirviendo.
+    public string GenerarPdfYQr(int decaId)
     {
         var deca = repositorio.ObtenerDeca(decaId)
             ?? throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
 
         string archivo = NombreArchivoPdf(deca);
-        byte[] pdf = DecaPdf.Crear(deca, UrlPublica(archivo));
+        string url = UrlPublica(archivo);
+
+        using var generador = new QRCodeGenerator();
+        using var qr = generador.CreateQrCode(url, QRCodeGenerator.ECCLevel.M);
 
         Directory.CreateDirectory(CarpetaPdf);
-        string ruta = Path.Combine(CarpetaPdf, archivo);
+        string rutaPdf = Path.Combine(CarpetaPdf, archivo);
+        Guardar(rutaPdf, DecaPdf.Crear(deca, url));
+        Guardar(Path.Combine(CarpetaPdf, $"{deca.Numero}-QR.png"), new PngByteQRCode(qr).GetGraphic(20));
+
+        repositorio.MarcarPdfGenerado(decaId, archivo);
+        return rutaPdf;
+    }
+
+    private static void Guardar(string ruta, byte[] contenido)
+    {
         try
         {
-            File.WriteAllBytes(ruta, pdf);
+            File.WriteAllBytes(ruta, contenido);
         }
         catch (IOException)
         {
-            throw new ReglaNegocioException($"No se pudo guardar el PDF. Si lo tienes abierto, ciérralo y vuelve a intentarlo.\n\n{ruta}");
+            throw new ReglaNegocioException($"No se pudo guardar el archivo. Si lo tienes abierto, ciérralo y vuelve a intentarlo.\n\n{ruta}");
         }
-
-        repositorio.MarcarPdfGenerado(decaId, archivo);
-        return ruta;
     }
 
     // DECA-2026-001-<código aleatorio>.pdf: el número para reconocerlo y el código para que

@@ -20,7 +20,7 @@ public class ModuloDeca : UserControl
     private readonly Label lblVacio = new();
     private readonly Button btnNuevo = Tema.BotonPrincipal("+  Nuevo DeCA", 190);
     private readonly Button btnAbrir = Tema.BotonSecundario("Abrir", 110);
-    private readonly Button btnPdf = Tema.BotonSecundario("Generar PDF", 140);
+    private readonly Button btnGenerar = Tema.BotonSecundario("Generar PDF y QR", 175);
 
     public ModuloDeca()
     {
@@ -140,12 +140,11 @@ public class ModuloDeca : UserControl
         var barra = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 3,
             BackColor = Color.White,
             Margin = new Padding(0, 10, 0, 0),
             Padding = new Padding(15, 0, 10, 0)
         };
-        barra.ColumnCount = 3;
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -154,10 +153,10 @@ public class ModuloDeca : UserControl
         lblContador.ForeColor = Tema.Suave;
         lblContador.TextAlign = ContentAlignment.MiddleLeft;
 
-        btnPdf.Height = 34;
-        btnPdf.Anchor = AnchorStyles.Right;
-        btnPdf.Margin = new Padding(0, 0, 10, 0);
-        btnPdf.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) GenerarPdf(d.Id); };
+        btnGenerar.Height = 34;
+        btnGenerar.Anchor = AnchorStyles.Right;
+        btnGenerar.Margin = new Padding(0, 0, 10, 0);
+        btnGenerar.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) GenerarPdfYQr(d.Id); };
 
         btnAbrir.Height = 34;
         btnAbrir.Anchor = AnchorStyles.Right;
@@ -165,7 +164,7 @@ public class ModuloDeca : UserControl
         btnAbrir.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) AbrirFormulario(d.Id); };
 
         barra.Controls.Add(lblContador, 0, 0);
-        barra.Controls.Add(btnPdf, 1, 0);
+        barra.Controls.Add(btnGenerar, 1, 0);
         barra.Controls.Add(btnAbrir, 2, 0);
         return barra;
     }
@@ -326,8 +325,8 @@ public class ModuloDeca : UserControl
     {
         var d = DecaSeleccionado();
         btnAbrir.Enabled = d != null;
-        btnPdf.Enabled = d != null;
-        btnPdf.Text = d is { PdfAlDia: true } ? "Ver PDF" : "Generar PDF";
+        btnGenerar.Enabled = d != null;
+        btnGenerar.Text = d is { PdfAlDia: true } ? "Ver PDF y QR" : "Generar PDF y QR";
     }
 
     private void LimpiarFiltros()
@@ -354,19 +353,20 @@ public class ModuloDeca : UserControl
         grid.SelectedRows.Cast<DataGridViewRow>()
             .FirstOrDefault(f => f.Visible && f.Tag is DecaFila)?.Tag as DecaFila;
 
-    // Siempre se vuelve a generar (también con "Ver PDF"): así sirve desde cualquier ordenador
-    // aunque el archivo no esté en su carpeta, y sale igual porque el nombre no cambia
-    private void GenerarPdf(int decaId)
+    // Genera el PDF y el QR y abre la carpeta con los dos. Siempre se vuelven a generar (también
+    // con "Ver"): así sirve desde cualquier ordenador aunque los archivos no estén en su carpeta,
+    // y salen iguales porque el nombre no cambia
+    private void GenerarPdfYQr(int decaId)
     {
         string ruta;
         Cursor = Cursors.WaitCursor;
         try
         {
-            ruta = servicio.GenerarPdf(decaId);
+            ruta = servicio.GenerarPdfYQr(decaId);
         }
         catch (ReglaNegocioException ex)
         {
-            MessageBox.Show(FindForm(), ex.Message, "PDF", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(FindForm(), ex.Message, "DeCA", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         catch (DbException ex)
@@ -381,7 +381,8 @@ public class ModuloDeca : UserControl
         }
 
         CargarDatos(decaId);
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ruta) { UseShellExecute = true });
+        // Explorador abierto en la carpeta con el PDF marcado; el QR está justo al lado
+        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{ruta}\"");
     }
 
     // null = nuevo DeCA
