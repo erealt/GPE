@@ -14,6 +14,16 @@ public class DecaServicio
 
     public const string PaisPorDefecto = "España";
 
+    // Dirección web donde quedarán publicados los PDF; el QR apunta a esta dirección + el nombre
+    // del archivo. Las variables de entorno permiten cambiarlas sin recompilar (como GPE_CONEXION).
+    public static readonly string UrlPublicacion =
+        Environment.GetEnvironmentVariable("GPE_DECA_URL") ?? "https://www.eurochoc.es/deca/";
+
+    // Carpeta donde se guardan los PDF generados (mientras no se suben solos a la web)
+    public static readonly string CarpetaPdf =
+        Environment.GetEnvironmentVariable("GPE_DECA_CARPETA")
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "GPE", "DeCA");
+
     // ---------- Consultas ----------
 
     public List<DecaFila> ObtenerDecas() => repositorio.ObtenerDecas();
@@ -45,6 +55,38 @@ public class DecaServicio
         if (!repositorio.ActualizarDeca(decaId, datos, UsuarioActual()))
             throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
     }
+
+    // Genera el PDF con su QR, lo guarda en CarpetaPdf y devuelve la ruta del archivo.
+    // Si ya tenía PDF se reutiliza el nombre, para que el QR ya impreso siga sirviendo.
+    public string GenerarPdf(int decaId)
+    {
+        var deca = repositorio.ObtenerDeca(decaId)
+            ?? throw new ReglaNegocioException("Este DeCA ya no existe. Cierra la pantalla y vuelve a abrirla.");
+
+        string archivo = NombreArchivoPdf(deca);
+        byte[] pdf = DecaPdf.Crear(deca, UrlPublica(archivo));
+
+        Directory.CreateDirectory(CarpetaPdf);
+        string ruta = Path.Combine(CarpetaPdf, archivo);
+        try
+        {
+            File.WriteAllBytes(ruta, pdf);
+        }
+        catch (IOException)
+        {
+            throw new ReglaNegocioException($"No se pudo guardar el PDF. Si lo tienes abierto, ciérralo y vuelve a intentarlo.\n\n{ruta}");
+        }
+
+        repositorio.MarcarPdfGenerado(decaId, archivo);
+        return ruta;
+    }
+
+    // DECA-2026-001-<código aleatorio>.pdf: el número para reconocerlo y el código para que
+    // nadie pueda adivinar la dirección de otro DeCA
+    public static string NombreArchivoPdf(DecaGuardado deca) =>
+        deca.ArchivoPdf ?? $"{deca.Numero}-{deca.CodigoPublico:N}.pdf";
+
+    public static string UrlPublica(string archivo) => UrlPublicacion.TrimEnd('/') + "/" + archivo;
 
     private static int UsuarioActual() =>
         Sesion.UsuarioActual?.Id ?? throw new ReglaNegocioException("No hay ningún usuario seleccionado.");

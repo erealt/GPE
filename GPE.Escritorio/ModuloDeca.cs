@@ -20,6 +20,7 @@ public class ModuloDeca : UserControl
     private readonly Label lblVacio = new();
     private readonly Button btnNuevo = Tema.BotonPrincipal("+  Nuevo DeCA", 190);
     private readonly Button btnAbrir = Tema.BotonSecundario("Abrir", 110);
+    private readonly Button btnPdf = Tema.BotonSecundario("Generar PDF", 140);
 
     public ModuloDeca()
     {
@@ -144,12 +145,19 @@ public class ModuloDeca : UserControl
             Margin = new Padding(0, 10, 0, 0),
             Padding = new Padding(15, 0, 10, 0)
         };
+        barra.ColumnCount = 3;
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         lblContador.Dock = DockStyle.Fill;
         lblContador.ForeColor = Tema.Suave;
         lblContador.TextAlign = ContentAlignment.MiddleLeft;
+
+        btnPdf.Height = 34;
+        btnPdf.Anchor = AnchorStyles.Right;
+        btnPdf.Margin = new Padding(0, 0, 10, 0);
+        btnPdf.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) GenerarPdf(d.Id); };
 
         btnAbrir.Height = 34;
         btnAbrir.Anchor = AnchorStyles.Right;
@@ -157,7 +165,8 @@ public class ModuloDeca : UserControl
         btnAbrir.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) AbrirFormulario(d.Id); };
 
         barra.Controls.Add(lblContador, 0, 0);
-        barra.Controls.Add(btnAbrir, 1, 0);
+        barra.Controls.Add(btnPdf, 1, 0);
+        barra.Controls.Add(btnAbrir, 2, 0);
         return barra;
     }
 
@@ -222,7 +231,7 @@ public class ModuloDeca : UserControl
             e.Handled = true;   // que Enter no baje a la fila siguiente
             AbrirFormulario(d.Id);
         };
-        grid.SelectionChanged += (s, e) => btnAbrir.Enabled = DecaSeleccionado() != null;
+        grid.SelectionChanged += (s, e) => ActivarBotones();
 
         // Estado del PDF como etiqueta: verde si está al día, ámbar si hay que generarlo
         grid.CellPainting += (s, e) =>
@@ -310,7 +319,15 @@ public class ModuloDeca : UserControl
         lblVacio.ForeColor = fechasCruzadas ? Tema.Error : Tema.Suave;
         lblVacio.Visible = visibles == 0;
         grid.Visible = visibles > 0;
-        btnAbrir.Enabled = DecaSeleccionado() != null;
+        ActivarBotones();
+    }
+
+    private void ActivarBotones()
+    {
+        var d = DecaSeleccionado();
+        btnAbrir.Enabled = d != null;
+        btnPdf.Enabled = d != null;
+        btnPdf.Text = d is { PdfAlDia: true } ? "Ver PDF" : "Generar PDF";
     }
 
     private void LimpiarFiltros()
@@ -336,6 +353,36 @@ public class ModuloDeca : UserControl
     private DecaFila? DecaSeleccionado() =>
         grid.SelectedRows.Cast<DataGridViewRow>()
             .FirstOrDefault(f => f.Visible && f.Tag is DecaFila)?.Tag as DecaFila;
+
+    // Siempre se vuelve a generar (también con "Ver PDF"): así sirve desde cualquier ordenador
+    // aunque el archivo no esté en su carpeta, y sale igual porque el nombre no cambia
+    private void GenerarPdf(int decaId)
+    {
+        string ruta;
+        Cursor = Cursors.WaitCursor;
+        try
+        {
+            ruta = servicio.GenerarPdf(decaId);
+        }
+        catch (ReglaNegocioException ex)
+        {
+            MessageBox.Show(FindForm(), ex.Message, "PDF", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (DbException ex)
+        {
+            MessageBox.Show(FindForm(), "No se pudo generar el PDF.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
+
+        CargarDatos(decaId);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ruta) { UseShellExecute = true });
+    }
 
     // null = nuevo DeCA
     private void AbrirFormulario(int? decaId)

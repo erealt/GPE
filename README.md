@@ -227,7 +227,11 @@ Documento de control del transporte. Es un módulo aparte de las devoluciones (s
   - Cada palet nuevo copia el peso y las cajas del anterior.
   - Avisa al cerrar si hay cambios sin guardar.
 - **Validaciones (`DecaServicio`)**: obligatorios, al menos un palet (peso entre 0 y 2.000 kg, cajas > 0), fecha de carga hasta 30 días atrás o adelante (solo si se cambia), CP de 5 cifras en España y el **NIF con su letra de control** ([`Nif`](GPE.Logica/Nif.cs): DNI, NIE, CIF y K/L/M) cuando el país es España. El NIF del transportista se comprueba si tiene forma de NIF español.
-- **PDF y QR**: si se modifica un DeCA que ya tenía PDF, queda *Por generar* pero conserva el nombre del archivo, para que el QR ya impreso siga sirviendo. *(Pendiente: generar el PDF y publicarlo.)*
+- **PDF y QR ([`DecaPdf`](GPE.Logica/DecaPdf.cs))**: botón *Generar PDF* en la lista (*Ver PDF* si ya está al día; lo vuelve a generar igualmente y lo abre). Hoja A4 con los mismos datos que el formulario y el QR arriba a la derecha; si hay muchos palets la tabla sigue en otra hoja. Se hace con PDFsharp y QRCoder (los dos MIT).
+  - El archivo se llama `DECA-AAAA-NNN-<codigo_publico>.pdf` y el QR apunta a `GPE_DECA_URL` + ese nombre (por defecto `https://www.eurochoc.es/deca/`).
+  - Se guarda en `GPE_DECA_CARPETA` (por defecto `Documentos\GPE\DeCA`).
+  - Si se modifica un DeCA que ya tenía PDF, queda *Por generar* pero conserva el nombre del archivo, para que el QR ya impreso siga sirviendo.
+  - *(Pendiente: subirlo solo a la web cuando haya acceso al WordPress.)*
 
 ---
 
