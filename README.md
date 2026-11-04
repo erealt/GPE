@@ -190,7 +190,7 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
 
 - **Lista (`ModuloDeca`)**: número `DECA-AAAA-NNN`, fecha de carga, remitente, destinatario, transportista, palets, cajas, peso total y el estado del PDF (*Al día* / *Por generar*). Búsqueda por texto y fechas; doble clic o *Abrir* para modificar.
 - **Formulario (`FormDeca`)**: remitente, destinatario, cargador contractual, transporte (fecha de carga, transportista efectivo, NIF, matrícula del vehículo y del remolque, lugar de carga y de descarga), mercancía, una fila por palet (peso y cajas, con los totales en el subtítulo) y observaciones.
-  - Remitente, destinatario y transportista se escriben a mano; el desplegable *Rellenar con uno ya usado* los rellena con los de otros DeCA (no hay catálogo aparte).
+  - Remitente, destinatario y transportista se escriben a mano; al escribir el nombre o el NIF salen debajo los de otros DeCA que coinciden, y al elegir uno se rellenan todos sus datos (no hay catálogo aparte).
   - **Cargador contractual**: quien contrata el transporte con el transportista. Se elige *El remitente*, *El destinatario* u *Otro* (y entonces se escriben sus datos). No hay ninguno marcado por defecto: depende de cada envío.
   - **Matrícula del remolque**: solo si es un camión articulado. **Lugar de carga y de descarga**: solo si no son las direcciones del remitente y del destinatario; en el PDF, si están vacíos, salen esas direcciones.
   - Cada palet nuevo copia el peso y las cajas del anterior.
@@ -208,7 +208,7 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
 
 ### Web del DeCA (`GPE.Web`)
 
-Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la red de la fábrica. Usa `DecaServicio` y `DecaPdf` tal cual: solo cambian las pantallas. No tiene el desplegable *Rellenar con uno ya usado*: todo se escribe a mano.
+Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la red de la fábrica. Usa `DecaServicio` y `DecaPdf` tal cual: solo cambian las pantallas. Las sugerencias al escribir el nombre o el NIF funcionan igual.
 
 | Pieza | Archivo |
 |---|---|

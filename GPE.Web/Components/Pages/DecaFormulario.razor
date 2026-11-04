@@ -65,9 +65,9 @@
 }
 
 <TarjetaParte Numero="1" Titulo="Remitente" Subtitulo="Quién envía la mercancía" Parte="remitente"
-              Errores="errores" Prefijo="remitente" Cambio="MarcarCambio" />
+              Errores="errores" Prefijo="remitente" Cambio="MarcarCambio" Usados="partesUsadas" />
 <TarjetaParte Numero="2" Titulo="Destinatario" Subtitulo="Quién la recibe" Parte="destinatario"
-              Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" />
+              Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" Usados="partesUsadas" />
 
 @* La normativa pide que figure expresamente quién contrata el transporte; si es el remitente
    o el destinatario no hace falta volver a escribir sus datos *@
@@ -96,7 +96,7 @@
     </div>
     @if (cargadorTipo == TipoCargador.Otro)
     {
-        <CamposParte Parte="cargadorOtro" Errores="errores" Prefijo="cargador" Cambio="MarcarCambio" />
+        <CamposParte Parte="cargadorOtro" Errores="errores" Prefijo="cargador" Cambio="MarcarCambio" Usados="partesUsadas" />
     }
 </section>
 
@@ -112,10 +112,12 @@
             <input type="date" @bind="fechaCarga" @bind:after='() => Cambiar("fecha")' />
         </Campo>
         <Campo Etiqueta="Transportista efectivo" Error="@errores.GetValueOrDefault("transportista")">
-            <input maxlength="150" placeholder="Nombre o razón social" @bind="transportista" @bind:after='() => Cambiar("transportista")' />
+            <CampoSugerencias T="TransportistaDeca" Maximo="150" Ejemplo="Nombre o razón social" Usados="transportistasUsados" BuscarEn="t => t.Nombre"
+                              @bind-Valor="transportista" @bind-Valor:after='() => Cambiar("transportista")' Elegido="ElegirTransportista" />
         </Campo>
         <Campo Etiqueta="NIF del transportista" Error="@errores.GetValueOrDefault("nifTransportista")">
-            <input maxlength="20" @bind="nifTransportista" @bind:after='() => Cambiar("nifTransportista")' />
+            <CampoSugerencias T="TransportistaDeca" Maximo="20" Usados="transportistasUsados" BuscarEn="t => t.Nif"
+                              @bind-Valor="nifTransportista" @bind-Valor:after='() => Cambiar("nifTransportista")' Elegido="ElegirTransportista" />
         </Campo>
         <Campo Etiqueta="Matrícula del vehículo" Error="@errores.GetValueOrDefault("matricula")">
             <input maxlength="20" placeholder="1234ABC" @bind="matricula" @bind:after='() => Cambiar("matricula")' />
@@ -145,7 +147,6 @@
                 @palets.Sum(p => p.PesoKg ?? 0).ToString("N2") kg
             </p>
         </div>
-        <button class="secundario" @onclick="AnadirPalet">+ Añadir palet</button>
     </div>
 
     <Campo Etiqueta="Naturaleza de la mercancía" Error="@errores.GetValueOrDefault("mercancia")">
@@ -175,6 +176,14 @@
                 </tr>
             }
         </tbody>
+        @* Debajo del último palet, que es donde se está escribiendo *@
+        <tfoot>
+            <tr>
+                <td colspan="5">
+                    <button class="anadir-palet" @onclick="AnadirPalet">+ Añadir palet</button>
+                </td>
+            </tr>
+        </tfoot>
     </table>
 
     <Campo Etiqueta="Observaciones" Error="@errores.GetValueOrDefault("observaciones")">
@@ -213,6 +222,10 @@
     private string observaciones = "";
     private List<PaletFormulario> palets = [];
 
+    // Ya usados en otros DeCA: salen al escribir el nombre o el NIF
+    private List<ParteEnvio> partesUsadas = [];
+    private List<TransportistaDeca> transportistasUsados = [];
+
     private readonly Dictionary<string, string> errores = new();
     private string? mensaje;
     private bool mensajeEsError;
@@ -220,9 +233,20 @@
     private bool guardando;
     private bool generando;
     private bool irAlPrimerError;
+    private bool irAlNuevoPalet;
 
     protected override void OnParametersSet()
     {
+        try
+        {
+            partesUsadas = servicio.ObtenerPartesUsadas();
+            transportistasUsados = servicio.ObtenerTransportistasUsados();
+        }
+        catch (DbException)
+        {
+            // Sin sugerencias se puede seguir escribiendo a mano
+        }
+
         cargaFallida = null;
         mensaje = Navegacion.Uri.EndsWith("?guardado") ? "DeCA guardado." : null;
         mensajeEsError = false;
@@ -288,6 +312,17 @@
         MarcarCambio();
     }
 
+    // Al elegir uno ya usado se rellenan su NIF y la matrícula de su último DeCA
+    private void ElegirTransportista(TransportistaDeca t)
+    {
+        transportista = t.Nombre;
+        nifTransportista = t.Nif;
+        matricula = t.Matricula;
+        foreach (var campo in new[] { "transportista", "nifTransportista", "matricula" })
+            errores.Remove(campo);
+        MarcarCambio();
+    }
+
     private static readonly (string Tipo, string Texto)[] OpcionesCargador =
     [
         (TipoCargador.Remitente, "El remitente"),
@@ -313,6 +348,7 @@
         var anterior = palets.LastOrDefault();
         palets.Add(new PaletFormulario { PesoKg = anterior?.PesoKg, NumCajas = anterior?.NumCajas });
         MarcarCambio();
+        irAlNuevoPalet = true;   // el cursor va a su peso cuando ya esté pintado
     }
 
     private void QuitarPalet(PaletFormulario palet)
@@ -421,6 +457,11 @@
 
     protected override async Task OnAfterRenderAsync(bool primeraVez)
     {
+        if (irAlNuevoPalet)
+        {
+            irAlNuevoPalet = false;
+            await JS.InvokeVoidAsync("gpe.irAlUltimoPalet");
+        }
         if (!irAlPrimerError) return;
         irAlPrimerError = false;
         await JS.InvokeVoidAsync("gpe.irAlPrimerError");

@@ -272,7 +272,7 @@ public record ParteEnvio(
     string Pais,
     string? Telefono)
 {
-    public override string ToString() => $"{Nombre} · {Poblacion}";
+    public override string ToString() => $"{Nombre} · {Nif} · {Poblacion}";
 }
 
 // Transportista ya usado en otro DeCA, con la última matrícula que llevó

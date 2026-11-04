@@ -291,6 +291,9 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
 .palets td:first-child { font-weight: 600; }
 .palets input { text-align: right; font-variant-numeric: tabular-nums; }
 .palets td.error-campo { margin: 0; }
+.palets tfoot td { padding: 6px 8px; border-top: 1px solid var(--linea); }
+.anadir-palet { background: none; color: var(--acento); height: 36px; padding: 0 10px; }
+.anadir-palet:hover { background: var(--acento-suave); }
 .quitar {
     background: none;
     border: none;
@@ -321,3 +324,16 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
     .acciones.fija { padding: 12px 16px; }
     .estado-cambios { display: none; }
 }
+
+/* Sugerencias de ya usados debajo de un cuadro de texto (CampoSugerencias) */
+.con-sugerencias { position: relative; }
+.sugerencias {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
+    min-width: 100%; width: max-content; max-width: min(520px, 90vw);
+    margin: 0; padding: 4px; list-style: none;
+    background: white; border: 1px solid var(--borde); border-radius: var(--radio-control);
+    box-shadow: 0 6px 18px rgba(20, 35, 30, .12);
+    font-size: 14px; font-weight: 400; color: var(--texto);
+}
+.sugerencias li { padding: 7px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sugerencias li:hover, .sugerencias li.marcada { background: var(--acento-suave); color: var(--acento-oscuro); }

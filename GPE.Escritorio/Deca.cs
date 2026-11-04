@@ -5,7 +5,7 @@ using System.Data.Common;
 namespace GPE.Escritorio;
 
 // Crear o modificar un DeCA: remitente, destinatario, cargador contractual, transporte, mercancía y palets.
-// Remitente, destinatario y transportista se pueden rellenar con uno ya usado.
+// Al escribir el nombre o el NIF de remitente, destinatario, cargador o transportista salen los ya usados.
 public class FormDeca : Form
 {
     private readonly DecaServicio servicio = new();
@@ -86,6 +86,11 @@ public class FormDeca : Form
     private readonly Label lblTotales = new();
     private readonly Label lblErrorPalets = CamposFormulario.EtiquetaError();
 
+    // PDF y QR (solo en un DeCA ya guardado)
+    private readonly Button btnPdf = Tema.BotonSecundario("Generar PDF y QR", 175);
+    private Label? lblEstadoPdf;
+    private bool pdfAlDia;
+
     private readonly CamposFormulario campos = new();
     private bool hayCambios;
     private bool cargando = true;   // mientras se rellenan los datos iniciales no cuenta como cambio
@@ -141,13 +146,26 @@ public class FormDeca : Form
                 existente.ArchivoPdf == null
                     ? "Modifica los datos del envío."
                     : "Si guardas cambios, habrá que volver a generar el PDF. El QR ya impreso seguirá llevando al PDF anterior."));
-            pila.Controls.Add(Componentes.Resumen(
+            var resumen = (TableLayoutPanel)Componentes.Resumen(
                 ("CREADO", $"{Componentes.Fecha(existente.CreadoEn)} · {existente.CreadoPor}"),
                 ("ÚLTIMO CAMBIO", existente.ModificadoEn == null
                     ? "—" : $"{Componentes.Fecha(existente.ModificadoEn)} · {existente.ModificadoPor}"),
                 ("PDF", existente.PdfGeneradoEn != null
                     ? "Generado el " + Componentes.Fecha(existente.PdfGeneradoEn)
-                    : existente.ArchivoPdf != null ? "Por volver a generar" : "Sin generar")));
+                    : existente.ArchivoPdf != null ? "Por volver a generar" : "Sin generar"));
+            lblEstadoPdf = (Label)resumen.Controls[resumen.Controls.Count - 1].Controls[1];
+
+            // El botón del PDF va en el resumen, a la derecha del estado del PDF
+            pdfAlDia = existente.PdfGeneradoEn != null;
+            btnPdf.Height = 40;
+            btnPdf.Anchor = AnchorStyles.Right;
+            btnPdf.Margin = new Padding(0);
+            btnPdf.Click += (s, e) => PulsarPdf();
+            ActualizarBotonPdf();
+            resumen.ColumnCount++;
+            resumen.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            resumen.Controls.Add(btnPdf, resumen.ColumnCount - 1, 0);
+            pila.Controls.Add(resumen);
         }
 
         List<ParteEnvio> partesUsadas = [];
@@ -172,33 +190,11 @@ public class FormDeca : Form
         return scroll;
     }
 
-    // Desplegable "Rellenar con uno ya usado" que va a la derecha del título de una tarjeta
-    private static ComboBox? Sugerencias<T>(List<T> usados, Action<T> rellenar) where T : class
-    {
-        if (usados.Count == 0) return null;
-
-        var combo = new ComboBox
-        {
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 320,
-            DropDownWidth = 450,
-            IntegralHeight = false,
-            MaxDropDownItems = 15
-        };
-        combo.Items.Add("Rellenar con uno ya usado...");
-        combo.Items.AddRange(usados.Cast<object>().ToArray());
-        combo.SelectedIndex = 0;
-        combo.SelectedIndexChanged += (s, e) =>
-        {
-            if (combo.SelectedItem is T elegido) rellenar(elegido);
-        };
-        return combo;
-    }
-
     private Control TarjetaParte(string titulo, string subtitulo, ControlesParte c,
         List<ParteEnvio> usados)
     {
-        var tarjeta = Componentes.Tarjeta(titulo, subtitulo, Sugerencias(usados, c.Rellenar));
+        var tarjeta = Componentes.Tarjeta(titulo, subtitulo);
+        SugerirPartes(c, usados);
         tarjeta.Controls.Add(RejillaParte(c, Componentes.Rejilla(4)));
         return tarjeta;
     }
@@ -207,8 +203,8 @@ public class FormDeca : Form
     // si es el remitente o el destinatario no hace falta volver a escribir sus datos.
     private Control TarjetaCargador(List<ParteEnvio> usados)
     {
-        var tarjeta = Componentes.Tarjeta("3   Cargador contractual", "Quién contrata el transporte con el transportista",
-            Sugerencias(usados, (ParteEnvio p) => { rbCargadorOtro.Checked = true; cargadorOtro.Rellenar(p); }));
+        var tarjeta = Componentes.Tarjeta("3   Cargador contractual", "Quién contrata el transporte con el transportista");
+        SugerirPartes(cargadorOtro, usados);
 
         panelCargador.Controls.AddRange(new Control[] { rbCargadorRemitente, rbCargadorDestinatario, rbCargadorOtro });
         foreach (var opcion in new[] { rbCargadorRemitente, rbCargadorDestinatario, rbCargadorOtro })
@@ -225,6 +221,13 @@ public class FormDeca : Form
         rejillaCargadorOtro.Margin = new Padding(0, 10, 0, 0);
         tarjeta.Controls.Add(RejillaParte(cargadorOtro, rejillaCargadorOtro));
         return tarjeta;
+    }
+
+    // Al escribir el nombre o el NIF salen los ya usados; al elegir uno se rellenan todos sus datos
+    private static void SugerirPartes(ControlesParte c, List<ParteEnvio> usados)
+    {
+        _ = new Sugerencias<ParteEnvio>(c.Nombre, usados, p => p.Nombre, c.Rellenar);
+        _ = new Sugerencias<ParteEnvio>(c.Nif, usados, p => p.Nif, c.Rellenar);
     }
 
     private Control RejillaParte(ControlesParte c, TableLayoutPanel rejilla)
@@ -248,13 +251,17 @@ public class FormDeca : Form
 
     private Control TarjetaTransporte(List<TransportistaDeca> usados)
     {
-        var tarjeta = Componentes.Tarjeta("4   Transporte", "Quién lleva la mercancía, en qué vehículo y de dónde a dónde",
-            Sugerencias(usados, (TransportistaDeca t) =>
-            {
-                txtTransportista.Text = t.Nombre;
-                txtNifTransportista.Text = t.Nif;
-                txtMatricula.Text = t.Matricula;
-            }));
+        var tarjeta = Componentes.Tarjeta("4   Transporte", "Quién lleva la mercancía, en qué vehículo y de dónde a dónde");
+
+        // Al elegir uno ya usado se rellenan su NIF y la matrícula de su último DeCA
+        void Rellenar(TransportistaDeca t)
+        {
+            txtTransportista.Text = t.Nombre;
+            txtNifTransportista.Text = t.Nif;
+            txtMatricula.Text = t.Matricula;
+        }
+        _ = new Sugerencias<TransportistaDeca>(txtTransportista, usados, t => t.Nombre, Rellenar);
+        _ = new Sugerencias<TransportistaDeca>(txtNifTransportista, usados, t => t.Nif, Rellenar);
 
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Fecha de carga", dtpCarga));
@@ -282,7 +289,7 @@ public class FormDeca : Form
         btnAnadir.Click += (s, e) => AnadirPalet();
 
         var tarjeta = Componentes.Tarjeta("5   Mercancía y palets",
-            "", btnAnadir, lblTotales);
+            "", null, lblTotales);
 
         var mercancia = campos.Campo("Naturaleza de la mercancía", txtMercancia);
         tarjeta.Controls.Add(mercancia);
@@ -300,12 +307,14 @@ public class FormDeca : Form
         contenedorPalets.AutoSize = true;
         contenedorPalets.ColumnCount = 1;
         contenedorPalets.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        contenedorPalets.Margin = new Padding(0, 0, 0, 15);
+        contenedorPalets.Margin = new Padding(0);
+        btnAnadir.Margin = new Padding(0, 6, 0, 15);   // debajo del último palet, que es donde se escribe
 
         lblErrorPalets.Margin = new Padding(0, 0, 0, 10);
 
         tarjeta.Controls.Add(EncabezadoPalets());
         tarjeta.Controls.Add(contenedorPalets);
+        tarjeta.Controls.Add(btnAnadir);
         tarjeta.Controls.Add(lblErrorPalets);
         tarjeta.Controls.Add(campos.Campo("Observaciones", txtObservaciones));
         return tarjeta;
@@ -552,6 +561,67 @@ public class FormDeca : Form
 
         hayCambios = false;
         DialogResult = DialogResult.OK;
+    }
+
+    // ---------- PDF y QR ----------
+
+    private void ActualizarBotonPdf() => btnPdf.Text = pdfAlDia ? "Ver PDF y QR" : "Generar PDF y QR";
+
+    // El PDF sale de lo guardado: si hay cambios, primero se guardan (y el formulario se cierra después)
+    private void PulsarPdf()
+    {
+        if (hayCambios)
+        {
+            var respuesta = MessageBox.Show(this,
+                "Para generar el PDF hay que guardar antes los cambios.\n\n¿Guardar y generar el PDF?",
+                "Cambios sin guardar", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (respuesta != DialogResult.Yes) return;
+
+            Guardar();
+            if (DialogResult != DialogResult.OK) return;   // había errores en los datos
+            pdfAlDia = false;   // al guardar cambios el PDF anterior deja de valer
+        }
+        GenerarPdfYQr();
+    }
+
+    // Genera el PDF y el QR, sube el PDF a la web y abre la carpeta con los dos. Con "Ver", si ya
+    // están en la carpeta de este ordenador solo se abre; si no (se generaron en otro), se vuelven
+    // a generar: es un archivo nuevo en la web, pero el anterior sigue ahí.
+    private void GenerarPdfYQr()
+    {
+        int id = existente!.Id;
+        string ruta;
+        Cursor = Cursors.WaitCursor;
+        try
+        {
+            string? guardado = pdfAlDia ? servicio.ObtenerDeca(id)?.ArchivoPdf : null;
+            ruta = guardado != null && File.Exists(Path.Combine(DecaServicio.CarpetaPdf, guardado))
+                ? Path.Combine(DecaServicio.CarpetaPdf, guardado)
+                : servicio.GenerarPdfYQr(id);
+        }
+        catch (ReglaNegocioException ex)
+        {
+            MessageBox.Show(this, ex.Message, "DeCA", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (DbException ex)
+        {
+            MessageBox.Show(this, "No se pudo generar el PDF.\n\n" + ex.Message,
+                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
+
+        if (!pdfAlDia && lblEstadoPdf != null)
+            lblEstadoPdf.Text = "Generado el " + Componentes.Fecha(DateTime.Now);
+        pdfAlDia = true;
+        ActualizarBotonPdf();
+
+        // Explorador abierto en la carpeta con el PDF marcado; el QR está justo al lado
+        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{ruta}\"");
     }
 
     // ---------- Cambios sin guardar ----------

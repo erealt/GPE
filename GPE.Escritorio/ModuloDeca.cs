@@ -20,7 +20,6 @@ public class ModuloDeca : UserControl
     private readonly Label lblVacio = new();
     private readonly Button btnNuevo = Tema.BotonPrincipal("+  Nuevo DeCA", 190);
     private readonly Button btnAbrir = Tema.BotonSecundario("Abrir", 110);
-    private readonly Button btnGenerar = Tema.BotonSecundario("Generar PDF y QR", 175);
 
     public ModuloDeca()
     {
@@ -140,23 +139,17 @@ public class ModuloDeca : UserControl
         var barra = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 2,
             BackColor = Color.White,
             Margin = new Padding(0, 10, 0, 0),
             Padding = new Padding(15, 0, 10, 0)
         };
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         lblContador.Dock = DockStyle.Fill;
         lblContador.ForeColor = Tema.Suave;
         lblContador.TextAlign = ContentAlignment.MiddleLeft;
-
-        btnGenerar.Height = 34;
-        btnGenerar.Anchor = AnchorStyles.Right;
-        btnGenerar.Margin = new Padding(0, 0, 10, 0);
-        btnGenerar.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) GenerarPdfYQr(d); };
 
         btnAbrir.Height = 34;
         btnAbrir.Anchor = AnchorStyles.Right;
@@ -164,8 +157,7 @@ public class ModuloDeca : UserControl
         btnAbrir.Click += (s, e) => { if (DecaSeleccionado() is DecaFila d) AbrirFormulario(d.Id); };
 
         barra.Controls.Add(lblContador, 0, 0);
-        barra.Controls.Add(btnGenerar, 1, 0);
-        barra.Controls.Add(btnAbrir, 2, 0);
+        barra.Controls.Add(btnAbrir, 1, 0);
         return barra;
     }
 
@@ -325,8 +317,6 @@ public class ModuloDeca : UserControl
     {
         var d = DecaSeleccionado();
         btnAbrir.Enabled = d != null;
-        btnGenerar.Enabled = d != null;
-        btnGenerar.Text = d is { PdfAlDia: true } ? "Ver PDF y QR" : "Generar PDF y QR";
     }
 
     private void LimpiarFiltros()
@@ -352,41 +342,6 @@ public class ModuloDeca : UserControl
     private DecaFila? DecaSeleccionado() =>
         grid.SelectedRows.Cast<DataGridViewRow>()
             .FirstOrDefault(f => f.Visible && f.Tag is DecaFila)?.Tag as DecaFila;
-
-    // Genera el PDF y el QR, sube el PDF a la web y abre la carpeta con los dos. Con "Ver", si ya
-    // están en la carpeta de este ordenador solo se abre; si no (se generaron en otro), se vuelven
-    // a generar: es un archivo nuevo en la web, pero el anterior sigue ahí.
-    private void GenerarPdfYQr(DecaFila fila)
-    {
-        string ruta;
-        Cursor = Cursors.WaitCursor;
-        try
-        {
-            string? guardado = fila.PdfAlDia ? servicio.ObtenerDeca(fila.Id)?.ArchivoPdf : null;
-            ruta = guardado != null && File.Exists(Path.Combine(DecaServicio.CarpetaPdf, guardado))
-                ? Path.Combine(DecaServicio.CarpetaPdf, guardado)
-                : servicio.GenerarPdfYQr(fila.Id);
-        }
-        catch (ReglaNegocioException ex)
-        {
-            MessageBox.Show(FindForm(), ex.Message, "DeCA", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-        catch (DbException ex)
-        {
-            MessageBox.Show(FindForm(), "No se pudo generar el PDF.\n\n" + ex.Message,
-                "Error de base de datos", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
-        finally
-        {
-            Cursor = Cursors.Default;
-        }
-
-        CargarDatos(fila.Id);
-        // Explorador abierto en la carpeta con el PDF marcado; el QR está justo al lado
-        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{ruta}\"");
-    }
 
     // null = nuevo DeCA
     private void AbrirFormulario(int? decaId)

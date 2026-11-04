@@ -7,7 +7,7 @@
         </div>
     </div>
 
-    <CamposParte Parte="Parte" Errores="Errores" Prefijo="@Prefijo" Cambio="Cambio" />
+    <CamposParte Parte="Parte" Errores="Errores" Prefijo="@Prefijo" Cambio="Cambio" Usados="Usados" />
 </section>
 
 @code {
@@ -19,4 +19,5 @@
     [Parameter, EditorRequired] public Dictionary<string, string> Errores { get; set; } = new();
     [Parameter, EditorRequired] public string Prefijo { get; set; } = "";
     [Parameter] public EventCallback Cambio { get; set; }
+    [Parameter] public List<ParteEnvio> Usados { get; set; } = [];
 }
