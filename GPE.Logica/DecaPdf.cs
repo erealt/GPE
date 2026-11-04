@@ -47,6 +47,11 @@ public static class DecaPdf
     {
         using var documento = new PdfDocument();
         documento.Info.Title = deca.Numero;
+        // La normativa pide la fecha y hora de creación y de modificación como metadatos del PDF.
+        // Cada cambio genera un PDF nuevo, así que las dos son el momento de generarlo.
+        var ahora = DateTime.Now;
+        documento.Info.CreationDate = ahora;
+        documento.Info.ModificationDate = ahora;
 
         var pagina = new Hoja(documento, deca.Numero);
         var g = pagina.G;
@@ -72,14 +77,31 @@ public static class DecaPdf
         double altoDestinatario = Parte(g, "DESTINATARIO", d.Destinatario, Margen + medio + 15, y, medio);
         y += Math.Max(altoRemitente, altoDestinatario) + 15;
 
-        // ---- Transporte ----
+        // ---- Cargador contractual y transportista efectivo: las dos figuras que pide la normativa ----
+        string tituloCargador = "CARGADOR CONTRACTUAL" + d.CargadorTipo switch
+        {
+            TipoCargador.Remitente => " (EL REMITENTE)",
+            TipoCargador.Destinatario => " (EL DESTINATARIO)",
+            _ => ""
+        };
+        double altoCargador = d.Cargador is ParteEnvio cargador
+            ? Parte(g, tituloCargador, cargador, Margen, y, medio) : 0;
+        double altoTransportista = Transportista(g, d, Margen + medio + 15, y, medio);
+        y += Math.Max(altoCargador, altoTransportista) + 15;
+
+        // ---- Transporte: vehículo, origen y destino ----
         y = TituloSeccion(g, "TRANSPORTE", Margen, y, ancho);
-        double cuarto = ancho / 4;
-        Dato(g, "FECHA DE CARGA", d.FechaCarga.ToString("dd/MM/yyyy", Es), Margen, y, cuarto);
-        Dato(g, "TRANSPORTISTA", d.TransportistaNombre, Margen + cuarto, y, cuarto * 1.5);
-        Dato(g, "NIF", d.TransportistaNif, Margen + cuarto * 2.5, y, cuarto * 0.75);
-        Dato(g, "MATRÍCULA", d.Matricula, Margen + cuarto * 3.25, y, cuarto * 0.75);
-        y += 38;
+        double tercio = ancho / 3;
+        Dato(g, "FECHA DE CARGA", d.FechaCarga.ToString("dd/MM/yyyy", Es), Margen, y, tercio);
+        Dato(g, "MATRÍCULA DEL VEHÍCULO", d.Matricula, Margen + tercio, y, tercio);
+        if (d.MatriculaRemolque != null)
+            Dato(g, "MATRÍCULA DEL REMOLQUE", d.MatriculaRemolque, Margen + tercio * 2, y, tercio);
+        y += 34;
+
+        double altoOrigen = Texto(g, "ORIGEN", d.LugarCarga ?? Domicilio(d.Remitente), Margen, y, medio);
+        double altoDestino = Texto(g, "DESTINO", d.LugarDescarga ?? Domicilio(d.Destinatario),
+            Margen + medio + 15, y, medio);
+        y += Math.Max(altoOrigen, altoDestino) + 15;
 
         // ---- Mercancía y palets ----
         y = TituloSeccion(g, "MERCANCÍA", Margen, y, ancho);
@@ -159,6 +181,21 @@ public static class DecaPdf
         }
         return y - inicio;
     }
+
+    // Devuelve el alto ocupado
+    private static double Transportista(XGraphics g, DatosDeca d, double x, double y, double ancho)
+    {
+        double inicio = y;
+        y = TituloSeccion(g, "TRANSPORTISTA EFECTIVO", x, y, ancho);
+        y += Parrafo(g, d.TransportistaNombre, x, y, ancho, Negrita) + 2;
+        y += Parrafo(g, "NIF: " + d.TransportistaNif, x, y, ancho);
+        return y - inicio;
+    }
+
+    // Dirección completa en una línea, para el origen y el destino
+    private static string Domicilio(ParteEnvio p) =>
+        $"{p.Direccion}, {p.CodigoPostal} {p.Poblacion}"
+        + (string.IsNullOrEmpty(p.Provincia) ? "" : $" ({p.Provincia})") + $", {p.Pais}";
 
     private static double TituloSeccion(XGraphics g, string titulo, double x, double y, double ancho)
     {

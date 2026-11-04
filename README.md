@@ -17,6 +17,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
    - [`control_agua.sql`](BaseDatos/control_agua.sql): tablas del control de agua (hoja AGUA del Excel de calidad), con los puntos de agua que se revisan.
    - [`rutina_revisiones.sql`](BaseDatos/rutina_revisiones.sql): solo en bases de datos creadas antes de que la rutina tuviera varias revisiones por día. Se puede ejecutar más de una vez.
+   - [`deca_normativa.sql`](BaseDatos/deca_normativa.sql): solo en bases de datos creadas antes de añadir al DeCA el cargador contractual, la matrícula del remolque y los lugares de carga y descarga. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
 
    Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-f 65001`, por las tildes.
@@ -188,12 +189,15 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
 | Pantallas | [`ModuloDeca.cs`](GPE.Escritorio/ModuloDeca.cs), [`Deca.cs`](GPE.Escritorio/Deca.cs) |
 
 - **Lista (`ModuloDeca`)**: número `DECA-AAAA-NNN`, fecha de carga, remitente, destinatario, transportista, palets, cajas, peso total y el estado del PDF (*Al día* / *Por generar*). Búsqueda por texto y fechas; doble clic o *Abrir* para modificar.
-- **Formulario (`FormDeca`)**: remitente, destinatario, transporte (fecha de carga, transportista, NIF, matrícula), mercancía, una fila por palet (peso y cajas, con los totales en el subtítulo) y observaciones.
+- **Formulario (`FormDeca`)**: remitente, destinatario, cargador contractual, transporte (fecha de carga, transportista efectivo, NIF, matrícula del vehículo y del remolque, lugar de carga y de descarga), mercancía, una fila por palet (peso y cajas, con los totales en el subtítulo) y observaciones.
   - Remitente, destinatario y transportista se escriben a mano; el desplegable *Rellenar con uno ya usado* los rellena con los de otros DeCA (no hay catálogo aparte).
+  - **Cargador contractual**: quien contrata el transporte con el transportista. Se elige *El remitente*, *El destinatario* u *Otro* (y entonces se escriben sus datos). No hay ninguno marcado por defecto: depende de cada envío.
+  - **Matrícula del remolque**: solo si es un camión articulado. **Lugar de carga y de descarga**: solo si no son las direcciones del remitente y del destinatario; en el PDF, si están vacíos, salen esas direcciones.
   - Cada palet nuevo copia el peso y las cajas del anterior.
   - Avisa al cerrar si hay cambios sin guardar.
 - **Validaciones (`DecaServicio`)**: obligatorios, al menos un palet (peso entre 0 y 2.000 kg, cajas > 0), fecha de carga hasta 30 días atrás o adelante (solo si se cambia), CP de 5 cifras en España y el **NIF con su letra de control** (DNI, NIE, CIF y K/L/M) cuando el país es España. El NIF del transportista se comprueba si tiene forma de NIF español.
 - **PDF y QR**: botón *Generar PDF y QR* en la lista. Genera el PDF, lo **sube a la web** (biblioteca de medios de WordPress) y guarda una copia junto con el QR suelto como imagen (`DECA-AAAA-NNN-QR.png`, para imprimirlo aparte); después abre la carpeta con los dos. El PDF es una hoja A4 con los mismos datos que el formulario y el QR arriba a la derecha; si hay muchos palets la tabla sigue en otra hoja. Se hace con PDFsharp y QRCoder (los dos MIT).
+  - **Normativa** (Orden FOM/2861/2012 y Resolución de 5 de junio de 2026, obligatorio desde el 5/10/2026): el PDF lleva todos los datos del artículo 6 (cargador contractual y transportista efectivo con esos nombres, origen y destino, naturaleza y peso, fecha, matrículas, observaciones), la fecha y hora de creación y de modificación como metadatos, y el QR con una dirección `https://` que descarga el PDF directamente. Si se modifica un DeCA se genera un PDF nuevo y el original se conserva, como permite la resolución.
   - Cada vez que se genera es un archivo nuevo, `DECA-AAAA-NNN-<código aleatorio>.pdf` (el código es para que no se pueda adivinar la dirección de otro DeCA). Los anteriores **se quedan en la web**: un QR ya impreso sigue llevando al PDF que se imprimió con él.
   - El QR va dentro del PDF, así que su dirección se calcula antes de subirlo: `https://eurochoc.es/wp-content/uploads/AAAA/MM/<archivo>`, la carpeta del mes en que se sube. Si WordPress lo deja en otra carpeta, se borra y se vuelve a subir con el QR apuntando a esa.
   - Si la subida falla, el DeCA sigue *Por generar* y se puede volver a intentar.

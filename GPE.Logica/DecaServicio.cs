@@ -188,6 +188,11 @@ public class DecaServicio
         return null;
     }
 
+    // No se da ninguno por defecto: depende de quién contrate cada transporte
+    public static string? ErrorCargadorTipo(string? tipo) =>
+        tipo is TipoCargador.Remitente or TipoCargador.Destinatario or TipoCargador.Otro
+            ? null : "Indica quién es el cargador contractual (quién contrata el transporte).";
+
     public static string? ErrorOpcional(string? valor, int maximo) =>
         valor != null && valor.Trim().Length > maximo ? $"No puede superar los {maximo} caracteres." : null;
 
@@ -198,12 +203,20 @@ public class DecaServicio
     {
         Remitente = Normalizar(d.Remitente),
         Destinatario = Normalizar(d.Destinatario),
+        // Los datos de "otro" cargador solo se guardan si se ha elegido esa opción
+        CargadorOtro = d.CargadorTipo == TipoCargador.Otro && d.CargadorOtro != null ? Normalizar(d.CargadorOtro) : null,
         TransportistaNombre = d.TransportistaNombre.Trim(),
         TransportistaNif = Nif.Normalizar(d.TransportistaNif),
-        Matricula = string.Concat(d.Matricula.Where(char.IsLetterOrDigit)).ToUpperInvariant(),
+        Matricula = NormalizarMatricula(d.Matricula),
+        MatriculaRemolque = Opcional(NormalizarMatricula(d.MatriculaRemolque ?? "")),
+        LugarCarga = Opcional(d.LugarCarga),
+        LugarDescarga = Opcional(d.LugarDescarga),
         Mercancia = d.Mercancia.Trim(),
         Observaciones = Opcional(d.Observaciones)
     };
+
+    private static string NormalizarMatricula(string matricula) =>
+        string.Concat(matricula.Where(char.IsLetterOrDigit)).ToUpperInvariant();
 
     private static ParteEnvio Normalizar(ParteEnvio p) => new(
         Nombre: p.Nombre.Trim(),
@@ -223,11 +236,22 @@ public class DecaServicio
         Comprobar(ErroresParte(d.Remitente, "del remitente"));
         Comprobar(ErroresParte(d.Destinatario, "del destinatario"));
 
+        Comprobar(ErrorCargadorTipo(d.CargadorTipo));
+        if (d.CargadorTipo == TipoCargador.Otro)
+        {
+            if (d.CargadorOtro == null)
+                throw new ReglaNegocioException("Indica los datos del cargador contractual.");
+            Comprobar(ErroresParte(d.CargadorOtro, "del cargador contractual"));
+        }
+
         Comprobar(
             comprobarFecha ? ErrorFechaCarga(d.FechaCarga) : null,
             ErrorObligatorio(d.TransportistaNombre, "el transportista", 150),
             ErrorNifTransportista(d.TransportistaNif),
             ErrorObligatorio(d.Matricula, "la matrícula", 20),
+            ErrorOpcional(d.MatriculaRemolque, 20),
+            ErrorOpcional(d.LugarCarga, 250),
+            ErrorOpcional(d.LugarDescarga, 250),
             ErrorObligatorio(d.Mercancia, "la mercancía", 250));
 
         if (d.Palets.Count == 0)

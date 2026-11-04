@@ -4,7 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Crear o modificar un DeCA: remitente, destinatario, transporte, mercancía y palets.
+// Crear o modificar un DeCA: remitente, destinatario, cargador contractual, transporte, mercancía y palets.
 // Remitente, destinatario y transportista se pueden rellenar con uno ya usado.
 public class FormDeca : Form
 {
@@ -60,11 +60,22 @@ public class FormDeca : Form
     private readonly ControlesParte remitente = new();
     private readonly ControlesParte destinatario = new();
 
+    // Cargador contractual: quien contrata el transporte. No se marca ninguno por defecto.
+    private readonly FlowLayoutPanel panelCargador = new() { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+    private readonly RadioButton rbCargadorRemitente = Opcion("El remitente");
+    private readonly RadioButton rbCargadorDestinatario = Opcion("El destinatario");
+    private readonly RadioButton rbCargadorOtro = Opcion("Otro");
+    private readonly ControlesParte cargadorOtro = new();
+    private readonly TableLayoutPanel rejillaCargadorOtro = Componentes.Rejilla(4);
+
     // Transporte y mercancía
     private readonly DateTimePicker dtpCarga = new() { Format = DateTimePickerFormat.Short };
     private readonly TextBox txtTransportista = Texto(150, "Nombre o razón social");
     private readonly TextBox txtNifTransportista = Texto(20, "");
     private readonly TextBox txtMatricula = Texto(20, "1234ABC");
+    private readonly TextBox txtMatriculaRemolque = Texto(20, "Solo si lleva remolque");
+    private readonly TextBox txtLugarCarga = Texto(250, "Si no es la dirección del remitente");
+    private readonly TextBox txtLugarDescarga = Texto(250, "Si no es la dirección del destinatario");
     private readonly TextBox txtMercancia = Texto(250, "Ej. Chocolate en cajas de cartón");
     private readonly TextBox txtObservaciones = Texto(4000, "Cualquier información útil para el transporte...");
 
@@ -112,6 +123,9 @@ public class FormDeca : Form
 
     private static TextBox Texto(int maximo, string ejemplo) => new() { MaxLength = maximo, PlaceholderText = ejemplo };
 
+    private static RadioButton Opcion(string texto) =>
+        new() { Text = texto, AutoSize = true, Margin = new Padding(0, 0, 25, 0) };
+
     // ---------- Estructura ----------
 
     private Panel CrearContenido()
@@ -150,6 +164,7 @@ public class FormDeca : Form
 
         pila.Controls.Add(TarjetaParte("1   Remitente", "Quién envía la mercancía", remitente, partesUsadas));
         pila.Controls.Add(TarjetaParte("2   Destinatario", "Quién la recibe", destinatario, partesUsadas));
+        pila.Controls.Add(TarjetaCargador(partesUsadas));
         pila.Controls.Add(TarjetaTransporte(transportistasUsados));
         pila.Controls.Add(TarjetaMercancia());
         pila.Controls.Add(CrearAcciones());
@@ -184,8 +199,36 @@ public class FormDeca : Form
         List<ParteEnvio> usados)
     {
         var tarjeta = Componentes.Tarjeta(titulo, subtitulo, Sugerencias(usados, c.Rellenar));
+        tarjeta.Controls.Add(RejillaParte(c, Componentes.Rejilla(4)));
+        return tarjeta;
+    }
 
-        var rejilla = Componentes.Rejilla(4);
+    // Quien contrata el transporte con el transportista. La normativa pide que figure expresamente;
+    // si es el remitente o el destinatario no hace falta volver a escribir sus datos.
+    private Control TarjetaCargador(List<ParteEnvio> usados)
+    {
+        var tarjeta = Componentes.Tarjeta("3   Cargador contractual", "Quién contrata el transporte con el transportista",
+            Sugerencias(usados, (ParteEnvio p) => { rbCargadorOtro.Checked = true; cargadorOtro.Rellenar(p); }));
+
+        panelCargador.Controls.AddRange(new Control[] { rbCargadorRemitente, rbCargadorDestinatario, rbCargadorOtro });
+        foreach (var opcion in new[] { rbCargadorRemitente, rbCargadorDestinatario, rbCargadorOtro })
+            opcion.CheckedChanged += (s, e) =>
+            {
+                if (!opcion.Checked) return;
+                campos.OcultarError(panelCargador);
+                rejillaCargadorOtro.Visible = rbCargadorOtro.Checked;
+                MarcarCambio();
+            };
+        tarjeta.Controls.Add(campos.Campo("El cargador contractual es", panelCargador));
+
+        rejillaCargadorOtro.Visible = false;
+        rejillaCargadorOtro.Margin = new Padding(0, 10, 0, 0);
+        tarjeta.Controls.Add(RejillaParte(cargadorOtro, rejillaCargadorOtro));
+        return tarjeta;
+    }
+
+    private Control RejillaParte(ControlesParte c, TableLayoutPanel rejilla)
+    {
         var nombre = campos.Campo("Nombre", c.Nombre);
         rejilla.Controls.Add(nombre);
         rejilla.SetColumnSpan(nombre, 2);
@@ -200,14 +243,12 @@ public class FormDeca : Form
 
         rejilla.Controls.Add(campos.Campo("Provincia", c.Provincia));
         rejilla.Controls.Add(campos.Campo("País", c.Pais));
-
-        tarjeta.Controls.Add(rejilla);
-        return tarjeta;
+        return rejilla;
     }
 
     private Control TarjetaTransporte(List<TransportistaDeca> usados)
     {
-        var tarjeta = Componentes.Tarjeta("3   Transporte", "Quién lleva la mercancía y cuándo se carga",
+        var tarjeta = Componentes.Tarjeta("4   Transporte", "Quién lleva la mercancía, en qué vehículo y de dónde a dónde",
             Sugerencias(usados, (TransportistaDeca t) =>
             {
                 txtTransportista.Text = t.Nombre;
@@ -217,9 +258,19 @@ public class FormDeca : Form
 
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Fecha de carga", dtpCarga));
-        rejilla.Controls.Add(campos.Campo("Transportista", txtTransportista));
+        rejilla.Controls.Add(campos.Campo("Transportista efectivo", txtTransportista));
         rejilla.Controls.Add(campos.Campo("NIF del transportista", txtNifTransportista));
         rejilla.Controls.Add(campos.Campo("Matrícula del vehículo", txtMatricula));
+
+        // Si es un camión articulado, la normativa pide también la del remolque o semirremolque
+        rejilla.Controls.Add(campos.Campo("Matrícula del remolque", txtMatriculaRemolque), 3, 1);
+
+        var carga = campos.Campo("Lugar de carga", txtLugarCarga);
+        rejilla.Controls.Add(carga, 0, 2);
+        rejilla.SetColumnSpan(carga, 2);
+        var descarga = campos.Campo("Lugar de descarga", txtLugarDescarga);
+        rejilla.Controls.Add(descarga, 2, 2);
+        rejilla.SetColumnSpan(descarga, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -230,7 +281,7 @@ public class FormDeca : Form
         var btnAnadir = Tema.BotonSecundario("+  Añadir palet", 170);
         btnAnadir.Click += (s, e) => AnadirPalet();
 
-        var tarjeta = Componentes.Tarjeta("4   Mercancía y palets",
+        var tarjeta = Componentes.Tarjeta("5   Mercancía y palets",
             "", btnAnadir, lblTotales);
 
         var mercancia = campos.Campo("Naturaleza de la mercancía", txtMercancia);
@@ -388,23 +439,41 @@ public class FormDeca : Form
     {
         remitente.Rellenar(d.Remitente);
         destinatario.Rellenar(d.Destinatario);
+        rbCargadorRemitente.Checked = d.CargadorTipo == TipoCargador.Remitente;
+        rbCargadorDestinatario.Checked = d.CargadorTipo == TipoCargador.Destinatario;
+        rbCargadorOtro.Checked = d.CargadorTipo == TipoCargador.Otro;
+        if (d.CargadorOtro != null) cargadorOtro.Rellenar(d.CargadorOtro);
         dtpCarga.Value = d.FechaCarga;
         txtTransportista.Text = d.TransportistaNombre;
         txtNifTransportista.Text = d.TransportistaNif;
         txtMatricula.Text = d.Matricula;
+        txtMatriculaRemolque.Text = d.MatriculaRemolque ?? "";
+        txtLugarCarga.Text = d.LugarCarga ?? "";
+        txtLugarDescarga.Text = d.LugarDescarga ?? "";
         txtMercancia.Text = d.Mercancia;
         txtObservaciones.Text = d.Observaciones ?? "";
         foreach (var palet in d.Palets)
             AnadirPalet(palet);
     }
 
+    private string CargadorElegido() =>
+        rbCargadorRemitente.Checked ? TipoCargador.Remitente
+        : rbCargadorDestinatario.Checked ? TipoCargador.Destinatario
+        : rbCargadorOtro.Checked ? TipoCargador.Otro
+        : "";
+
     private DatosDeca Leer() => new(
         remitente.Leer(),
         destinatario.Leer(),
+        CargadorElegido(),
+        rbCargadorOtro.Checked ? cargadorOtro.Leer() : null,
         dtpCarga.Value.Date,
         txtTransportista.Text,
         txtNifTransportista.Text,
         txtMatricula.Text,
+        txtMatriculaRemolque.Text,
+        txtLugarCarga.Text,
+        txtLugarDescarga.Text,
         txtMercancia.Text,
         txtObservaciones.Text,
         palets.Select(p => new PaletDeca(p.Peso.Value, (int)p.Cajas.Value)).ToList());
@@ -421,12 +490,17 @@ public class FormDeca : Form
         bool fechaCambiada = existente == null || dtpCarga.Value.Date != existente.Datos.FechaCarga.Date;
         var comprobaciones = remitente.Comprobaciones()
             .Concat(destinatario.Comprobaciones())
+            .Append((panelCargador, () => DecaServicio.ErrorCargadorTipo(CargadorElegido())))
+            .Concat(rbCargadorOtro.Checked ? cargadorOtro.Comprobaciones() : [])
             .Concat(new (Control, Func<string?>)[]
             {
                 (dtpCarga, () => fechaCambiada ? DecaServicio.ErrorFechaCarga(dtpCarga.Value) : null),
                 (txtTransportista, () => DecaServicio.ErrorObligatorio(txtTransportista.Text, "el transportista", 150)),
                 (txtNifTransportista, () => DecaServicio.ErrorNifTransportista(txtNifTransportista.Text)),
                 (txtMatricula, () => DecaServicio.ErrorObligatorio(txtMatricula.Text, "la matrícula", 20)),
+                (txtMatriculaRemolque, () => DecaServicio.ErrorOpcional(txtMatriculaRemolque.Text, 20)),
+                (txtLugarCarga, () => DecaServicio.ErrorOpcional(txtLugarCarga.Text, 250)),
+                (txtLugarDescarga, () => DecaServicio.ErrorOpcional(txtLugarDescarga.Text, 250)),
                 (txtMercancia, () => DecaServicio.ErrorObligatorio(txtMercancia.Text, "la mercancía", 250))
             });
 

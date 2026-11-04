@@ -69,18 +69,49 @@
 <TarjetaParte Numero="2" Titulo="Destinatario" Subtitulo="Quién la recibe" Parte="destinatario"
               Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" />
 
+@* La normativa pide que figure expresamente quién contrata el transporte; si es el remitente
+   o el destinatario no hace falta volver a escribir sus datos *@
 <section class="tarjeta">
     <div class="titulo-tarjeta">
         <div>
-            <h2><span class="paso">3</span>Transporte</h2>
-            <p class="suave">Quién lleva la mercancía y cuándo se carga</p>
+            <h2><span class="paso">3</span>Cargador contractual</h2>
+            <p class="suave">Quién contrata el transporte con el transportista</p>
+        </div>
+    </div>
+    <div class="campo @(errores.ContainsKey("cargador") ? "con-error" : "")">
+        <span class="etiqueta-campo" id="etiqueta-cargador">El cargador contractual es</span>
+        <div class="opciones" role="radiogroup" aria-labelledby="etiqueta-cargador">
+            @foreach (var (tipo, texto) in OpcionesCargador)
+            {
+                <label class="opcion">
+                    <input type="radio" name="cargador" checked="@(cargadorTipo == tipo)" @onchange="() => ElegirCargador(tipo)" />
+                    @texto
+                </label>
+            }
+        </div>
+        @if (errores.GetValueOrDefault("cargador") is string errorCargador)
+        {
+            <span class="error-campo">@errorCargador</span>
+        }
+    </div>
+    @if (cargadorTipo == TipoCargador.Otro)
+    {
+        <CamposParte Parte="cargadorOtro" Errores="errores" Prefijo="cargador" Cambio="MarcarCambio" />
+    }
+</section>
+
+<section class="tarjeta">
+    <div class="titulo-tarjeta">
+        <div>
+            <h2><span class="paso">4</span>Transporte</h2>
+            <p class="suave">Quién lleva la mercancía, en qué vehículo y de dónde a dónde</p>
         </div>
     </div>
     <div class="rejilla">
         <Campo Etiqueta="Fecha de carga" Error="@errores.GetValueOrDefault("fecha")">
             <input type="date" @bind="fechaCarga" @bind:after='() => Cambiar("fecha")' />
         </Campo>
-        <Campo Etiqueta="Transportista" Error="@errores.GetValueOrDefault("transportista")">
+        <Campo Etiqueta="Transportista efectivo" Error="@errores.GetValueOrDefault("transportista")">
             <input maxlength="150" placeholder="Nombre o razón social" @bind="transportista" @bind:after='() => Cambiar("transportista")' />
         </Campo>
         <Campo Etiqueta="NIF del transportista" Error="@errores.GetValueOrDefault("nifTransportista")">
@@ -89,13 +120,25 @@
         <Campo Etiqueta="Matrícula del vehículo" Error="@errores.GetValueOrDefault("matricula")">
             <input maxlength="20" placeholder="1234ABC" @bind="matricula" @bind:after='() => Cambiar("matricula")' />
         </Campo>
+
+        @* Si es un camión articulado, la normativa pide también la del remolque o semirremolque *@
+        <Campo Etiqueta="Matrícula del remolque" Error="@errores.GetValueOrDefault("matriculaRemolque")" Clase="ultima">
+            <input maxlength="20" placeholder="Solo si lleva remolque" @bind="matriculaRemolque" @bind:after='() => Cambiar("matriculaRemolque")' />
+        </Campo>
+
+        <Campo Etiqueta="Lugar de carga" Error="@errores.GetValueOrDefault("lugarCarga")" Clase="doble">
+            <input maxlength="250" placeholder="Si no es la dirección del remitente" @bind="lugarCarga" @bind:after='() => Cambiar("lugarCarga")' />
+        </Campo>
+        <Campo Etiqueta="Lugar de descarga" Error="@errores.GetValueOrDefault("lugarDescarga")" Clase="doble">
+            <input maxlength="250" placeholder="Si no es la dirección del destinatario" @bind="lugarDescarga" @bind:after='() => Cambiar("lugarDescarga")' />
+        </Campo>
     </div>
 </section>
 
 <section class="tarjeta">
     <div class="titulo-tarjeta">
         <div>
-            <h2><span class="paso">4</span>Mercancía y palets</h2>
+            <h2><span class="paso">5</span>Mercancía y palets</h2>
             <p class="suave">
                 @palets.Count @(palets.Count == 1 ? "palet" : "palets")  ·
                 @palets.Sum(p => p.NumCajas ?? 0).ToString("N0") cajas  ·
@@ -157,10 +200,15 @@
 
     private ParteFormulario remitente = new();
     private ParteFormulario destinatario = new();
+    private string cargadorTipo = "";   // ninguno marcado hasta que se elija
+    private ParteFormulario cargadorOtro = new();
     private DateTime fechaCarga = DateTime.Today;
     private string transportista = "";
     private string nifTransportista = "";
     private string matricula = "";
+    private string matriculaRemolque = "";
+    private string lugarCarga = "";
+    private string lugarDescarga = "";
     private string mercancia = "";
     private string observaciones = "";
     private List<PaletFormulario> palets = [];
@@ -213,10 +261,16 @@
         remitente.Rellenar(d.Remitente);
         destinatario = new();
         destinatario.Rellenar(d.Destinatario);
+        cargadorTipo = d.CargadorTipo;
+        cargadorOtro = new();
+        if (d.CargadorOtro != null) cargadorOtro.Rellenar(d.CargadorOtro);
         fechaCarga = d.FechaCarga;
         transportista = d.TransportistaNombre;
         nifTransportista = d.TransportistaNif;
         matricula = d.Matricula;
+        matriculaRemolque = d.MatriculaRemolque ?? "";
+        lugarCarga = d.LugarCarga ?? "";
+        lugarDescarga = d.LugarDescarga ?? "";
         mercancia = d.Mercancia;
         observaciones = d.Observaciones ?? "";
         palets = d.Palets.Select(p => new PaletFormulario { PesoKg = p.PesoKg, NumCajas = p.NumCajas }).ToList();
@@ -232,6 +286,19 @@
     {
         errores.Remove(campo);
         MarcarCambio();
+    }
+
+    private static readonly (string Tipo, string Texto)[] OpcionesCargador =
+    [
+        (TipoCargador.Remitente, "El remitente"),
+        (TipoCargador.Destinatario, "El destinatario"),
+        (TipoCargador.Otro, "Otro")
+    ];
+
+    private void ElegirCargador(string tipo)
+    {
+        cargadorTipo = tipo;
+        Cambiar("cargador");
     }
 
     private void CambiarPalet(PaletFormulario palet)
@@ -266,10 +333,15 @@
     private DatosDeca Leer() => new(
         remitente.Leer(),
         destinatario.Leer(),
+        cargadorTipo,
+        cargadorTipo == TipoCargador.Otro ? cargadorOtro.Leer() : null,
         fechaCarga.Date,
         transportista,
         nifTransportista,
         matricula,
+        matriculaRemolque,
+        lugarCarga,
+        lugarDescarga,
         mercancia,
         observaciones,
         palets.Select(p => new PaletDeca(p.PesoKg ?? 0, p.NumCajas ?? 0)).ToList());
@@ -280,15 +352,21 @@
 
         // 1. Se marcan a la vez todos los campos con error y la página va al primero
         errores.Clear();
-        foreach (var (prefijo, parte) in new[] { ("remitente", remitente), ("destinatario", destinatario) })
+        var partes = new List<(string, ParteFormulario)> { ("remitente", remitente), ("destinatario", destinatario) };
+        if (cargadorTipo == TipoCargador.Otro) partes.Add(("cargador", cargadorOtro));
+        foreach (var (prefijo, parte) in partes)
             foreach (var (campo, error) in parte.Comprobaciones())
                 if (error != null) errores[$"{prefijo}.{campo}"] = error;
 
+        Anotar("cargador", DecaServicio.ErrorCargadorTipo(cargadorTipo));
         bool fechaCambiada = existente == null || fechaCarga.Date != existente.Datos.FechaCarga.Date;
         Anotar("fecha", fechaCambiada ? DecaServicio.ErrorFechaCarga(fechaCarga) : null);
         Anotar("transportista", DecaServicio.ErrorObligatorio(transportista, "el transportista", 150));
         Anotar("nifTransportista", DecaServicio.ErrorNifTransportista(nifTransportista));
         Anotar("matricula", DecaServicio.ErrorObligatorio(matricula, "la matrícula", 20));
+        Anotar("matriculaRemolque", DecaServicio.ErrorOpcional(matriculaRemolque, 20));
+        Anotar("lugarCarga", DecaServicio.ErrorOpcional(lugarCarga, 250));
+        Anotar("lugarDescarga", DecaServicio.ErrorOpcional(lugarDescarga, 250));
         Anotar("mercancia", DecaServicio.ErrorObligatorio(mercancia, "la mercancía", 250));
 
         foreach (var palet in palets)

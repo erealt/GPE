@@ -283,17 +283,40 @@ public record TransportistaDeca(string Nombre, string Nif, string Matricula)
 
 public record PaletDeca(decimal PesoKg, int NumCajas);
 
-// Lo que el usuario rellena al crear o modificar un DeCA
+// Quién es el cargador contractual (quien contrata el transporte con el transportista)
+public static class TipoCargador
+{
+    public const string Remitente = "REMITENTE";
+    public const string Destinatario = "DESTINATARIO";
+    public const string Otro = "OTRO";
+}
+
+// Lo que el usuario rellena al crear o modificar un DeCA. CargadorOtro solo se usa si
+// CargadorTipo es Otro. LugarCarga y LugarDescarga son null si coinciden con las direcciones
+// del remitente y del destinatario.
 public record DatosDeca(
     ParteEnvio Remitente,
     ParteEnvio Destinatario,
+    string CargadorTipo,
+    ParteEnvio? CargadorOtro,
     DateTime FechaCarga,
     string TransportistaNombre,
     string TransportistaNif,
     string Matricula,
+    string? MatriculaRemolque,
+    string? LugarCarga,
+    string? LugarDescarga,
     string Mercancia,
     string? Observaciones,
-    List<PaletDeca> Palets);
+    List<PaletDeca> Palets)
+{
+    public ParteEnvio? Cargador => CargadorTipo switch
+    {
+        TipoCargador.Remitente => Remitente,
+        TipoCargador.Destinatario => Destinatario,
+        _ => CargadorOtro
+    };
+}
 
 // Fila de la lista de DeCA, con los totales de sus palets
 public record DecaFila(

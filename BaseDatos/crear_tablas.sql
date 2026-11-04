@@ -425,11 +425,28 @@ CREATE TABLE DECA (
     destinatario_provincia NVARCHAR(100) NULL,
     destinatario_pais NVARCHAR(60) NOT NULL CONSTRAINT DF_deca_destinatario_pais DEFAULT N'España',
     destinatario_telefono NVARCHAR(30) NULL,
+    -- Cargador contractual: quien contrata el transporte con el transportista (Orden FOM/2861/2012).
+    -- Si es el remitente o el destinatario no se repiten sus datos; con OTRO van en cargador_*.
+    cargador_tipo NVARCHAR(12) NOT NULL
+        CONSTRAINT DF_deca_cargador_tipo DEFAULT N'REMITENTE'
+        CONSTRAINT CK_deca_cargador_tipo CHECK (cargador_tipo IN (N'REMITENTE', N'DESTINATARIO', N'OTRO')),
+    cargador_nombre NVARCHAR(150) NULL,
+    cargador_nif NVARCHAR(20) NULL,
+    cargador_direccion NVARCHAR(200) NULL,
+    cargador_cp NVARCHAR(10) NULL,
+    cargador_poblacion NVARCHAR(100) NULL,
+    cargador_provincia NVARCHAR(100) NULL,
+    cargador_pais NVARCHAR(60) NULL,
+    cargador_telefono NVARCHAR(30) NULL,
     -- Transporte (el catálogo TRANSPORTISTA de las recogidas no tiene NIF, por eso es texto)
     fecha_carga DATE NOT NULL,
-    transportista_nombre NVARCHAR(150) NOT NULL,
+    transportista_nombre NVARCHAR(150) NOT NULL,   -- transportista efectivo
     transportista_nif NVARCHAR(20) NOT NULL,
     matricula NVARCHAR(20) NOT NULL,
+    matricula_remolque NVARCHAR(20) NULL,   -- solo en conjuntos articulados
+    -- Origen y destino, si no son las direcciones del remitente y del destinatario
+    lugar_carga NVARCHAR(250) NULL,
+    lugar_descarga NVARCHAR(250) NULL,
     mercancia NVARCHAR(250) NOT NULL,   -- naturaleza de la mercancía
     observaciones NVARCHAR(MAX) NULL,
     -- PDF publicado (nombre del archivo en la carpeta de publicación); NULL si aún no se ha generado
@@ -441,7 +458,10 @@ CREATE TABLE DECA (
     modificado_por INT NULL,
     modificado_en DATETIME2 NULL,
     CONSTRAINT FK_deca_creado_por     FOREIGN KEY (creado_por)       REFERENCES USUARIO(id),
-    CONSTRAINT FK_deca_modificado_por FOREIGN KEY (modificado_por)   REFERENCES USUARIO(id)
+    CONSTRAINT FK_deca_modificado_por FOREIGN KEY (modificado_por)   REFERENCES USUARIO(id),
+    CONSTRAINT CK_deca_cargador_otro CHECK (cargador_tipo <> N'OTRO' OR
+        (cargador_nombre IS NOT NULL AND cargador_nif IS NOT NULL AND cargador_direccion IS NOT NULL
+         AND cargador_cp IS NOT NULL AND cargador_poblacion IS NOT NULL AND cargador_pais IS NOT NULL))
 );
 
 -- Palets de la carga: peso y cajas de cada uno. "orden" es el nº de palet (1, 2, 3...)

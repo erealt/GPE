@@ -56,7 +56,9 @@ public class DecaRepositorio
                    {string.Format(ColumnasParte, "d.destinatario")},
                    d.fecha_carga, d.transportista_nombre, d.transportista_nif, d.matricula,
                    d.mercancia, d.observaciones, d.archivo_pdf, d.pdf_generado_en,
-                   uc.nombre, d.creado_en, um.nombre, d.modificado_en
+                   uc.nombre, d.creado_en, um.nombre, d.modificado_en,
+                   d.cargador_tipo, {string.Format(ColumnasParte, "d.cargador")},
+                   d.matricula_remolque, d.lugar_carga, d.lugar_descarga
             FROM DECA d
             JOIN USUARIO uc ON uc.id = d.creado_por
             LEFT JOIN USUARIO um ON um.id = d.modificado_por
@@ -88,14 +90,20 @@ public class DecaRepositorio
         DateTime creadoEn = lector.GetDateTime(28);
         string? modificadoPor = TextoONull(lector, 29);
         DateTime? modificadoEn = lector.IsDBNull(30) ? null : lector.GetDateTime(30);
+        string cargadorTipo = lector.GetString(31);
+        ParteEnvio? cargadorOtro = cargadorTipo == TipoCargador.Otro ? LeerParte(lector, 32) : null;
+        string? matriculaRemolque = TextoONull(lector, 40);
+        string? lugarCarga = TextoONull(lector, 41);
+        string? lugarDescarga = TextoONull(lector, 42);
 
         var palets = new List<PaletDeca>();
         lector.NextResult();
         while (lector.Read())
             palets.Add(new PaletDeca(lector.GetDecimal(0), lector.GetInt32(1)));
 
-        var datos = new DatosDeca(remitente, destinatario, fechaCarga, transportista, nif,
-            matricula, mercancia, observaciones, palets);
+        var datos = new DatosDeca(remitente, destinatario, cargadorTipo, cargadorOtro, fechaCarga,
+            transportista, nif, matricula, matriculaRemolque, lugarCarga, lugarDescarga,
+            mercancia, observaciones, palets);
 
         return new DecaGuardado(id, numero, codigo, datos, archivoPdf, pdfGeneradoEn,
             creadoPor, creadoEn, modificadoPor, modificadoEn);
@@ -163,15 +171,19 @@ public class DecaRepositorio
             INSERT INTO DECA
                 ({string.Format(ColumnasParte, "remitente")},
                  {string.Format(ColumnasParte, "destinatario")},
-                 fecha_carga, transportista_nombre, transportista_nif, matricula, mercancia,
-                 observaciones, creado_por)
+                 cargador_tipo, {string.Format(ColumnasParte, "cargador")},
+                 fecha_carga, transportista_nombre, transportista_nif, matricula, matricula_remolque,
+                 lugar_carga, lugar_descarga, mercancia, observaciones, creado_por)
             OUTPUT INSERTED.id
             VALUES
                 (@remitente_nombre, @remitente_nif, @remitente_direccion, @remitente_cp,
                  @remitente_poblacion, @remitente_provincia, @remitente_pais, @remitente_telefono,
                  @destinatario_nombre, @destinatario_nif, @destinatario_direccion, @destinatario_cp,
                  @destinatario_poblacion, @destinatario_provincia, @destinatario_pais, @destinatario_telefono,
-                 @fecha, @transportista, @nif, @matricula, @mercancia, @observaciones, @usuario);";
+                 @cargador_tipo, @cargador_nombre, @cargador_nif, @cargador_direccion, @cargador_cp,
+                 @cargador_poblacion, @cargador_provincia, @cargador_pais, @cargador_telefono,
+                 @fecha, @transportista, @nif, @matricula, @matricula_remolque,
+                 @lugar_carga, @lugar_descarga, @mercancia, @observaciones, @usuario);";
 
         using var conexion = Conexion.Abrir();
 
@@ -193,7 +205,7 @@ public class DecaRepositorio
     }
 
     // Guarda los cambios y sustituye los palets. El PDF deja de estar al día (pdf_generado_en
-    // a NULL) pero se conserva su nombre, para que el QR ya impreso siga sirviendo al regenerarlo.
+    // a NULL); al volver a generarlo será un PDF nuevo y el anterior se queda en la web.
     // Devuelve false si el DeCA ya no existe.
     public bool ActualizarDeca(int decaId, DatosDeca datos, int usuarioId)
     {
@@ -207,8 +219,14 @@ public class DecaRepositorio
                 destinatario_direccion = @destinatario_direccion, destinatario_cp = @destinatario_cp,
                 destinatario_poblacion = @destinatario_poblacion, destinatario_provincia = @destinatario_provincia,
                 destinatario_pais = @destinatario_pais, destinatario_telefono = @destinatario_telefono,
+                cargador_tipo = @cargador_tipo, cargador_nombre = @cargador_nombre, cargador_nif = @cargador_nif,
+                cargador_direccion = @cargador_direccion, cargador_cp = @cargador_cp,
+                cargador_poblacion = @cargador_poblacion, cargador_provincia = @cargador_provincia,
+                cargador_pais = @cargador_pais, cargador_telefono = @cargador_telefono,
                 fecha_carga = @fecha, transportista_nombre = @transportista, transportista_nif = @nif,
-                matricula = @matricula, mercancia = @mercancia, observaciones = @observaciones,
+                matricula = @matricula, matricula_remolque = @matricula_remolque,
+                lugar_carga = @lugar_carga, lugar_descarga = @lugar_descarga,
+                mercancia = @mercancia, observaciones = @observaciones,
                 pdf_generado_en = NULL,
                 modificado_por = @usuario, modificado_en = SYSDATETIME()
             WHERE id = @deca;
@@ -273,24 +291,30 @@ public class DecaRepositorio
     {
         AnadirParte(comando, "remitente", d.Remitente);
         AnadirParte(comando, "destinatario", d.Destinatario);
+        comando.Parameters.AddWithValue("@cargador_tipo", d.CargadorTipo);
+        AnadirParte(comando, "cargador", d.CargadorTipo == TipoCargador.Otro ? d.CargadorOtro : null);
         comando.Parameters.AddWithValue("@fecha", d.FechaCarga.Date);
         comando.Parameters.AddWithValue("@transportista", d.TransportistaNombre);
         comando.Parameters.AddWithValue("@nif", d.TransportistaNif);
         comando.Parameters.AddWithValue("@matricula", d.Matricula);
+        comando.Parameters.AddWithValue("@matricula_remolque", (object?)d.MatriculaRemolque ?? DBNull.Value);
+        comando.Parameters.AddWithValue("@lugar_carga", (object?)d.LugarCarga ?? DBNull.Value);
+        comando.Parameters.AddWithValue("@lugar_descarga", (object?)d.LugarDescarga ?? DBNull.Value);
         comando.Parameters.AddWithValue("@mercancia", d.Mercancia);
         comando.Parameters.AddWithValue("@observaciones", (object?)d.Observaciones ?? DBNull.Value);
     }
 
-    private static void AnadirParte(SqlCommand comando, string prefijo, ParteEnvio p)
+    // Con p null (el cargador cuando es el remitente o el destinatario) todo va a NULL
+    private static void AnadirParte(SqlCommand comando, string prefijo, ParteEnvio? p)
     {
-        comando.Parameters.AddWithValue($"@{prefijo}_nombre", p.Nombre);
-        comando.Parameters.AddWithValue($"@{prefijo}_nif", p.Nif);
-        comando.Parameters.AddWithValue($"@{prefijo}_direccion", p.Direccion);
-        comando.Parameters.AddWithValue($"@{prefijo}_cp", p.CodigoPostal);
-        comando.Parameters.AddWithValue($"@{prefijo}_poblacion", p.Poblacion);
-        comando.Parameters.AddWithValue($"@{prefijo}_provincia", (object?)p.Provincia ?? DBNull.Value);
-        comando.Parameters.AddWithValue($"@{prefijo}_pais", p.Pais);
-        comando.Parameters.AddWithValue($"@{prefijo}_telefono", (object?)p.Telefono ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_nombre", (object?)p?.Nombre ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_nif", (object?)p?.Nif ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_direccion", (object?)p?.Direccion ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_cp", (object?)p?.CodigoPostal ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_poblacion", (object?)p?.Poblacion ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_provincia", (object?)p?.Provincia ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_pais", (object?)p?.Pais ?? DBNull.Value);
+        comando.Parameters.AddWithValue($"@{prefijo}_telefono", (object?)p?.Telefono ?? DBNull.Value);
     }
 
     // Lee las 8 columnas de ColumnasParte a partir de la posición "inicio"

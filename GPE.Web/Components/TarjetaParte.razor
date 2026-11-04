@@ -7,34 +7,7 @@
         </div>
     </div>
 
-    <div class="rejilla">
-        <Campo Etiqueta="Nombre" Error="@ErrorDe(nameof(Parte.Nombre))" Clase="doble">
-            <input maxlength="150" placeholder="Nombre o razón social" @bind="Parte.Nombre" @bind:after="() => Cambiar(nameof(Parte.Nombre))" />
-        </Campo>
-        <Campo Etiqueta="NIF" Error="@ErrorDe(nameof(Parte.Nif))">
-            <input maxlength="20" placeholder="B12345674" @bind="Parte.Nif" @bind:after="() => Cambiar(nameof(Parte.Nif))" />
-        </Campo>
-        <Campo Etiqueta="Teléfono" Error="@ErrorDe(nameof(Parte.Telefono))">
-            <input maxlength="30" placeholder="Opcional" @bind="Parte.Telefono" @bind:after="() => Cambiar(nameof(Parte.Telefono))" />
-        </Campo>
-
-        <Campo Etiqueta="Dirección" Error="@ErrorDe(nameof(Parte.Direccion))" Clase="doble">
-            <input maxlength="200" placeholder="Calle, número, piso..." @bind="Parte.Direccion" @bind:after="() => Cambiar(nameof(Parte.Direccion))" />
-        </Campo>
-        <Campo Etiqueta="Código postal" Error="@ErrorDe(nameof(Parte.CodigoPostal))">
-            <input maxlength="10" placeholder="02001" @bind="Parte.CodigoPostal" @bind:after="() => Cambiar(nameof(Parte.CodigoPostal))" />
-        </Campo>
-        <Campo Etiqueta="Población" Error="@ErrorDe(nameof(Parte.Poblacion))">
-            <input maxlength="100" @bind="Parte.Poblacion" @bind:after="() => Cambiar(nameof(Parte.Poblacion))" />
-        </Campo>
-
-        <Campo Etiqueta="Provincia" Error="@ErrorDe(nameof(Parte.Provincia))">
-            <input maxlength="100" placeholder="Opcional" @bind="Parte.Provincia" @bind:after="() => Cambiar(nameof(Parte.Provincia))" />
-        </Campo>
-        <Campo Etiqueta="País" Error="@ErrorDe(nameof(Parte.Pais))">
-            <input maxlength="60" @bind="Parte.Pais" @bind:after="() => Cambiar(nameof(Parte.Pais))" />
-        </Campo>
-    </div>
+    <CamposParte Parte="Parte" Errores="Errores" Prefijo="@Prefijo" Cambio="Cambio" />
 </section>
 
 @code {
@@ -43,17 +16,7 @@
     [Parameter] public string Subtitulo { get; set; } = "";
     [Parameter, EditorRequired] public ParteFormulario Parte { get; set; } = new();
 
-    // Errores de todo el formulario; los de esta tarjeta van con la clave "Prefijo.Campo"
     [Parameter, EditorRequired] public Dictionary<string, string> Errores { get; set; } = new();
     [Parameter, EditorRequired] public string Prefijo { get; set; } = "";
     [Parameter] public EventCallback Cambio { get; set; }
-
-    private string? ErrorDe(string campo) => Errores.GetValueOrDefault($"{Prefijo}.{campo}");
-
-    // El error de un campo se quita en cuanto se toca
-    private Task Cambiar(string campo)
-    {
-        Errores.Remove($"{Prefijo}.{campo}");
-        return Cambio.InvokeAsync();
-    }
 }
