@@ -99,6 +99,11 @@ public class FormPrincipal : Form
             () => null,
             () => new ModuloMaquina()));
 
+        lista.Add(new Modulo("Supervisión de máquinas",
+            "Cómo van todas las máquinas, sus paradas y los motivos que más paran (prueba, con datos inventados).",
+            () => null,
+            () => new ModuloSupervisionMaquinas()));
+
         return lista;
     }
 
