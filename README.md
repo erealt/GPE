@@ -203,7 +203,7 @@ Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DE
   - Si la subida falla, el DeCA sigue *Por generar* y se puede volver a intentar.
   - *Ver PDF y QR* (cuando ya están al día) abre la copia de la carpeta; si no está en este ordenador, los vuelve a generar.
   - La copia se guarda en `GPE_DECA_CARPETA` (por defecto `Documentos\GPE\DeCA`). Si se modifica un DeCA que ya tenía PDF, queda *Por generar*.
-  - La web no borra nada: los PDF se quedan publicados (como mínimo el año que deben estar disponibles) hasta que alguien los borre en WordPress.
+  - **Se borran al año**: la normativa obliga a conservarlos al menos un año. Cada día, [`GPE.Avisos`](GPE.Avisos/Program.cs) borra los PDF del DeCA subidos hace más de 365 días, de WordPress y de `GPE_DECA_CARPETA` (con los QR sueltos). Solo borra los archivos con el nombre exacto que pone el programa (`DECA-AAAA-NNN-<32 cifras>.pdf` y `DECA-AAAA-NNN-QR.png`): nunca toca catálogos ni otros PDF de la web. Lo que borra queda apuntado en `avisos.log`.
 - **Acceso a la web**: un usuario de WordPress con permiso para subir y borrar archivos (Autor o más) y una *contraseña de aplicación* (WordPress → *Usuarios → Perfil → Contraseñas de aplicación*), nunca la contraseña normal. Se ponen en cada ordenador (y en el servidor de `GPE.Web`) con `setx GPE_WP_USUARIO "usuario"` y `setx GPE_WP_CLAVE "xxxx xxxx xxxx xxxx xxxx xxxx"`. `GPE_WP_SITIO` cambia la web (por defecto `https://eurochoc.es`).
 
 ### Web del DeCA (`GPE.Web`)
@@ -226,6 +226,7 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
   4. `GPE_DECA_CARPETA`: una carpeta del servidor donde esa cuenta pueda escribir. Y `GPE_WP_USUARIO` y `GPE_WP_CLAVE` para subir los PDF a la web.
   5. En `appsettings.json` de la carpeta publicada, `"UsuarioWeb"` con el id del usuario a cuyo nombre se guardan los DeCA.
   6. Se entra con `http://<servidor>/`, solo desde la red de la fábrica.
+  7. **Borrado de los DeCA de más de un año**: en el mismo servidor, la tarea programada de `GPE.Avisos` (apartado 8). Las variables (`GPE_CONEXION`, `GPE_DECA_CARPETA`, `GPE_WP_USUARIO`, `GPE_WP_CLAVE`) conviene ponerlas para todo el servidor (`setx NOMBRE "valor" /M`, como administrador), así las ven tanto la web como la tarea y las dos usan la misma carpeta.
 
 ---
 
@@ -233,7 +234,7 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
 
 Cuando una devolución avanza se avisa a quien le toca el siguiente paso (el rol de `ESTADO_DEVOLUCION.rol_responsable_id` en la fábrica de la devolución). El aviso se apunta en `AVISO_CORREO` en la misma transacción que el cambio, y [`AvisoServicio`](GPE.Logica/AvisoServicio.cs) lo envía en segundo plano; si el correo falla, la devolución se guarda igual y se reintenta.
 
-Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`.
+Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`. La misma tarea borra los PDF del DeCA de más de un año (apartado 7); si una de las dos cosas falla, la otra se hace igual.
 
 **Cuenta de envío.** Se configura en cada ordenador con variables de entorno (`setx NOMBRE "valor"` y volver a abrir la aplicación). Sin ellas, los avisos se quedan pendientes.
 

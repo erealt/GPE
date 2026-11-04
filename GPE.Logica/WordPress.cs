@@ -25,10 +25,6 @@ public static class WordPress
 
     public static Medio Subir(string nombreArchivo, byte[] contenido, string tipo)
     {
-        if (usuario == "" || clave == "")
-            throw new ReglaNegocioException(
-                "Falta configurar el acceso a la web (variables GPE_WP_USUARIO y GPE_WP_CLAVE). El PDF no se ha subido.");
-
         using var peticion = Peticion(HttpMethod.Post, "media");
         peticion.Content = new ByteArrayContent(contenido);
         peticion.Content.Headers.ContentType = new MediaTypeHeaderValue(tipo);
@@ -48,8 +44,33 @@ public static class WordPress
         using var respuesta = Enviar(peticion);
     }
 
+    // Todos los archivos de este tipo (p. ej. "application/pdf") subidos antes de esa fecha.
+    // WordPress los devuelve de 100 en 100; se piden todas las páginas antes de borrar nada.
+    public static List<Medio> Anteriores(string tipo, DateTime fecha)
+    {
+        var medios = new List<Medio>();
+        for (int pagina = 1; ; pagina++)
+        {
+            using var peticion = Peticion(HttpMethod.Get,
+                $"media?mime_type={Uri.EscapeDataString(tipo)}&before={fecha:yyyy-MM-ddTHH:mm:ss}" +
+                $"&per_page=100&page={pagina}&_fields=id,source_url");
+            using var respuesta = Enviar(peticion);
+            using var json = JsonDocument.Parse(respuesta.Content.ReadAsStream());
+            foreach (var medio in json.RootElement.EnumerateArray())
+                medios.Add(new Medio(medio.GetProperty("id").GetInt32(), medio.GetProperty("source_url").GetString() ?? ""));
+
+            int paginas = respuesta.Headers.TryGetValues("X-WP-TotalPages", out var valores)
+                && int.TryParse(valores.FirstOrDefault(), out int total) ? total : 1;
+            if (pagina >= paginas) return medios;
+        }
+    }
+
     private static HttpRequestMessage Peticion(HttpMethod metodo, string ruta)
     {
+        if (usuario == "" || clave == "")
+            throw new ReglaNegocioException(
+                "Falta configurar el acceso a la web (variables GPE_WP_USUARIO y GPE_WP_CLAVE).");
+
         var peticion = new HttpRequestMessage(metodo, $"{Sitio}/wp-json/wp/v2/{ruta}");
         peticion.Headers.Authorization = new AuthenticationHeaderValue("Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{usuario}:{clave}")));

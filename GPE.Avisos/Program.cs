@@ -1,7 +1,8 @@
 using GPE.Logica;
 
-// Envía los avisos pendientes y los resúmenes diarios sin abrir GPE (tarea programada, ver README).
-// Log en %LOCALAPPDATA%\GPE\avisos.log; si falla sale con código 1 para que la tarea reintente.
+// Tarea diaria sin abrir GPE (tarea programada, ver README): envía los avisos pendientes y los
+// resúmenes diarios, y borra los PDF del DeCA de más de un año.
+// Log en %LOCALAPPDATA%\GPE\avisos.log; si algo falla sale con código 1 para que la tarea reintente.
 
 string carpetaLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GPE");
 Directory.CreateDirectory(carpetaLog);
@@ -14,6 +15,9 @@ void Log(string texto)
     File.AppendAllText(rutaLog, linea + Environment.NewLine);
 }
 
+// Cada parte va por separado: si falla el correo, los PDF antiguos se borran igual, y al revés
+bool todoBien = true;
+
 try
 {
     AvisoServicio.EnviarPendientes();
@@ -22,10 +26,24 @@ try
     Log(enviados == 0
         ? "Resumen diario: nada que enviar (no hay devoluciones pendientes de revisar o ya se envió hoy)."
         : $"Resumen diario: {enviados} correo(s) enviado(s).");
-    return 0;
 }
 catch (Exception ex)
 {
     Log("ERROR: " + AvisoServicio.DescribirError(ex));
-    return 1;
+    todoBien = false;
 }
+
+try
+{
+    var (web, carpeta) = DecaServicio.BorrarPdfsAntiguos();
+    Log(web == 0 && carpeta == 0
+        ? "DeCA: ningún PDF de más de un año."
+        : $"DeCA: borrados {web} PDF de más de un año de la web y {carpeta} archivo(s) de la carpeta.");
+}
+catch (Exception ex)
+{
+    Log("ERROR al borrar los DeCA antiguos: " + ex.Message);
+    todoBien = false;
+}
+
+return todoBien ? 0 : 1;

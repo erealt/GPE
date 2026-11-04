@@ -1,5 +1,6 @@
 using GPE.Datos;
 using QRCoder;
+using System.Text.RegularExpressions;
 
 namespace GPE.Logica;
 
@@ -94,6 +95,43 @@ public class DecaServicio
 
         repositorio.MarcarPdfGenerado(decaId, archivo);
         return rutaPdf;
+    }
+
+    // La normativa obliga a conservar los PDF al menos un año; pasado ese tiempo se borran
+    public static readonly TimeSpan Conservacion = TimeSpan.FromDays(365);
+
+    // Nombres de los archivos que genera GenerarPdfYQr: DECA-2026-001-<32 cifras>.pdf y DECA-2026-001-QR.png.
+    // Solo se borra lo que encaja exactamente, para no tocar nunca otros PDF de la web.
+    private static readonly Regex ArchivoPdfDeca = new(@"^DECA-\d{4}-\d{3,}-[0-9a-f]{32}\.pdf$");
+    private static readonly Regex ArchivoQrDeca = new(@"^DECA-\d{4}-\d{3,}-QR\.png$");
+
+    // Borra los PDF del DeCA de más de un año: de la web y de CarpetaPdf (con los QR sueltos).
+    // Lo ejecuta cada día GPE.Avisos. Devuelve cuántos ha borrado de cada sitio.
+    public static (int Web, int Carpeta) BorrarPdfsAntiguos()
+    {
+        DateTime limite = DateTime.Now - Conservacion;
+
+        // Primero la carpeta: así se limpia aunque la web no responda
+        int carpeta = 0;
+        if (Directory.Exists(CarpetaPdf))
+            foreach (string ruta in Directory.EnumerateFiles(CarpetaPdf, "DECA-*"))
+            {
+                string nombre = Path.GetFileName(ruta);
+                if (!ArchivoPdfDeca.IsMatch(nombre) && !ArchivoQrDeca.IsMatch(nombre)) continue;
+                if (File.GetLastWriteTime(ruta) >= limite) continue;
+                File.Delete(ruta);
+                carpeta++;
+            }
+
+        int web = 0;
+        foreach (var medio in WordPress.Anteriores("application/pdf", limite))
+        {
+            if (!ArchivoPdfDeca.IsMatch(Path.GetFileName(new Uri(medio.Url).LocalPath))) continue;
+            WordPress.Borrar(medio.Id);
+            web++;
+        }
+
+        return (web, carpeta);
     }
 
     private static void Guardar(string ruta, byte[] contenido)
