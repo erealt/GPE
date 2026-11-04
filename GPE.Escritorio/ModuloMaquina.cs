@@ -47,6 +47,9 @@ public class ModuloMaquina : UserControl
     internal static readonly Color Naranja = Color.FromArgb(240, 150, 30);   // el rato de la parada con el mecánico en la máquina
     internal const string LeyendaColores = "Verde: en marcha  ·  Rojo: parada  ·  Naranja: parada con el mecánico";
 
+    // Una parada que pasa de esto sin mecánico se avisa: aquí parpadea el botón y en la supervisión se resalta la fila
+    internal static readonly TimeSpan ParadaLarga = TimeSpan.FromMinutes(10);
+
     // Un tramo seguido en marcha o parada; Fin null: el que está en curso
     internal class Tramo
     {
@@ -64,6 +67,9 @@ public class ModuloMaquina : UserControl
         public bool Prevista => Motivo != null && MotivosPrevistos.Contains(Motivo);
         public bool EsMicroparada => !EnMarcha && Motivo == null && Fin != null && Fin - Inicio < Microparada;
         public bool FaltaMotivo => !EnMarcha && Motivo == null && !EsMicroparada;
+        // Parada en curso que ya es larga y a la que todavía no ha llegado el mecánico
+        public bool LargaSinMecanico(DateTime ahora) =>
+            !EnMarcha && Fin == null && LlegaMecanico == null && ahora - Inicio >= ParadaLarga;
 
         // Lo que dura dentro de [desde, hasta]
         public TimeSpan DentroDe(DateTime desde, DateTime hasta)
@@ -618,8 +624,14 @@ public class ModuloMaquina : UserControl
             { EnMarcha: false, LlegaMecanico: not null } => "Mecánico trabajando\npulsa al resolverse",
             { EnMarcha: false, AvisoMecanico: DateTime avisado } =>
                 $"Avisado {avisado:HH:mm} ({Duracion(ahora - avisado)})\npulsa cuando llegue",
+            { EnMarcha: false } when enCurso.LargaSinMecanico(ahora) =>
+                $"🔧  Avisar mecánico\nlleva {Duracion(enCurso.Duracion(ahora))} parada",
             _ => "🔧  Avisar mecánico"
         };
+        // Parada larga sin avisar: el botón parpadea en rojo
+        if (btnMecanico.Enabled)
+            btnMecanico.BackColor = enCurso is { AvisoMecanico: null } && enCurso.LargaSinMecanico(ahora) && ahora.Second % 2 == 0
+                ? Rojo : Tema.Aviso;
 
         var (fondo, texto) = Tema.ColorEstadoCasilla(enCurso switch
         {

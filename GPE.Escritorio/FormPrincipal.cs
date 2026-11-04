@@ -104,6 +104,11 @@ public class FormPrincipal : Form
             () => null,
             () => new ModuloSupervisionMaquinas()));
 
+        lista.Add(new Modulo("Avisos del mecánico",
+            "Lo que verá el mecánico en el móvil: los avisos de las máquinas, para marcar que ha llegado y que está resuelto (prueba).",
+            () => null,
+            () => new ModuloAvisosMecanico()));
+
         return lista;
     }
 

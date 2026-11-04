@@ -20,6 +20,7 @@ public class ModuloSupervisionMaquinas : UserControl
     private readonly Panel filas = new();
     private readonly Label lblDesde = new(), lblHasta = new();
     private readonly MotivosFrecuentes motivos = new();
+    private readonly Label lblMecanico = new();
     private readonly Label lblDetalle = new();
     private readonly DataGridView grid = new();
     private readonly System.Windows.Forms.Timer reloj = new() { Interval = 2000 };
@@ -208,8 +209,13 @@ public class ModuloSupervisionMaquinas : UserControl
 
         var izquierda = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(15, 10, 15, 10), Margin = new Padding(0, 0, 8, 0) };
         motivos.Dock = DockStyle.Fill;
+        lblMecanico.Dock = DockStyle.Bottom;
+        lblMecanico.Height = 56;
+        lblMecanico.ForeColor = Tema.Texto;
+        lblMecanico.Font = Tema.FuenteNegrita;
         izquierda.Controls.Add(motivos);
         izquierda.Controls.Add(Titulo("Motivos que más paran"));
+        izquierda.Controls.Add(lblMecanico);
 
         var derecha = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(15, 10, 15, 10), Margin = new Padding(8, 0, 0, 0) };
         Componentes.EstiloTabla(grid, altoFila: 40);
@@ -376,15 +382,17 @@ public class ModuloSupervisionMaquinas : UserControl
         {
             var (fila, estado, barra, disponibilidad) = controlesFila[maquina];
             fila.Visible = vistas.Contains(maquina);
-            fila.BackColor = maquina == elegida ? Tema.AcentoSuave : Color.White;
 
             var lista = datos[maquina];
             var ultimo = lista.LastOrDefault();
+            // Parada larga sin mecánico: la fila se resalta en rojo para que se vea sin buscarla
+            bool alerta = hoy && ultimo != null && ultimo.LargaSinMecanico(hasta);
+            fila.BackColor = alerta ? Tema.FondoError : maquina == elegida ? Tema.AcentoSuave : Color.White;
             (estado.Text, estado.ForeColor) = !hoy ? ($"{lista.Count(t => !t.EnMarcha)} paradas", Tema.Suave)
                 : ultimo == null ? ("Sin arrancar", Tema.Suave)
                 : ultimo is { Fin: not null } ? ("Apagada", Tema.Suave)
                 : ultimo.EnMarcha ? ($"En marcha · {ultimo.Maquinista ?? "sin maquinista"}", Color.FromArgb(25, 120, 70))
-                : ($"Parada {ModuloMaquina.Duracion(hasta - ultimo.Inicio)} · {ultimo.Motivo ?? "sin motivo"}", Tema.Error);
+                : ($"{(alerta ? "⚠ " : "")}Parada {ModuloMaquina.Duracion(hasta - ultimo.Inicio)} · {ultimo.Motivo ?? "sin motivo"}", Tema.Error);
 
             barra.Mostrar(lista, desde, hasta, hasta);
             disponibilidad.Text = Disponibilidad(
@@ -394,7 +402,24 @@ public class ModuloSupervisionMaquinas : UserControl
         filas.ResumeLayout();
 
         motivos.Mostrar(tramos.Where(t => !t.EnMarcha).ToList(), hasta);
+        MostrarMecanico(tramos);
         MostrarDetalle();
+    }
+
+    // Cuántas veces se ha avisado al mecánico y cuánto tarda de media en llegar y en resolver
+    private void MostrarMecanico(List<Tramo> tramos)
+    {
+        var avisos = tramos.Where(t => t.AvisoMecanico != null).ToList();
+        string Media(IEnumerable<TimeSpan> tiempos) =>
+            tiempos.ToList() is { Count: > 0 } lista ? ModuloMaquina.Duracion(TimeSpan.FromSeconds(lista.Average(t => t.TotalSeconds))) : "—";
+
+        string llegar = Media(avisos.Where(t => t.LlegaMecanico != null).Select(t => t.LlegaMecanico!.Value - t.AvisoMecanico!.Value));
+        string resolver = Media(avisos.Where(t => t.LlegaMecanico != null && t.ResueltoMecanico != null)
+            .Select(t => t.ResueltoMecanico!.Value - t.LlegaMecanico!.Value));
+        lblMecanico.Text = avisos.Count == 0
+            ? "🔧  Mecánico: ningún aviso"
+            : $"🔧  Mecánico: {avisos.Count} {(avisos.Count == 1 ? "aviso" : "avisos")}\n" +
+              $"De media tarda {llegar} en llegar y {resolver} en resolver";
     }
 
     // Las paradas de la máquina elegida, la última arriba
