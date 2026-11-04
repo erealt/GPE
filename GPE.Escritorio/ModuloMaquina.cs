@@ -44,6 +44,8 @@ public class ModuloMaquina : UserControl
 
     internal static readonly Color Verde = Color.FromArgb(70, 150, 40);
     internal static readonly Color Rojo = Color.FromArgb(215, 60, 60);
+    internal static readonly Color Naranja = Color.FromArgb(240, 150, 30);   // el rato de la parada con el mecánico en la máquina
+    internal const string LeyendaColores = "Verde: en marcha  ·  Rojo: parada  ·  Naranja: parada con el mecánico";
 
     // Un tramo seguido en marcha o parada; Fin null: el que está en curso
     internal class Tramo
@@ -664,8 +666,7 @@ public class ModuloMaquina : UserControl
         // La barra va desde que arrancó en este turno hasta ahora: así ocupa todo el ancho y se ve grande
         var arranque = Actuales.FirstOrDefault(t => (t.Fin ?? ahora) > turno.Inicio)?.Inicio;
         var desde = arranque is DateTime a && a > turno.Inicio ? a : turno.Inicio;
-        lblBarra.Text = $"Turno de {turno.Nombre.ToLower()}, desde que arrancó.   " +
-            "Verde: en marcha  ·  Rojo: parada";
+        lblBarra.Text = $"Turno de {turno.Nombre.ToLower()}, desde que arrancó.   {LeyendaColores}";
         barra.Mostrar(arranque == null ? new() : Actuales, desde, ahora, ahora);
         lblDesde.Text = arranque == null ? "" : desde.ToString("HH:mm");
         lblHasta.Text = arranque == null ? "" : $"Ahora ({ahora:HH:mm})";
@@ -704,7 +705,8 @@ public class ModuloMaquina : UserControl
         : t.TotalMinutes >= 1 ? $"{t.Minutes} min {t.Seconds} s"
         : $"{t.Seconds} s";
 
-    // Tramos verdes (en marcha) y rojos (parada) entre desde y hasta.
+    // Tramos verdes (en marcha) y rojos (parada) entre desde y hasta; dentro de una parada, en naranja
+    // desde que llega el mecánico hasta que se resuelve.
     // Si hasta es más tarde que ahora, lo que no ha pasado queda en gris, con una raya en la hora actual.
     // Con el ratón encima de un tramo sale un cuadro con sus horas y, si es una parada, su motivo.
     internal class BarraTramos : Control
@@ -807,6 +809,13 @@ public class ModuloMaquina : UserControl
                     using var pincel = new SolidBrush(tramo.EnMarcha ? Verde : Rojo);
                     // Al menos 2 px, para que una parada corta se vea en un turno de 8 horas
                     e.Graphics.FillRectangle(pincel, x1, 0, Math.Max(x2 - x1, 2), Height);
+
+                    if (tramo.LlegaMecanico is DateTime llega)
+                    {
+                        int m1 = X(llega), m2 = X(tramo.ResueltoMecanico ?? fin);
+                        using var naranja = new SolidBrush(Naranja);
+                        e.Graphics.FillRectangle(naranja, m1, 0, Math.Max(m2 - m1, 2), Height);
+                    }
                 }
 
             if (ahora > desde && ahora < hasta)

@@ -190,7 +190,7 @@ public class ModuloSupervisionMaquinas : UserControl
         zona.Controls.Add(filas);
         zona.Controls.Add(new Label
         {
-            Text = "Pulsa una máquina para ver sus paradas.   Verde: en marcha  ·  Rojo: parada",
+            Text = $"Pulsa una máquina para ver sus paradas.   {ModuloMaquina.LeyendaColores}",
             Dock = DockStyle.Top,
             Height = 26,
             ForeColor = Tema.Suave,

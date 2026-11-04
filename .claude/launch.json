@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gpe-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "GPE.Web", "--launch-profile", "http", "--urls", "http://localhost:5299"],
+      "port": 5299
+    }
+  ]
+}
