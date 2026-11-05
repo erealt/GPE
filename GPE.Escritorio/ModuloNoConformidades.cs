@@ -7,8 +7,11 @@ namespace GPE.Escritorio;
 // Lista de incidencias, NC y acciones de mejora (hoja INCIDENCIAS) con sus filtros.
 public class ModuloNoConformidades : UserControl
 {
+    private const int ColumnaNumero = 0;
+    private const int ColumnaDetectada = 1;
     private const int ColumnaTipo = 2;
     private const int ColumnaProblema = 4;
+    private const int ColumnaPrevista = 6;
     private const int ColumnaEstado = 7;
 
     private const string TodasLasSecciones = "Todas";
@@ -141,7 +144,7 @@ public class ModuloNoConformidades : UserControl
         cmbEstado.Items.Add("Todos");
         cmbEstado.Items.Add(EstadoAbiertas);
         cmbEstado.Items.AddRange(EstadoRegistro.Todos);
-        cmbEstado.SelectedIndex = 0;
+        cmbEstado.SelectedItem = EstadoAbiertas;   // lo del día a día son las abiertas
 
         foreach (var fecha in new[] { dtpDesde, dtpHasta })
         {
@@ -234,6 +237,7 @@ public class ModuloNoConformidades : UserControl
             AbrirRegistro(nc);
         };
         grid.CellPainting += PintarEtiquetas;
+        grid.SortCompare += CompararParaOrdenar;
 
         grid.ColumnHeadersHeight = 45;
         grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
@@ -279,6 +283,48 @@ public class ModuloNoConformidades : UserControl
             var (fondo, texto) = Tema.ColorEstadoRegistro(estado);
             Componentes.PintarEtiqueta(e, estado, fondo, texto);
         }
+    }
+
+    // En la lista, fechas y números son texto: se ordena por el dato de verdad, no por cómo se ve
+    private void CompararParaOrdenar(object? sender, DataGridViewSortCompareEventArgs e)
+    {
+        if (grid.Rows[e.RowIndex1].Tag is not NoConformidad a || grid.Rows[e.RowIndex2].Tag is not NoConformidad b)
+            return;
+
+        int? resultado = e.Column.Index switch
+        {
+            ColumnaNumero => CompararNumeros(a.Numero, b.Numero),
+            ColumnaDetectada => a.FechaDetectado.CompareTo(b.FechaDetectado),
+            ColumnaPrevista => CompararFechas(a.FechaPrevista, b.FechaPrevista),
+            _ => null
+        };
+        if (resultado == null) return;
+
+        // Empate: el más reciente primero, para que el orden no salte al filtrar
+        e.SortResult = resultado.Value != 0 ? resultado.Value : b.Id.CompareTo(a.Id);
+        e.Handled = true;
+    }
+
+    // Los registros sin fecha o sin número van al final (al principio si se ordena al revés)
+    private static int CompararFechas(DateTime? a, DateTime? b) =>
+        a == null ? (b == null ? 0 : 1) : b == null ? -1 : a.Value.CompareTo(b.Value);
+
+    // "99" antes que "100"; "AC-2026-2" antes que "AC-2026-10": primero la serie, luego el número
+    private static int CompararNumeros(string? a, string? b)
+    {
+        if (a == null || b == null) return a == null ? (b == null ? 0 : 1) : -1;
+
+        static (string Serie, long Numero) Partes(string numero)
+        {
+            int guion = numero.LastIndexOf('-');
+            string serie = guion < 0 ? "" : numero[..(guion + 1)];
+            return (serie, long.TryParse(numero[(guion + 1)..], out long n) ? n : long.MaxValue);
+        }
+
+        var (serieA, numA) = Partes(a);
+        var (serieB, numB) = Partes(b);
+        int porSerie = string.Compare(serieA, serieB, StringComparison.CurrentCultureIgnoreCase);
+        return porSerie != 0 ? porSerie : numA.CompareTo(numB);
     }
 
     // Datos y filtros
@@ -345,6 +391,11 @@ public class ModuloNoConformidades : UserControl
 
         grid.Rows.Clear();
         grid.Rows.AddRange(visibles.Select(nc => CrearFila(grid, nc)).ToArray());
+        // Al rehacer la tabla se mantiene la columna por la que se había ordenado
+        if (grid.SortedColumn != null && grid.SortOrder != SortOrder.None)
+            grid.Sort(grid.SortedColumn, grid.SortOrder == SortOrder.Ascending
+                ? System.ComponentModel.ListSortDirection.Ascending
+                : System.ComponentModel.ListSortDirection.Descending);
         grid.ClearSelection();
 
         // Primero el contador, que vuelve a mostrar la tabla: oculta no se puede desplazar
@@ -389,14 +440,16 @@ public class ModuloNoConformidades : UserControl
             grid.FirstDisplayedScrollingRowIndex = fila.Index;
     }
 
-    private void LimpiarFiltros()
+    // Vuelve a como se abre la lista (solo abiertas); con todosLosEstados, también las cerradas
+    private void LimpiarFiltros(bool todosLosEstados = false)
     {
         // Cada control que se limpia lanzaría AplicarFiltros: se rehace la tabla una sola vez al final
         limpiando = true;
         txtBuscar.Clear();
         cmbTipo.SelectedIndex = 0;
         cmbSeccion.SelectedIndex = 0;
-        cmbEstado.SelectedIndex = 0;
+        if (todosLosEstados) cmbEstado.SelectedIndex = 0;
+        else cmbEstado.SelectedItem = EstadoAbiertas;
         dtpDesde.Checked = false;
         dtpHasta.Checked = false;
         limpiando = false;
@@ -460,8 +513,10 @@ public class ModuloNoConformidades : UserControl
             return;   // se guardó; la lista se actualizará la próxima vez
         }
 
-        // Si el registro guardado no pasa los filtros, se quitan para que se vea
-        if (!Filtrados().Any(r => r.Id == id)) LimpiarFiltros();
+        // Si el registro guardado no pasa los filtros, se quitan para que se vea (si se ha cerrado, con todos los estados)
+        if (!Filtrados().Any(r => r.Id == id))
+            LimpiarFiltros(todosLosEstados: registros.FirstOrDefault(r => r.Id == id) is { } guardado
+                && !NoConformidadServicio.Abierta(guardado));
         AplicarFiltros(id);
     }
 }

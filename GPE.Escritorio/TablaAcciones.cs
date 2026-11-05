@@ -19,6 +19,11 @@ public class TablaAcciones : TableLayoutPanel
     private readonly Button btnAnadir;
     private bool cargando;
 
+    // Calendario que se despliega bajo la celda de la fecha
+    private readonly MonthCalendar calendario = new() { MaxSelectionCount = 1 };
+    private readonly ToolStripDropDown desplegableFecha = new() { Padding = Padding.Empty };
+    private int filaCalendario = -1;
+
     // El usuario ha cambiado algo (para el aviso de cambios sin guardar)
     public event EventHandler? Cambiado;
 
@@ -34,6 +39,7 @@ public class TablaAcciones : TableLayoutPanel
         ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         ConfigurarGrid(personas);
+        ConfigurarCalendario();
 
         lblVacia.Text = textoVacia;
         lblVacia.AutoSize = true;
@@ -131,6 +137,16 @@ public class TablaAcciones : TableLayoutPanel
             AvisarCambio();
         };
         grid.CellEndEdit += (s, e) => FormatearFecha(e.RowIndex, e.ColumnIndex);
+        grid.CellClick += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex == ColFecha) AbrirCalendario(e.RowIndex);
+        };
+        // Desde el teclado, como en los desplegables: F4 o Alt+↓
+        grid.EditingControlShowing += (s, e) =>
+        {
+            e.Control.KeyDown -= TeclaCalendario;
+            if (grid.CurrentCell?.ColumnIndex == ColFecha) e.Control.KeyDown += TeclaCalendario;
+        };
         grid.CellContentClick += (s, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex != ColQuitar) return;
@@ -150,6 +166,64 @@ public class TablaAcciones : TableLayoutPanel
         MaxInputLength = maximo,
         SortMode = DataGridViewColumnSortMode.NotSortable
     };
+
+    // Calendario de la fecha: se elige con un clic, pero se puede seguir escribiendo o dejar vacía
+
+    private void ConfigurarCalendario()
+    {
+        desplegableFecha.Items.Add(new ToolStripControlHost(calendario) { Margin = Padding.Empty, Padding = Padding.Empty });
+        calendario.DateSelected += (s, e) => PonerFechaElegida(e.Start);
+        calendario.KeyDown += (s, e) =>
+        {
+            if (e.KeyCode == Keys.Enter) PonerFechaElegida(calendario.SelectionStart);
+        };
+    }
+
+    private void TeclaCalendario(object? sender, KeyEventArgs e)
+    {
+        if (grid.CurrentCell?.ColumnIndex != ColFecha) return;
+        if (e.KeyCode == Keys.F4 || (e.Alt && e.KeyCode == Keys.Down))
+        {
+            e.Handled = true;
+            AbrirCalendario(grid.CurrentCell.RowIndex);
+        }
+    }
+
+    private void AbrirCalendario(int fila)
+    {
+        if (SoloLectura) return;
+
+        // Empieza en la fecha que ya tenga la celda; si no, en hoy
+        string texto = grid.IsCurrentCellInEditMode && grid.CurrentCell?.RowIndex == fila
+            ? grid.EditingControl?.Text ?? ""
+            : Texto(grid.Rows[fila], ColFecha);
+        calendario.SetDate(DateTime.TryParseExact(texto.Trim(), FormatosFecha, Componentes.Es,
+            DateTimeStyles.None, out var fecha) ? fecha : DateTime.Today);
+
+        filaCalendario = fila;
+        var celda = grid.GetCellDisplayRectangle(ColFecha, fila, false);
+        desplegableFecha.Show(grid, new Point(celda.Left, celda.Bottom));
+        calendario.Focus();
+    }
+
+    private void PonerFechaElegida(DateTime fecha)
+    {
+        desplegableFecha.Close();
+        if (filaCalendario < 0 || filaCalendario >= grid.Rows.Count) return;
+
+        string texto = fecha.ToString("dd/MM/yyyy");
+        // Si la celda se está editando, el texto va a la caja; si no, al terminar la edición se perdería
+        if (grid.IsCurrentCellInEditMode && grid.CurrentCell?.RowIndex == filaCalendario
+            && grid.CurrentCell.ColumnIndex == ColFecha && grid.EditingControl != null)
+        {
+            grid.EditingControl.Text = texto;
+            grid.EndEdit();
+        }
+        else
+            grid.Rows[filaCalendario].Cells[ColFecha].Value = texto;
+
+        filaCalendario = -1;
+    }
 
     // Filas
 

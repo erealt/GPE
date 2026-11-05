@@ -6,7 +6,7 @@ using System.Globalization;
 namespace GPE.Escritorio;
 
 // Ficha de una incidencia, NC o acción de mejora (fila de la hoja INCIDENCIAS).
-// Una tarjeta por fase; solo se ve la elegida en la barra de fases.
+// Una tarjeta por fase, todas a la vista una debajo de otra; la barra de fases marca lo hecho y salta a cada una.
 public class FormNoConformidad : Form
 {
     private readonly NoConformidadServicio servicio = new();
@@ -81,13 +81,10 @@ public class FormNoConformidad : Form
     private Control campoTipo = null!;
     private Control tarjetaIncidencia = null!;
 
-    // faseElegida = -1 mientras se monta la ficha: se ven todas
     private readonly BarraFasesCalidad barraFases = new();
     private List<EstadoFase> fases = new();
     private readonly Dictionary<string, Control> tarjetasFase = new();
-    private int faseElegida = -1;
     private Panel scroll = null!;
-    private TableLayoutPanel pila = null!;
 
     // borrador: valores con los que empieza uno nuevo (una incidencia abierta desde la rutina de calidad)
     public FormNoConformidad(NoConformidad? registro = null, NoConformidad? borrador = null)
@@ -144,9 +141,6 @@ public class FormNoConformidad : Form
         tablaInmediatas.Cambiado += (s, e) => ActualizarFases();
         tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
         barraFases.FasePulsada += IrAFase;
-
-        // Siempre empieza por el registro; la barra de fases ya marca lo que falta
-        MostrarFase(0);
 
         if (SoloLectura)
         {
@@ -444,7 +438,7 @@ public class FormNoConformidad : Form
 
     private Panel CrearContenido()
     {
-        (scroll, pila) = Componentes.Pagina();
+        (scroll, var pila) = Componentes.Pagina();
 
         pila.Controls.Add(Componentes.Cabecera(
             original == null ? "CALIDAD / NUEVO REGISTRO" : "CALIDAD / " + Titulo(original).ToUpper(Componentes.Es),
@@ -462,6 +456,7 @@ public class FormNoConformidad : Form
 
         pila.Controls.Add(registro);
         pila.Controls.Add(tarjetaIncidencia = CrearTarjetaIncidencia());
+        PintarRaya(tarjetaIncidencia, Tema.ColorSeccionCalidad(1));   // es parte del registro: lleva su color
         pila.Controls.Add(inmediata);
         pila.Controls.Add(analisis);
         pila.Controls.Add(correctora);
@@ -497,7 +492,7 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaRegistro()
     {
-        var tarjeta = Componentes.Tarjeta("Registro", "Qué es, cuándo se detectó, de dónde viene y quién se encarga");
+        var tarjeta = TarjetaFase(1, "Registro", "Qué es, cuándo se detectó, de dónde viene y quién se encarga");
 
         // Los tres botones del tipo no caben en una columna: ocupan dos
         var rejilla = Componentes.Rejilla(3);
@@ -530,14 +525,14 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaAccionInmediata()
     {
-        var tarjeta = Componentes.Tarjeta("Acción inmediata", "Lo que se ha hecho en el momento para frenar el problema");
+        var tarjeta = TarjetaFase(2, "Acción inmediata", "Lo que se ha hecho en el momento para frenar el problema");
         tarjeta.Controls.Add(campos.Campo("Acciones inmediatas", tablaInmediatas));
         return tarjeta;
     }
 
     private Control CrearTarjetaAnalisis()
     {
-        var tarjeta = Componentes.Tarjeta("Análisis de la causa", "Por qué ha pasado");
+        var tarjeta = TarjetaFase(3, "Análisis de la causa", "Por qué ha pasado");
 
         var rejilla = Componentes.Rejilla(2);
         var causa = campos.Campo("Descripción de la causa", txtCausa);
@@ -568,7 +563,7 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaAccionCorrectora()
     {
-        var tarjeta = Componentes.Tarjeta("Acción correctora",
+        var tarjeta = TarjetaFase(4, "Acción correctora",
             "Para que no vuelva a pasar. La fase queda hecha cuando todas las acciones están hechas");
 
         var rejilla = Componentes.Rejilla(2);
@@ -586,7 +581,7 @@ public class FormNoConformidad : Form
     // Con la fecha fin el registro queda cerrado
     private Control CrearTarjetaCierre()
     {
-        var tarjeta = Componentes.Tarjeta("Verificación y cierre", "", etiquetaSubtitulo: lblEstado);
+        var tarjeta = TarjetaFase(5, "Verificación y cierre", "", etiquetaSubtitulo: lblEstado);
 
         var rejilla = Componentes.Rejilla(3);
         var seguimiento = campos.Campo("Seguimientos", tablaSeguimientos);
@@ -671,7 +666,7 @@ public class FormNoConformidad : Form
         ActualizarSecciones();
         ActualizarNumero();
         ActualizarFases();
-        if (faseElegida >= 0) MostrarFase(faseElegida);   // la tarjeta de incidencia va y viene
+        tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
     }
 
     // Fases
@@ -687,8 +682,23 @@ public class FormNoConformidad : Form
             FechaFin = LeerFecha(dtpFin)
         };
         fases = NoConformidadServicio.Fases(actual, tablaInmediatas.Borrador().Concat(tablaCorrectoras.Borrador()));
-        barraFases.Mostrar(fases.Select(f => (TextoFase(f.Fase), f.Hecha, f.Opcional)));
+        barraFases.Mostrar(fases.Select((f, i) => ($"{i + 1}. {TextoFase(f.Fase)}", f.Hecha, f.Opcional)));
     }
+
+    // Tarjeta de una fase: número en el título y raya a la izquierda con el color de la sección
+    private static TableLayoutPanel TarjetaFase(int numero, string titulo, string subtitulo, Label? etiquetaSubtitulo = null)
+    {
+        var tarjeta = Componentes.Tarjeta($"{numero}. {titulo}", subtitulo, etiquetaSubtitulo: etiquetaSubtitulo);
+        PintarRaya(tarjeta, Tema.ColorSeccionCalidad(numero));
+        return tarjeta;
+    }
+
+    private static void PintarRaya(Control tarjeta, Color color) =>
+        tarjeta.Paint += (s, e) =>
+        {
+            using var pincel = new SolidBrush(color);
+            e.Graphics.FillRectangle(pincel, 0, 0, 6, tarjeta.Height);
+        };
 
     // Cortos: tienen que caber en el botón con el ✓ o "(opcional)"
     private static string TextoFase(string fase) => fase switch
@@ -701,45 +711,26 @@ public class FormNoConformidad : Form
         _ => "Verificación y cierre"
     };
 
-    // En el registro de una incidencia se ve también la tarjeta de clasificación
-    private void MostrarFase(int indice)
-    {
-        faseElegida = indice;
-        var tarjeta = tarjetasFase[fases[indice].Fase];
-
-        pila.SuspendLayout();
-        foreach (var otra in tarjetasFase.Values.Distinct())
-            otra.Visible = otra == tarjeta;
-        tarjetaIncidencia.Visible = fases[indice].Fase == FaseCalidad.Registro
-            && TipoElegido == TipoRegistro.Incidencia;
-        pila.ResumeLayout();
-
-        barraFases.Elegir(indice);
-        scroll.AutoScrollPosition = Point.Empty;
-    }
-
-    // Cursor al final del texto, sin seleccionarlo, para no borrarlo al escribir
+    // Baja hasta la tarjeta de la fase (arriba del todo) y pone el cursor en su primer campo,
+    // al final del texto, sin seleccionarlo, para no borrarlo al escribir
     private void IrAFase(int indice)
     {
-        MostrarFase(indice);
-        var campo = Entradas(tarjetasFase[fases[indice].Fase]).FirstOrDefault(c => c.Visible && c.Enabled);
+        var tarjeta = tarjetasFase[fases[indice].Fase];
+        var campo = Entradas(tarjeta).FirstOrDefault(c => c.Visible && c.Enabled);
         campo?.Focus();
         if (campo is TextBox texto)
             texto.Select(texto.TextLength, 0);
-        scroll.AutoScrollPosition = Point.Empty;
+
+        // Después del Focus, que también mueve la página para que se vea el campo
+        int arriba = tarjeta.PointToScreen(Point.Empty).Y - scroll.PointToScreen(Point.Empty).Y
+            - scroll.AutoScrollPosition.Y;
+        scroll.AutoScrollPosition = new Point(0, Math.Max(0, arriba - scroll.Padding.Top));
     }
 
-    // Con un error en otra fase, se pasa a esa fase antes de llevar el cursor al campo
     private void IrAlError(Control control)
     {
-        for (Control? padre = control; padre != null; padre = padre.Parent)
-        {
-            int indice = padre == tarjetaIncidencia ? 0 : fases.FindIndex(f => tarjetasFase[f.Fase] == padre);
-            if (indice < 0) continue;
-            if (indice != faseElegida) MostrarFase(indice);
-            break;
-        }
         control.Focus();
+        scroll.ScrollControlIntoView(control);
     }
 
     // Con origen auditoría solo se ofrecen las secciones de auditoría, y con los demás orígenes, el resto

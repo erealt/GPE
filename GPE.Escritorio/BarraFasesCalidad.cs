@@ -1,12 +1,11 @@
 namespace GPE.Escritorio;
 
-// Pestañas con las fases de un registro de calidad: la elegida en morado, las hechas con ✓
-// y las opcionales en gris.
+// Índice de las fases de un registro de calidad: las hechas con ✓ en verde y las opcionales en gris.
+// Al pulsar una, la ficha baja hasta ella.
 public class BarraFasesCalidad : FlowLayoutPanel
 {
     private readonly List<Button> botones = new();
     private List<(string Texto, bool Hecha, bool Opcional)> fases = new();
-    private int elegida;
 
     // Posición (0, 1...) de la fase pulsada
     public event Action<int>? FasePulsada;
@@ -32,18 +31,15 @@ public class BarraFasesCalidad : FlowLayoutPanel
                 Size = new Size(190, 40),
                 Margin = new Padding(0, 0, 6, 0),
                 Cursor = Cursors.Hand,
-                TabStop = false
+                TabStop = false,
+                BackColor = Color.White,
+                Font = Tema.FuenteDeOpcion(false),
+                FlatAppearance = { BorderColor = Tema.Borde, MouseOverBackColor = Tema.AcentoSuave }
             };
-            boton.Click += (s, e) => { if (indice != elegida) FasePulsada?.Invoke(indice); };
+            boton.Click += (s, e) => FasePulsada?.Invoke(indice);
             botones.Add(boton);
             Controls.Add(boton);
         }
-        Pintar();
-    }
-
-    public void Elegir(int fase)
-    {
-        elegida = fase;
         Pintar();
     }
 
@@ -57,14 +53,11 @@ public class BarraFasesCalidad : FlowLayoutPanel
             if (i >= fases.Count) continue;
 
             var (texto, hecha, opcional) = fases[i];
-            bool vista = i == elegida;
-
             boton.Text = (hecha ? "✓ " : "") + texto + (opcional && !hecha ? " " : "");
-            boton.BackColor = vista ? Tema.Acento : Color.White;
-            boton.ForeColor = vista ? Color.White : opcional ? Tema.Suave : Tema.Texto;
-            boton.Font = Tema.FuenteDeOpcion(vista);
-            boton.FlatAppearance.BorderColor = vista ? Tema.Acento : Tema.Borde;
-            boton.FlatAppearance.MouseOverBackColor = vista ? Tema.Acento : Tema.AcentoSuave;
+            // Las hechas en verde, como la etiqueta de su tarjeta
+            boton.BackColor = hecha ? Tema.FaseHecha.Fondo : Color.White;
+            boton.ForeColor = hecha ? Tema.FaseHecha.Texto : opcional ? Tema.Suave : Tema.Texto;
+            boton.FlatAppearance.BorderColor = hecha ? Tema.FaseHecha.Texto : Tema.Borde;
         }
     }
 }

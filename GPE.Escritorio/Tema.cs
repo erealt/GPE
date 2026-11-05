@@ -75,6 +75,22 @@ public static class Tema
         _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
     };
 
+    // Fases de la ficha de calidad: la barra marca las hechas en verde
+    public static readonly (Color Fondo, Color Texto) FaseHecha = (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70));
+
+    // Raya izquierda de cada sección de la ficha de calidad (1 a 5): un color distinto para cada una
+    private static readonly Color[] ColoresSeccionCalidad =
+    {
+        Color.FromArgb(30, 80, 170),    // 1. Registro: azul
+        Color.FromArgb(220, 120, 0),    // 2. Acción inmediata: naranja
+        Acento,                         // 3. Análisis: morado
+        Color.FromArgb(0, 140, 145),    // 4. Acción correctora: turquesa
+        Color.FromArgb(25, 140, 70)     // 5. Verificación y cierre: verde
+    };
+
+    public static Color ColorSeccionCalidad(int numero) =>
+        ColoresSeccionCalidad[Math.Clamp(numero, 1, ColoresSeccionCalidad.Length) - 1];
+
     // Casillas de la rutina de calidad. FondoNoRevisa: casilla que la plantilla no revisa.
     public static readonly Color FondoNoRevisa = Color.FromArgb(226, 228, 224);
     // Líneas de la tabla (más marcadas que Linea: es una tabla grande que se recorre con la vista)
