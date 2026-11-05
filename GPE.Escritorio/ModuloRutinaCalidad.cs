@@ -101,7 +101,7 @@ public class ModuloRutinaCalidad : UserControl
     private readonly Label lblRondaCompacta = new();
     private const int AltoFilaNormal = 32, AltoFilaMinimo = 14, AltoFilaComoda = 20, AltoFilaMaximo = 48;
     private float escalaAlto = 1f;
-    private const int AnchoSeccionMaximo = 110, AnchoSeccionMinimo = 34;
+    private const int AnchoSeccionMinimo = 34;
     private const int AltoCabecera = 76, AltoCabeceraCompacta = 52;
     private const int FilasDeArriba = 4;   // cabecera, día, revisiones y leyenda
     private static readonly int[] AltosDeArriba = { 95, 80, 56, 68 };
@@ -157,18 +157,26 @@ public class ModuloRutinaCalidad : UserControl
         var columnas = grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Tag != null).ToList();
         if (columnas.Count == 0) return;
 
+        int disponible = grid.ClientSize.Width - 2;
+        if (grid.Controls.OfType<VScrollBar>().Any(b => b.Visible))
+            disponible -= SystemInformation.VerticalScrollBarWidth;
+
         if (!pantallaCompleta)
         {
             PonerEscala(1f);
             grid.Columns[0].Width = AnchoPunto;
-            foreach (var columna in columnas)
-                if (columna.Width != AnchoColumna(columna.HeaderText)) columna.Width = AnchoColumna(columna.HeaderText);
+
+            // Cada máquina con su ancho normal; si sobra sitio (menú plegado, pantalla grande)
+            // se reparte entre ellas para que la tabla llegue hasta el borde. Si no cabe, barra horizontal.
+            var normales = columnas.Select(c => AnchoColumna(c.HeaderText)).ToList();
+            int sobra = Math.Max(0, disponible - AnchoPunto - normales.Sum());
+            for (int i = 0; i < columnas.Count; i++)
+            {
+                int ancho = normales[i] + sobra / columnas.Count + (i < sobra % columnas.Count ? 1 : 0);
+                if (columnas[i].Width != ancho) columnas[i].Width = ancho;
+            }
             return;
         }
-
-        int disponible = grid.ClientSize.Width - 2;
-        if (grid.Controls.OfType<VScrollBar>().Any(b => b.Visible))
-            disponible -= SystemInformation.VerticalScrollBarWidth;
 
         // Si ni con lo mínimo cabe (pantalla pequeña), se encoge todo por igual, letra incluida
         var minimos = columnas.Select(c => AnchoColumnaCompacta(c.HeaderText)).ToList();
@@ -183,7 +191,7 @@ public class ModuloRutinaCalidad : UserControl
         int resto = disponible - anchoPunto;
         while (libres.Count > 0)
         {
-            int parte = Math.Min(resto / libres.Count, AnchoSeccionMaximo);
+            int parte = resto / libres.Count;   // sin máximo: con pocas máquinas (planta superior) también llega al borde
             var fijas = libres.Where(i => anchos[i] > parte).ToList();
             if (fijas.Count == 0)
             {
@@ -753,7 +761,11 @@ public class ModuloRutinaCalidad : UserControl
         grid.CellToolTipTextNeeded += (s, e) => e.ToolTipText = TextoAyuda(e.RowIndex, e.ColumnIndex);
         grid.CellValidating += ValidarNumero;
         grid.CellEndEdit += GuardarNumero;
-        grid.Resize += (s, e) => { if (pantallaCompleta) AjustarAltoFilas(); };
+        grid.Resize += (s, e) =>
+        {
+            if (pantallaCompleta) AjustarAltoFilas();
+            else AjustarAnchoColumnas();   // al plegar o desplegar el menú y al cambiar el tamaño de la ventana
+        };
 
         return grid;
     }

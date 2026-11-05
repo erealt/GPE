@@ -1,0 +1,23 @@
+@* Remitente o destinatario: los dos tienen los mismos campos *@
+<section class="tarjeta">
+    <div class="titulo-tarjeta">
+        <div>
+            <h2><span class="paso">@Numero</span>@Titulo</h2>
+            <p class="suave">@Subtitulo</p>
+        </div>
+    </div>
+
+    <CamposParte Parte="Parte" Errores="Errores" Prefijo="@Prefijo" Cambio="Cambio" Usados="Usados" />
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Numero { get; set; } = "";
+    [Parameter, EditorRequired] public string Titulo { get; set; } = "";
+    [Parameter] public string Subtitulo { get; set; } = "";
+    [Parameter, EditorRequired] public ParteFormulario Parte { get; set; } = new();
+
+    [Parameter, EditorRequired] public Dictionary<string, string> Errores { get; set; } = new();
+    [Parameter, EditorRequired] public string Prefijo { get; set; } = "";
+    [Parameter] public EventCallback Cambio { get; set; }
+    [Parameter] public List<ParteEnvio> Usados { get; set; } = [];
+}

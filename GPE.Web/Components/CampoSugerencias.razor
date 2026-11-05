@@ -1,0 +1,76 @@
+@typeparam T where T : class
+@* Cuadro de texto que, mientras se escribe, muestra debajo los ya usados que contienen lo escrito.
+   Al elegir uno (clic, o flechas + Intro) se rellena todo; si no, se sigue escribiendo uno nuevo.
+   Igual que Sugerencias.cs en el escritorio. *@
+<div class="con-sugerencias">
+    <input maxlength="@Maximo" placeholder="@Ejemplo" value="@Valor" autocomplete="off"
+           @oninput="Escribir" @onkeydown="Teclas" @onblur="Ocultar" />
+    @if (coincidencias.Count > 0)
+    {
+        <ul class="sugerencias" role="listbox">
+            @for (int i = 0; i < coincidencias.Count; i++)
+            {
+                var item = coincidencias[i];
+                @* mousedown y no click: así el cuadro no pierde el foco antes de elegir *@
+                <li role="option" aria-selected="@(i == marcada)" class="@(i == marcada ? "marcada" : "")"
+                    @onmousedown="() => Elegir(item)" @onmousedown:preventDefault>@item</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private const int MaximoVisibles = 8;
+
+    [Parameter] public string Valor { get; set; } = "";
+    [Parameter] public EventCallback<string> ValorChanged { get; set; }
+    [Parameter] public int Maximo { get; set; }
+    [Parameter] public string? Ejemplo { get; set; }
+
+    [Parameter, EditorRequired] public List<T> Usados { get; set; } = [];
+    // El dato del que se busca (nombre o NIF); en la lista se ve el ToString de cada uno
+    [Parameter, EditorRequired] public Func<T, string> BuscarEn { get; set; } = _ => "";
+    [Parameter] public EventCallback<T> Elegido { get; set; }
+
+    private List<T> coincidencias = [];
+    private int marcada = -1;
+
+    private async Task Escribir(ChangeEventArgs e)
+    {
+        Valor = e.Value?.ToString() ?? "";
+        string texto = Valor.Trim();
+        coincidencias = texto.Length == 0 ? [] : Usados
+            .Where(u => BuscarEn(u).Contains(texto, StringComparison.OrdinalIgnoreCase))
+            .Take(MaximoVisibles)
+            .ToList();
+        marcada = -1;
+        await ValorChanged.InvokeAsync(Valor);
+    }
+
+    private async Task Teclas(KeyboardEventArgs e)
+    {
+        if (coincidencias.Count == 0) return;
+        switch (e.Key)
+        {
+            case "ArrowDown": marcada = Math.Min(marcada + 1, coincidencias.Count - 1); break;
+            case "ArrowUp": marcada = Math.Max(marcada - 1, -1); break;
+            case "Escape": Ocultar(); break;
+            case "Enter":
+                if (marcada >= 0) await Elegir(coincidencias[marcada]);
+                else Ocultar();
+                break;
+        }
+    }
+
+    private void Ocultar()
+    {
+        coincidencias = [];
+        marcada = -1;
+    }
+
+    private async Task Elegir(T item)
+    {
+        Ocultar();
+        await Elegido.InvokeAsync(item);
+    }
+}

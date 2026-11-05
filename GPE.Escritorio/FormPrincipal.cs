@@ -93,6 +93,11 @@ public class FormPrincipal : Form
                 () => new ModuloControlAgua()));
         }
 
+        lista.Add(new Modulo("DeCA",
+            "Documento de control del transporte, con su PDF y su código QR.",
+            ModuloInicio.ResumenDeca,
+            () => new ModuloDeca()));
+
         return lista;
     }
 

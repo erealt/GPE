@@ -131,6 +131,22 @@ public class ModuloInicio : UserControl
         }
     }
 
+    public static string? ResumenDeca()
+    {
+        try
+        {
+            var lista = new DecaServicio().ObtenerDecas();
+            int esteMes = lista.Count(d => d.FechaCarga.Year == DateTime.Today.Year
+                                        && d.FechaCarga.Month == DateTime.Today.Month);
+            int sinPdf = lista.Count(d => !d.PdfAlDia);
+            return $"{esteMes} este mes" + (sinPdf > 0 ? $"  ·  {sinPdf} con el PDF por generar" : "");
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
+
     public static string? ResumenNoConformidades()
     {
         try

@@ -31,6 +31,10 @@ public class ModuloDevoluciones : UserControl
     private readonly System.Windows.Forms.Timer temporizadorAviso = new() { Interval = MinutosEntreAvisos * 60_000 };
     private bool soloRetrasadas;    // filtro activado desde la franja
 
+    // Las cerradas se cargan la primera vez que se buscan o se filtra por su estado
+    private bool cerradasCargadas;
+    private string estadoCierre = "";
+
     // Tocaba avisar con otra ventana abierta: se avisa al volver a la principal
     public bool AvisoPendiente { get; private set; }
 
@@ -234,7 +238,7 @@ public class ModuloDevoluciones : UserControl
         };
 
         txtBuscar.Width = 340;
-        txtBuscar.PlaceholderText = "Nº, cliente o albarán";
+        txtBuscar.PlaceholderText = "Nº, cliente o código de cliente";
 
         cmbEstado.Width = 210;
         cmbEstado.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -252,8 +256,8 @@ public class ModuloDevoluciones : UserControl
 
         panel.Controls.Add(Componentes.CampoFiltro("Buscar", txtBuscar));
         panel.Controls.Add(Componentes.CampoFiltro("Estado", cmbEstado));
-        panel.Controls.Add(Componentes.CampoFiltro("Fecha desde", dtpDesde));
-        panel.Controls.Add(Componentes.CampoFiltro("Fecha hasta", dtpHasta));
+        panel.Controls.Add(Componentes.CampoFiltro("Solicitud desde", dtpDesde));
+        panel.Controls.Add(Componentes.CampoFiltro("Solicitud hasta", dtpHasta));
         panel.Controls.Add(btnLimpiar);
 
         // Los filtros se aplican al momento, sin botón de "Filtrar"
@@ -385,10 +389,15 @@ public class ModuloDevoluciones : UserControl
         List<DevolucionFila> devoluciones;
         try
         {
-            devoluciones = servicio.ObtenerDevolucionesVisibles();
+            devoluciones = servicio.ObtenerDevolucionesEnCurso();
+            if (cerradasCargadas)
+                devoluciones = devoluciones.Concat(servicio.ObtenerDevolucionesCerradas())
+                    .OrderByDescending(d => d.FechaSolicitud).ThenByDescending(d => d.Id)
+                    .ToList();
 
             if (cmbEstado.Items.Count == 0)
             {
+                estadoCierre = servicio.ObtenerNombreEstadoCierre();
                 cmbEstado.Items.Add("Todos los estados");
                 foreach (string estado in servicio.ObtenerEstadosVisibles())
                     cmbEstado.Items.Add(estado);
@@ -514,6 +523,13 @@ public class ModuloDevoluciones : UserControl
         string estado = cmbEstado.SelectedIndex > 0 ? cmbEstado.Text : "";
         DateTime? desde = dtpDesde.Checked ? dtpDesde.Value.Date : null;
         DateTime? hasta = dtpHasta.Checked ? dtpHasta.Value.Date : null;
+
+        // Se marca antes de cargar: si la base de datos falla, no se vuelve a intentar en cada tecla
+        if (!cerradasCargadas && (texto != "" || estado == estadoCierre) && estadoCierre != "")
+        {
+            cerradasCargadas = true;
+            CargarDatos();
+        }
 
         grid.CurrentCell = null;
 

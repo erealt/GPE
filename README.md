@@ -12,17 +12,19 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
 ## 1. Puesta en marcha
 
 1. **Base de datos**: en una base de datos llamada `GPE`, ejecutar:
-   - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones. Ya da de alta la fábrica, los cuatro roles (los tres de devoluciones y Calidad) y los seis estados (apartado 3).
+   - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones y del DeCA. Ya da de alta la fábrica, los cuatro roles (los tres de devoluciones y Calidad) y los seis estados (apartado 3).
    - [`no_conformidades.sql`](BaseDatos/no_conformidades.sql): tablas de calidad y opciones de los desplegables (la hoja LISTAS del Excel).
    - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
    - [`control_agua.sql`](BaseDatos/control_agua.sql): tablas del control de agua (hoja AGUA del Excel de calidad), con los puntos de agua que se revisan.
    - [`rutina_revisiones.sql`](BaseDatos/rutina_revisiones.sql): solo en bases de datos creadas antes de que la rutina tuviera varias revisiones por día. Se puede ejecutar más de una vez.
+   - [`deca_normativa.sql`](BaseDatos/deca_normativa.sql): solo en bases de datos creadas antes de añadir al DeCA el cargador contractual, la matrícula del remolque y los lugares de carga y descarga. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
 
    Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-f 65001`, por las tildes.
 
 2. **Conexión**: por defecto `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos se define la variable de entorno `GPE_CONEXION`.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar `GPE.Escritorio`. Al entrar se elige el usuario (provisional hasta que haya login); queda registrado en el historial y sus roles deciden qué puede hacer.
+4. **Web del DeCA** (opcional): ejecutar `GPE.Web` y abrir `http://localhost:5265`. Ver el apartado 7.
 
 > Para modificar datos a mano desde SSMS hay que indicar antes el usuario, porque los triggers del historial lo exigen:
 > `EXEC sp_set_session_context @key = N'usuario_id', @value = 1;`
@@ -36,9 +38,9 @@ El código está en tres capas. Cada una solo conoce a la de debajo:
 ```
 GPE.Escritorio   →   GPE.Logica   →   GPE.Datos   →   SQL Server
  (pantallas)         (reglas)         (consultas)
-                         ↑
-                     GPE.Avisos
-              (resúmenes diarios por correo)
+                       ↑   ↑
+          GPE.Avisos ──┘   └── GPE.Web
+ (resúmenes diarios por correo)   (DeCA en el navegador)
 ```
 
 | Proyecto | Qué contiene |
@@ -46,7 +48,8 @@ GPE.Escritorio   →   GPE.Logica   →   GPE.Datos   →   SQL Server
 | **GPE.Datos** | Acceso a SQL Server con `Microsoft.Data.SqlClient` (SQL escrito a mano, sin ORM) y los `record` que viajan entre capas. |
 | **GPE.Logica** | Reglas de negocio y validaciones. Es lo único que llaman las pantallas. Lanza `ReglaNegocioException` con un mensaje listo para enseñar al usuario. |
 | **GPE.Escritorio** | Las pantallas (Windows Forms creadas por código, sin diseñador). |
-| **GPE.Avisos** | Programa de consola que envía los resúmenes diarios por correo (apartado 7). |
+| **GPE.Avisos** | Programa de consola que envía los resúmenes diarios por correo (apartado 8). |
+| **GPE.Web** | El DeCA en el navegador (Blazor), para usarlo en la fábrica antes de instalar el escritorio. Usa los mismos servicios que el escritorio (apartado 7). |
 
 Ejemplo, "Finalizar revisión": `FormAlmacen` llama a `DevolucionServicio.FinalizarRevision`, que valida las líneas; `DevolucionRepositorio` las guarda y cambia la fase en una transacción, y los triggers apuntan el cambio en el historial.
 
@@ -83,7 +86,7 @@ flowchart LR
 
 ## 4. Cómo están hechas las pantallas
 
-**Ventana principal.** `FormPrincipal` tiene un menú lateral con los módulos (`ModuloInicio`, `ModuloDevoluciones`, `ModuloNoConformidades`), que son `UserControl`. Para añadir uno basta una entrada en `FormPrincipal.CrearModulos`: el menú y la tarjeta del inicio salen solos.
+**Ventana principal.** `FormPrincipal` tiene un menú lateral con los módulos (`ModuloInicio`, `ModuloDevoluciones`, `ModuloDeca`, `ModuloNoConformidades`...), que son `UserControl`. Para añadir uno basta una entrada en `FormPrincipal.CrearModulos`: el menú y la tarjeta del inicio salen solos.
 
 **Pantallas de paso.** Heredan de [`PantallaFase`](GPE.Escritorio/PantallaFase.cs), que aporta la barra de progreso (se puede saltar a otro paso pulsándolo), el diálogo de motivo de las reaperturas y los botones comunes.
 
@@ -173,11 +176,65 @@ Sustituye a la hoja AGUA (MT-RG09) del Excel de calidad: cada día se apuntan lo
 
 ---
 
-## 7. Avisos por correo
+## 7. DeCA (documento de control del transporte)
+
+Módulo aparte de las devoluciones (sección 4 de `crear_tablas.sql`: tablas `DECA` y `DECA_PALET`). Todavía en desarrollo.
+
+| Pieza | Archivo |
+|---|---|
+| Datos | [`Datos.cs`](GPE.Datos/Datos.cs), [`DecaRepositorio.cs`](GPE.Datos/DecaRepositorio.cs) |
+| Reglas | [`DecaServicio.cs`](GPE.Logica/DecaServicio.cs), [`Nif.cs`](GPE.Logica/Nif.cs) |
+| PDF | [`DecaPdf.cs`](GPE.Logica/DecaPdf.cs) |
+| Subida a la web | [`WordPress.cs`](GPE.Logica/WordPress.cs) |
+| Pantallas | [`ModuloDeca.cs`](GPE.Escritorio/ModuloDeca.cs), [`Deca.cs`](GPE.Escritorio/Deca.cs) |
+
+- **Lista (`ModuloDeca`)**: número `DECA-AAAA-NNN`, fecha de carga, remitente, destinatario, transportista, palets, cajas, peso total y el estado del PDF (*Al día* / *Por generar*). Búsqueda por texto y fechas; doble clic o *Abrir* para modificar.
+- **Formulario (`FormDeca`)**: remitente, destinatario, cargador contractual, transporte (fecha de carga, transportista efectivo, NIF, matrícula del vehículo y del remolque, lugar de carga y de descarga), mercancía, una fila por palet (peso y cajas, con los totales en el subtítulo) y observaciones.
+  - Remitente, destinatario y transportista se escriben a mano; al escribir el nombre o el NIF salen debajo los de otros DeCA que coinciden, y al elegir uno se rellenan todos sus datos (no hay catálogo aparte).
+  - **Cargador contractual**: quien contrata el transporte con el transportista. Se elige *El remitente*, *El destinatario* u *Otro* (y entonces se escriben sus datos). No hay ninguno marcado por defecto: depende de cada envío.
+  - **Matrícula del remolque**: solo si es un camión articulado. **Lugar de carga y de descarga**: solo si no son las direcciones del remitente y del destinatario; en el PDF, si están vacíos, salen esas direcciones.
+  - Cada palet nuevo copia el peso y las cajas del anterior.
+  - Avisa al cerrar si hay cambios sin guardar.
+- **Validaciones (`DecaServicio`)**: obligatorios, al menos un palet (peso entre 0 y 2.000 kg, cajas > 0), fecha de carga hasta 30 días atrás o adelante (solo si se cambia), CP de 5 cifras en España y el **NIF con su letra de control** (DNI, NIE, CIF y K/L/M) cuando el país es España. El NIF del transportista se comprueba si tiene forma de NIF español.
+- **PDF y QR**: botón *Generar PDF y QR* en la lista. Genera el PDF, lo **sube a la web** (biblioteca de medios de WordPress) y guarda una copia junto con el QR suelto como imagen (`DECA-AAAA-NNN-QR.png`, para imprimirlo aparte); después abre la carpeta con los dos. El PDF es una hoja A4 con los mismos datos que el formulario y el QR arriba a la derecha; si hay muchos palets la tabla sigue en otra hoja. Se hace con PDFsharp y QRCoder (los dos MIT).
+  - **Normativa** (Orden FOM/2861/2012 y Resolución de 5 de junio de 2026, obligatorio desde el 5/10/2026): el PDF lleva todos los datos del artículo 6 (cargador contractual y transportista efectivo con esos nombres, origen y destino, naturaleza y peso, fecha, matrículas, observaciones), la fecha y hora de creación y de modificación como metadatos, y el QR con una dirección `https://` que descarga el PDF directamente. Si se modifica un DeCA se genera un PDF nuevo y el original se conserva, como permite la resolución.
+  - Cada vez que se genera es un archivo nuevo, `DECA-AAAA-NNN-<código aleatorio>.pdf` (el código es para que no se pueda adivinar la dirección de otro DeCA). Los anteriores **se quedan en la web**: un QR ya impreso sigue llevando al PDF que se imprimió con él.
+  - El QR va dentro del PDF, así que su dirección se calcula antes de subirlo: `https://eurochoc.es/wp-content/uploads/AAAA/MM/<archivo>`, la carpeta del mes en que se sube. Si WordPress lo deja en otra carpeta, se borra y se vuelve a subir con el QR apuntando a esa.
+  - Si la subida falla, el DeCA sigue *Por generar* y se puede volver a intentar.
+  - *Ver PDF y QR* (cuando ya están al día) abre la copia de la carpeta; si no está en este ordenador, los vuelve a generar.
+  - La copia se guarda en `GPE_DECA_CARPETA` (por defecto `Documentos\GPE\DeCA`). Si se modifica un DeCA que ya tenía PDF, queda *Por generar*.
+  - **Se borran al año**: la normativa obliga a conservarlos al menos un año. Cada día, [`GPE.Avisos`](GPE.Avisos/Program.cs) borra los PDF del DeCA subidos hace más de 365 días, de WordPress y de `GPE_DECA_CARPETA` (con los QR sueltos). Solo borra los archivos con el nombre exacto que pone el programa (`DECA-AAAA-NNN-<32 cifras>.pdf` y `DECA-AAAA-NNN-QR.png`): nunca toca catálogos ni otros PDF de la web. Lo que borra queda apuntado en `avisos.log`.
+- **Acceso a la web**: un usuario de WordPress con permiso para subir y borrar archivos (Autor o más) y una *contraseña de aplicación* (WordPress → *Usuarios → Perfil → Contraseñas de aplicación*), nunca la contraseña normal. Se ponen en cada ordenador (y en el servidor de `GPE.Web`) con `setx GPE_WP_USUARIO "usuario"` y `setx GPE_WP_CLAVE "xxxx xxxx xxxx xxxx xxxx xxxx"`. `GPE_WP_SITIO` cambia la web (por defecto `https://eurochoc.es`).
+
+### Web del DeCA (`GPE.Web`)
+
+Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la red de la fábrica. Usa `DecaServicio` y `DecaPdf` tal cual: solo cambian las pantallas. Las sugerencias al escribir el nombre o el NIF funcionan igual.
+
+| Pieza | Archivo |
+|---|---|
+| Lista | [`DecaLista.razor`](GPE.Web/Components/Pages/DecaLista.razor) |
+| Formulario | [`DecaFormulario.razor`](GPE.Web/Components/Pages/DecaFormulario.razor), [`TarjetaParte.razor`](GPE.Web/Components/TarjetaParte.razor), [`Campo.razor`](GPE.Web/Components/Campo.razor), [`FormularioDeca.cs`](GPE.Web/FormularioDeca.cs) |
+| Usuario | [`UsuarioWeb.cs`](GPE.Web/UsuarioWeb.cs) |
+| PDF y QR | `/deca/{id}/pdf` y `/deca/{id}/qr` en [`Program.cs`](GPE.Web/Program.cs) |
+
+- **Usuario**: la web no pide usuario. Todo lo que se guarda desde ella queda a nombre del usuario cuyo id está en `"UsuarioWeb"` de [`appsettings.json`](GPE.Web/appsettings.json) (por defecto 1), porque cada DeCA guarda quién lo creó y lo cambió. Cada operación que guarda va dentro de `using (UsuarioWeb.Operacion())`, que usa `Sesion.Como(usuario)` solo para esa operación, sin tocar `Sesion.UsuarioActual` como hace el escritorio.
+- **PDF y QR**: el botón *Generar PDF y QR* del formulario sube el PDF a la web igual que el escritorio y guarda la copia en `GPE_DECA_CARPETA` **del servidor**; *Ver PDF* y *Ver QR* los abren en el navegador para imprimirlos o guardarlos.
+- **Instalarla en un servidor** de la fábrica (Windows):
+  1. Instalar IIS y el *ASP.NET Core Hosting Bundle* de .NET 10.
+  2. Publicar `GPE.Web` (clic derecho → *Publicar* → carpeta) y crear un sitio en IIS que apunte a esa carpeta.
+  3. Conexión a la base de datos: o se da permiso en SQL Server a la cuenta del grupo de aplicaciones de IIS (`IIS APPPOOL\<nombre>`), o se pone en `GPE_CONEXION` un usuario de SQL.
+  4. `GPE_DECA_CARPETA`: una carpeta del servidor donde esa cuenta pueda escribir. Y `GPE_WP_USUARIO` y `GPE_WP_CLAVE` para subir los PDF a la web.
+  5. En `appsettings.json` de la carpeta publicada, `"UsuarioWeb"` con el id del usuario a cuyo nombre se guardan los DeCA.
+  6. Se entra con `http://<servidor>/`, solo desde la red de la fábrica.
+  7. **Borrado de los DeCA de más de un año**: en el mismo servidor, la tarea programada de `GPE.Avisos` (apartado 8). Las variables (`GPE_CONEXION`, `GPE_DECA_CARPETA`, `GPE_WP_USUARIO`, `GPE_WP_CLAVE`) conviene ponerlas para todo el servidor (`setx NOMBRE "valor" /M`, como administrador), así las ven tanto la web como la tarea y las dos usan la misma carpeta.
+
+---
+
+## 8. Avisos por correo
 
 Cuando una devolución avanza se avisa a quien le toca el siguiente paso (el rol de `ESTADO_DEVOLUCION.rol_responsable_id` en la fábrica de la devolución). El aviso se apunta en `AVISO_CORREO` en la misma transacción que el cambio, y [`AvisoServicio`](GPE.Logica/AvisoServicio.cs) lo envía en segundo plano; si el correo falla, la devolución se guarda igual y se reintenta.
 
-Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`.
+Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`. La misma tarea borra los PDF del DeCA de más de un año (apartado 7); si una de las dos cosas falla, la otra se hace igual.
 
 **Cuenta de envío.** Se configura en cada ordenador con variables de entorno (`setx NOMBRE "valor"` y volver a abrir la aplicación). Sin ellas, los avisos se quedan pendientes.
 
@@ -190,7 +247,7 @@ Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen po
 
 ---
 
-## 8. Cómo añadir algo nuevo
+## 9. Cómo añadir algo nuevo
 
 **Un campo nuevo en un paso existente**
 1. Columna en el script de tablas (y un `ALTER TABLE` para las bases de datos ya creadas).

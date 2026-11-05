@@ -1,0 +1,518 @@
+@page "/deca/nuevo"
+@page "/deca/{Id:int}"
+@inject NavigationManager Navegacion
+@inject IJSRuntime JS
+@inject UsuarioWeb UsuarioWeb
+
+@* Crear o modificar un DeCA: remitente, destinatario, transporte, mercancía y palets *@
+
+<PageTitle>@(existente?.Numero ?? "Nuevo DeCA")</PageTitle>
+<NavigationLock ConfirmExternalNavigation="hayCambios" OnBeforeInternalNavigation="AntesDeSalir" />
+
+@if (cargaFallida != null)
+{
+    <div class="aviso error">@cargaFallida</div>
+    <a href="deca">← Volver a la lista</a>
+    return;
+}
+
+<div class="cabecera">
+    <div>
+        <p class="ruta"><a href="deca">DECA</a> / @(existente?.Numero ?? "NUEVO")</p>
+        <h1>@(existente?.Numero ?? "Nuevo DeCA")</h1>
+        <p class="suave">
+            @(existente == null ? "Rellena los datos del envío. Después podrás generar el PDF con su código QR."
+              : existente.ArchivoPdf == null ? "Modifica los datos del envío."
+              : "Si guardas cambios, habrá que volver a generar el PDF. El QR ya impreso seguirá llevando al PDF anterior.")
+        </p>
+    </div>
+</div>
+
+@if (mensaje != null)
+{
+    <div class="aviso @(mensajeEsError ? "error" : "bien")">@mensaje</div>
+}
+
+@if (existente != null)
+{
+    <section class="tarjeta resumen">
+        <div>
+            <span class="etiqueta-dato">CREADO</span>
+            <span>@existente.CreadoEn.ToString("dd MMM yyyy") · @existente.CreadoPor</span>
+        </div>
+        <div>
+            <span class="etiqueta-dato">ÚLTIMO CAMBIO</span>
+            <span>@(existente.ModificadoEn == null ? "—" : $"{existente.ModificadoEn:dd MMM yyyy} · {existente.ModificadoPor}")</span>
+        </div>
+        <div>
+            <span class="etiqueta-dato">PDF Y QR</span>
+            <span>
+                @(existente.PdfGeneradoEn != null ? $"Generados el {existente.PdfGeneradoEn:dd MMM yyyy}"
+                  : existente.ArchivoPdf != null ? "Por volver a generar" : "Sin generar")
+            </span>
+        </div>
+        <div class="pdf">
+            <button class="secundario" disabled="@generando" @onclick="GenerarPdfYQr">
+                @(generando ? "Generando..." : "Generar PDF y QR")
+            </button>
+            @if (existente.PdfGeneradoEn != null)
+            {
+                <a class="boton secundario" href="deca/@existente.Id/pdf" target="_blank">Ver PDF</a>
+                <a class="boton secundario" href="deca/@existente.Id/qr" target="_blank">Ver QR</a>
+            }
+        </div>
+    </section>
+}
+
+<TarjetaParte Numero="1" Titulo="Remitente" Subtitulo="Quién envía la mercancía" Parte="remitente"
+              Errores="errores" Prefijo="remitente" Cambio="MarcarCambio" Usados="partesUsadas" />
+<TarjetaParte Numero="2" Titulo="Destinatario" Subtitulo="Quién la recibe" Parte="destinatario"
+              Errores="errores" Prefijo="destinatario" Cambio="MarcarCambio" Usados="partesUsadas" />
+
+@* La normativa pide que figure expresamente quién contrata el transporte; si es el remitente
+   o el destinatario no hace falta volver a escribir sus datos *@
+<section class="tarjeta">
+    <div class="titulo-tarjeta">
+        <div>
+            <h2><span class="paso">3</span>Cargador contractual</h2>
+            <p class="suave">Quién contrata el transporte con el transportista</p>
+        </div>
+    </div>
+    <div class="campo @(errores.ContainsKey("cargador") ? "con-error" : "")">
+        <span class="etiqueta-campo" id="etiqueta-cargador">El cargador contractual es</span>
+        <div class="opciones" role="radiogroup" aria-labelledby="etiqueta-cargador">
+            @foreach (var (tipo, texto) in OpcionesCargador)
+            {
+                <label class="opcion">
+                    <input type="radio" name="cargador" checked="@(cargadorTipo == tipo)" @onchange="() => ElegirCargador(tipo)" />
+                    @texto
+                </label>
+            }
+        </div>
+        @if (errores.GetValueOrDefault("cargador") is string errorCargador)
+        {
+            <span class="error-campo">@errorCargador</span>
+        }
+    </div>
+    @if (cargadorTipo == TipoCargador.Otro)
+    {
+        <CamposParte Parte="cargadorOtro" Errores="errores" Prefijo="cargador" Cambio="MarcarCambio" Usados="partesUsadas" />
+    }
+</section>
+
+<section class="tarjeta">
+    <div class="titulo-tarjeta">
+        <div>
+            <h2><span class="paso">4</span>Transporte</h2>
+            <p class="suave">Quién lleva la mercancía, en qué vehículo y de dónde a dónde</p>
+        </div>
+    </div>
+    <div class="rejilla">
+        <Campo Etiqueta="Fecha de carga" Error="@errores.GetValueOrDefault("fecha")">
+            <input type="date" @bind="fechaCarga" @bind:after='() => Cambiar("fecha")' />
+        </Campo>
+        <Campo Etiqueta="Transportista efectivo" Error="@errores.GetValueOrDefault("transportista")">
+            <CampoSugerencias T="TransportistaDeca" Maximo="150" Ejemplo="Nombre o razón social" Usados="transportistasUsados" BuscarEn="t => t.Nombre"
+                              @bind-Valor="transportista" @bind-Valor:after='() => Cambiar("transportista")' Elegido="ElegirTransportista" />
+        </Campo>
+        <Campo Etiqueta="NIF del transportista" Error="@errores.GetValueOrDefault("nifTransportista")">
+            <CampoSugerencias T="TransportistaDeca" Maximo="20" Usados="transportistasUsados" BuscarEn="t => t.Nif"
+                              @bind-Valor="nifTransportista" @bind-Valor:after='() => Cambiar("nifTransportista")' Elegido="ElegirTransportista" />
+        </Campo>
+        <Campo Etiqueta="Matrícula del vehículo" Error="@errores.GetValueOrDefault("matricula")">
+            <input maxlength="20" placeholder="1234ABC" @bind="matricula" @bind:after='() => Cambiar("matricula")' />
+        </Campo>
+
+        @* Si es un camión articulado, la normativa pide también la del remolque o semirremolque *@
+        <Campo Etiqueta="Matrícula del remolque" Error="@errores.GetValueOrDefault("matriculaRemolque")" Clase="ultima">
+            <input maxlength="20" placeholder="Solo si lleva remolque" @bind="matriculaRemolque" @bind:after='() => Cambiar("matriculaRemolque")' />
+        </Campo>
+
+        <Campo Etiqueta="Lugar de carga" Error="@errores.GetValueOrDefault("lugarCarga")" Clase="doble">
+            <input maxlength="250" placeholder="Si no es la dirección del remitente" @bind="lugarCarga" @bind:after='() => Cambiar("lugarCarga")' />
+        </Campo>
+        <Campo Etiqueta="Lugar de descarga" Error="@errores.GetValueOrDefault("lugarDescarga")" Clase="doble">
+            <input maxlength="250" placeholder="Si no es la dirección del destinatario" @bind="lugarDescarga" @bind:after='() => Cambiar("lugarDescarga")' />
+        </Campo>
+    </div>
+</section>
+
+<section class="tarjeta">
+    <div class="titulo-tarjeta">
+        <div>
+            <h2><span class="paso">5</span>Mercancía y palets</h2>
+            <p class="suave">
+                @palets.Count @(palets.Count == 1 ? "palet" : "palets")  ·
+                @palets.Sum(p => p.NumCajas ?? 0).ToString("N0") cajas  ·
+                @palets.Sum(p => p.PesoKg ?? 0).ToString("N2") kg
+            </p>
+        </div>
+    </div>
+
+    <Campo Etiqueta="Naturaleza de la mercancía" Error="@errores.GetValueOrDefault("mercancia")">
+        <input maxlength="250" placeholder="Ej. Chocolate en cajas de cartón" @bind="mercancia" @bind:after='() => Cambiar("mercancia")' />
+    </Campo>
+
+    <p class="suave pequeno">Cada palet nuevo copia el peso y las cajas del anterior.</p>
+
+    <table class="palets">
+        <thead>
+            <tr><th>PALET</th><th>PESO (KG)</th><th>Nº DE CAJAS</th><th></th><th></th></tr>
+        </thead>
+        <tbody>
+            @for (int i = 0; i < palets.Count; i++)
+            {
+                var palet = palets[i];
+                int numero = i + 1;
+                <tr @key="palet">
+                    <td>Palet @numero</td>
+                    <td><input type="number" step="0.01" min="0" @bind="palet.PesoKg" @bind:after="() => CambiarPalet(palet)" /></td>
+                    <td><input type="number" step="1" min="0" @bind="palet.NumCajas" @bind:after="() => CambiarPalet(palet)" /></td>
+                    <td>
+                        <button class="quitar" title="Quitar palet" disabled="@(palets.Count <= 1)"
+                                @onclick="() => QuitarPalet(palet)">✕</button>
+                    </td>
+                    <td class="error-campo">@palet.Error</td>
+                </tr>
+            }
+        </tbody>
+        @* Debajo del último palet, que es donde se está escribiendo *@
+        <tfoot>
+            <tr>
+                <td colspan="5">
+                    <button class="anadir-palet" @onclick="AnadirPalet">+ Añadir palet</button>
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <Campo Etiqueta="Observaciones" Error="@errores.GetValueOrDefault("observaciones")">
+        <textarea rows="3" maxlength="4000" placeholder="Cualquier información útil para el transporte..."
+                  @bind="observaciones" @bind:after='() => Cambiar("observaciones")'></textarea>
+    </Campo>
+</section>
+
+<div class="acciones fija">
+    <span class="estado-cambios">@(hayCambios ? "Hay cambios sin guardar" : "")</span>
+    <button class="principal" disabled="@guardando" @onclick="Guardar">
+        @(existente == null ? "Guardar DeCA" : "Guardar cambios")
+    </button>
+    <a class="boton secundario" href="deca">Cancelar</a>
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private readonly DecaServicio servicio = new();
+    private DecaGuardado? existente;   // null = nuevo
+    private string? cargaFallida;
+
+    private ParteFormulario remitente = new();
+    private ParteFormulario destinatario = new();
+    private string cargadorTipo = "";   // ninguno marcado hasta que se elija
+    private ParteFormulario cargadorOtro = new();
+    private DateTime fechaCarga = DateTime.Today;
+    private string transportista = "";
+    private string nifTransportista = "";
+    private string matricula = "";
+    private string matriculaRemolque = "";
+    private string lugarCarga = "";
+    private string lugarDescarga = "";
+    private string mercancia = "";
+    private string observaciones = "";
+    private List<PaletFormulario> palets = [];
+
+    // Ya usados en otros DeCA: salen al escribir el nombre o el NIF
+    private List<ParteEnvio> partesUsadas = [];
+    private List<TransportistaDeca> transportistasUsados = [];
+
+    private readonly Dictionary<string, string> errores = new();
+    private string? mensaje;
+    private bool mensajeEsError;
+    private bool hayCambios;
+    private bool guardando;
+    private bool generando;
+    private bool irAlPrimerError;
+    private bool irAlNuevoPalet;
+
+    protected override void OnParametersSet()
+    {
+        try
+        {
+            partesUsadas = servicio.ObtenerPartesUsadas();
+            transportistasUsados = servicio.ObtenerTransportistasUsados();
+        }
+        catch (DbException)
+        {
+            // Sin sugerencias se puede seguir escribiendo a mano
+        }
+
+        cargaFallida = null;
+        mensaje = Navegacion.Uri.EndsWith("?guardado") ? "DeCA guardado." : null;
+        mensajeEsError = false;
+        errores.Clear();
+
+        if (Id == null)
+        {
+            existente = null;
+            palets = [new PaletFormulario()];
+        }
+        else if (!Cargar(Id.Value))
+            return;
+
+        hayCambios = false;
+    }
+
+    private bool Cargar(int id)
+    {
+        try
+        {
+            existente = servicio.ObtenerDeca(id);
+        }
+        catch (DbException ex)
+        {
+            cargaFallida = "No se pudo cargar el DeCA. " + ex.Message;
+            return false;
+        }
+        if (existente == null)
+        {
+            cargaFallida = "Este DeCA ya no existe.";
+            return false;
+        }
+
+        var d = existente.Datos;
+        remitente = new();
+        remitente.Rellenar(d.Remitente);
+        destinatario = new();
+        destinatario.Rellenar(d.Destinatario);
+        cargadorTipo = d.CargadorTipo;
+        cargadorOtro = new();
+        if (d.CargadorOtro != null) cargadorOtro.Rellenar(d.CargadorOtro);
+        fechaCarga = d.FechaCarga;
+        transportista = d.TransportistaNombre;
+        nifTransportista = d.TransportistaNif;
+        matricula = d.Matricula;
+        matriculaRemolque = d.MatriculaRemolque ?? "";
+        lugarCarga = d.LugarCarga ?? "";
+        lugarDescarga = d.LugarDescarga ?? "";
+        mercancia = d.Mercancia;
+        observaciones = d.Observaciones ?? "";
+        palets = d.Palets.Select(p => new PaletFormulario { PesoKg = p.PesoKg, NumCajas = p.NumCajas }).ToList();
+        return true;
+    }
+
+    // ---------- Cambios ----------
+
+    private void MarcarCambio() => hayCambios = true;
+
+    // El error de un campo se quita en cuanto se toca
+    private void Cambiar(string campo)
+    {
+        errores.Remove(campo);
+        MarcarCambio();
+    }
+
+    // Al elegir uno ya usado se rellenan su NIF y la matrícula de su último DeCA
+    private void ElegirTransportista(TransportistaDeca t)
+    {
+        transportista = t.Nombre;
+        nifTransportista = t.Nif;
+        matricula = t.Matricula;
+        foreach (var campo in new[] { "transportista", "nifTransportista", "matricula" })
+            errores.Remove(campo);
+        MarcarCambio();
+    }
+
+    private static readonly (string Tipo, string Texto)[] OpcionesCargador =
+    [
+        (TipoCargador.Remitente, "El remitente"),
+        (TipoCargador.Destinatario, "El destinatario"),
+        (TipoCargador.Otro, "Otro")
+    ];
+
+    private void ElegirCargador(string tipo)
+    {
+        cargadorTipo = tipo;
+        Cambiar("cargador");
+    }
+
+    private void CambiarPalet(PaletFormulario palet)
+    {
+        palet.Error = null;
+        MarcarCambio();
+    }
+
+    // Copia el último palet: lo normal es que sean todos iguales
+    private void AnadirPalet()
+    {
+        var anterior = palets.LastOrDefault();
+        palets.Add(new PaletFormulario { PesoKg = anterior?.PesoKg, NumCajas = anterior?.NumCajas });
+        MarcarCambio();
+        irAlNuevoPalet = true;   // el cursor va a su peso cuando ya esté pintado
+    }
+
+    private void QuitarPalet(PaletFormulario palet)
+    {
+        if (palets.Count <= 1) return;   // siempre queda al menos uno
+        palets.Remove(palet);
+        MarcarCambio();
+    }
+
+    private async Task AntesDeSalir(LocationChangingContext contexto)
+    {
+        if (hayCambios && !await JS.InvokeAsync<bool>("confirm", "Tienes cambios sin guardar. ¿Quieres salir sin guardarlos?"))
+            contexto.PreventNavigation();
+    }
+
+    // ---------- Guardado ----------
+
+    private DatosDeca Leer() => new(
+        remitente.Leer(),
+        destinatario.Leer(),
+        cargadorTipo,
+        cargadorTipo == TipoCargador.Otro ? cargadorOtro.Leer() : null,
+        fechaCarga.Date,
+        transportista,
+        nifTransportista,
+        matricula,
+        matriculaRemolque,
+        lugarCarga,
+        lugarDescarga,
+        mercancia,
+        observaciones,
+        palets.Select(p => new PaletDeca(p.PesoKg ?? 0, p.NumCajas ?? 0)).ToList());
+
+    private void Guardar()
+    {
+        mensaje = null;
+
+        // 1. Se marcan a la vez todos los campos con error y la página va al primero
+        errores.Clear();
+        var partes = new List<(string, ParteFormulario)> { ("remitente", remitente), ("destinatario", destinatario) };
+        if (cargadorTipo == TipoCargador.Otro) partes.Add(("cargador", cargadorOtro));
+        foreach (var (prefijo, parte) in partes)
+            foreach (var (campo, error) in parte.Comprobaciones())
+                if (error != null) errores[$"{prefijo}.{campo}"] = error;
+
+        Anotar("cargador", DecaServicio.ErrorCargadorTipo(cargadorTipo));
+        bool fechaCambiada = existente == null || fechaCarga.Date != existente.Datos.FechaCarga.Date;
+        Anotar("fecha", fechaCambiada ? DecaServicio.ErrorFechaCarga(fechaCarga) : null);
+        Anotar("transportista", DecaServicio.ErrorObligatorio(transportista, "el transportista", 150));
+        Anotar("nifTransportista", DecaServicio.ErrorNifTransportista(nifTransportista));
+        Anotar("matricula", DecaServicio.ErrorObligatorio(matricula, "la matrícula", 20));
+        Anotar("matriculaRemolque", DecaServicio.ErrorOpcional(matriculaRemolque, 20));
+        Anotar("lugarCarga", DecaServicio.ErrorOpcional(lugarCarga, 250));
+        Anotar("lugarDescarga", DecaServicio.ErrorOpcional(lugarDescarga, 250));
+        Anotar("mercancia", DecaServicio.ErrorObligatorio(mercancia, "la mercancía", 250));
+
+        foreach (var palet in palets)
+            palet.Error = DecaServicio.ErrorPalet(palet.PesoKg, palet.NumCajas);
+
+        if (errores.Count > 0 || palets.Any(p => p.Error != null))
+        {
+            irAlPrimerError = true;   // cuando ya estén pintados (OnAfterRenderAsync)
+            return;
+        }
+
+        // 2. Guardar (el servicio vuelve a comprobarlo todo)
+        guardando = true;
+        int id;
+        try
+        {
+            using (UsuarioWeb.Operacion())
+            {
+                if (existente == null)
+                    id = servicio.CrearDeca(Leer());
+                else
+                {
+                    servicio.ModificarDeca(existente.Id, Leer());
+                    id = existente.Id;
+                }
+            }
+        }
+        catch (ReglaNegocioException ex)
+        {
+            Avisar(ex.Message);
+            return;
+        }
+        catch (DbException ex)
+        {
+            Avisar("No se pudo guardar el DeCA. " + ex.Message);
+            return;
+        }
+        finally
+        {
+            guardando = false;
+        }
+
+        hayCambios = false;
+        if (existente == null)
+            Navegacion.NavigateTo($"deca/{id}?guardado");
+        else if (Cargar(id))
+        {
+            mensaje = "Cambios guardados.";
+            mensajeEsError = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool primeraVez)
+    {
+        if (irAlNuevoPalet)
+        {
+            irAlNuevoPalet = false;
+            await JS.InvokeVoidAsync("gpe.irAlUltimoPalet");
+        }
+        if (!irAlPrimerError) return;
+        irAlPrimerError = false;
+        await JS.InvokeVoidAsync("gpe.irAlPrimerError");
+    }
+
+    private void Anotar(string campo, string? error)
+    {
+        if (error != null) errores[campo] = error;
+    }
+
+    private void Avisar(string texto)
+    {
+        mensaje = texto;
+        mensajeEsError = true;
+    }
+
+    // ---------- PDF y QR ----------
+
+    private async Task GenerarPdfYQr()
+    {
+        if (existente == null) return;
+        if (hayCambios)
+        {
+            Avisar("Guarda los cambios antes de generar el PDF, para que salgan en él.");
+            return;
+        }
+
+        generando = true;
+        mensaje = null;
+        await Task.Yield();   // que se vea "Generando..." mientras tanto
+        try
+        {
+            using (UsuarioWeb.Operacion())
+                servicio.GenerarPdfYQr(existente.Id);
+            if (Cargar(existente.Id))
+            {
+                mensaje = "PDF subido a la web y QR generado. Ábrelos con \"Ver PDF\" y \"Ver QR\".";
+                mensajeEsError = false;
+            }
+        }
+        catch (ReglaNegocioException ex)
+        {
+            Avisar(ex.Message);
+        }
+        catch (DbException ex)
+        {
+            Avisar("No se pudo generar el PDF. " + ex.Message);
+        }
+        finally
+        {
+            generando = false;
+        }
+    }
+}

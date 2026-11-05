@@ -1,0 +1,61 @@
+@* Campos de un remitente, un destinatario o un cargador contractual: los tres son iguales *@
+<div class="rejilla">
+    <Campo Etiqueta="Nombre" Error="@ErrorDe(nameof(Parte.Nombre))" Clase="doble">
+        <CampoSugerencias T="ParteEnvio" Maximo="150" Ejemplo="Nombre o razón social" Usados="Usados" BuscarEn="p => p.Nombre"
+                          @bind-Valor="Parte.Nombre" @bind-Valor:after="() => Cambiar(nameof(Parte.Nombre))" Elegido="Elegir" />
+    </Campo>
+    <Campo Etiqueta="NIF" Error="@ErrorDe(nameof(Parte.Nif))">
+        <CampoSugerencias T="ParteEnvio" Maximo="20" Ejemplo="B12345674" Usados="Usados" BuscarEn="p => p.Nif"
+                          @bind-Valor="Parte.Nif" @bind-Valor:after="() => Cambiar(nameof(Parte.Nif))" Elegido="Elegir" />
+    </Campo>
+    <Campo Etiqueta="Teléfono" Error="@ErrorDe(nameof(Parte.Telefono))">
+        <input maxlength="30" placeholder="Opcional" @bind="Parte.Telefono" @bind:after="() => Cambiar(nameof(Parte.Telefono))" />
+    </Campo>
+
+    <Campo Etiqueta="Dirección" Error="@ErrorDe(nameof(Parte.Direccion))" Clase="doble">
+        <input maxlength="200" placeholder="Calle, número, piso..." @bind="Parte.Direccion" @bind:after="() => Cambiar(nameof(Parte.Direccion))" />
+    </Campo>
+    <Campo Etiqueta="Código postal" Error="@ErrorDe(nameof(Parte.CodigoPostal))">
+        <input maxlength="10" placeholder="02001" @bind="Parte.CodigoPostal" @bind:after="() => Cambiar(nameof(Parte.CodigoPostal))" />
+    </Campo>
+    <Campo Etiqueta="Población" Error="@ErrorDe(nameof(Parte.Poblacion))">
+        <input maxlength="100" @bind="Parte.Poblacion" @bind:after="() => Cambiar(nameof(Parte.Poblacion))" />
+    </Campo>
+
+    <Campo Etiqueta="Provincia" Error="@ErrorDe(nameof(Parte.Provincia))">
+        <input maxlength="100" placeholder="Opcional" @bind="Parte.Provincia" @bind:after="() => Cambiar(nameof(Parte.Provincia))" />
+    </Campo>
+    <Campo Etiqueta="País" Error="@ErrorDe(nameof(Parte.Pais))">
+        <input maxlength="60" @bind="Parte.Pais" @bind:after="() => Cambiar(nameof(Parte.Pais))" />
+    </Campo>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ParteFormulario Parte { get; set; } = new();
+
+    // Errores de todo el formulario; los de estos campos van con la clave "Prefijo.Campo"
+    [Parameter, EditorRequired] public Dictionary<string, string> Errores { get; set; } = new();
+    [Parameter, EditorRequired] public string Prefijo { get; set; } = "";
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    // Remitentes y destinatarios de otros DeCA: salen al escribir el nombre o el NIF
+    [Parameter] public List<ParteEnvio> Usados { get; set; } = [];
+
+    private string? ErrorDe(string campo) => Errores.GetValueOrDefault($"{Prefijo}.{campo}");
+
+    // El error de un campo se quita en cuanto se toca
+    private Task Cambiar(string campo)
+    {
+        Errores.Remove($"{Prefijo}.{campo}");
+        return Cambio.InvokeAsync();
+    }
+
+    // Al elegir uno ya usado se rellenan todos sus datos y se quitan los errores que hubiera
+    private Task Elegir(ParteEnvio p)
+    {
+        Parte.Rellenar(p);
+        foreach (var clave in Errores.Keys.Where(k => k.StartsWith(Prefijo + ".")).ToList())
+            Errores.Remove(clave);
+        return Cambio.InvokeAsync();
+    }
+}

@@ -71,7 +71,29 @@ public record CambioHistorial(
 // Usuario de la aplicación; se envía a SQL Server para que los triggers sepan quién cambia qué.
 public static class Sesion
 {
-    public static Usuario? UsuarioActual { get; set; }
+    // En el escritorio hay un solo usuario por programa. La web atiende a varias personas a la
+    // vez, así que cada operación indica el suyo con Como(...), que tiene preferencia.
+    private static Usuario? usuarioPrograma;
+    private static readonly AsyncLocal<Usuario?> usuarioOperacion = new();
+
+    public static Usuario? UsuarioActual
+    {
+        get => usuarioOperacion.Value ?? usuarioPrograma;
+        set => usuarioPrograma = value;
+    }
+
+    // using (Sesion.Como(usuario)) { ... }: lo que se haga dentro queda a nombre de ese usuario
+    public static IDisposable Como(Usuario usuario)
+    {
+        var anterior = usuarioOperacion.Value;
+        usuarioOperacion.Value = usuario;
+        return new Restaurar(() => usuarioOperacion.Value = anterior);
+    }
+
+    private sealed class Restaurar(Action accion) : IDisposable
+    {
+        public void Dispose() => accion();
+    }
 
     // Roles del usuario (tabla USUARIO_ROL): deciden qué pasos puede hacer
     public static HashSet<string> Roles { get; set; } = new();
@@ -236,3 +258,89 @@ public record AbonoGuardado(
     decimal? Importe,
     string? Observaciones,
     DateTime? FechaCierre);
+
+// ---------- DeCA ----------
+
+// Remitente o destinatario de un DeCA (texto libre; se sugieren los ya usados)
+public record ParteEnvio(
+    string Nombre,
+    string Nif,
+    string Direccion,
+    string CodigoPostal,
+    string Poblacion,
+    string? Provincia,
+    string Pais,
+    string? Telefono)
+{
+    public override string ToString() => $"{Nombre} · {Nif} · {Poblacion}";
+}
+
+// Transportista ya usado en otro DeCA, con la última matrícula que llevó
+public record TransportistaDeca(string Nombre, string Nif, string Matricula)
+{
+    public override string ToString() => $"{Nombre} · {Nif}";
+}
+
+public record PaletDeca(decimal PesoKg, int NumCajas);
+
+// Quién es el cargador contractual (quien contrata el transporte con el transportista)
+public static class TipoCargador
+{
+    public const string Remitente = "REMITENTE";
+    public const string Destinatario = "DESTINATARIO";
+    public const string Otro = "OTRO";
+}
+
+// Lo que el usuario rellena al crear o modificar un DeCA. CargadorOtro solo se usa si
+// CargadorTipo es Otro. LugarCarga y LugarDescarga son null si coinciden con las direcciones
+// del remitente y del destinatario.
+public record DatosDeca(
+    ParteEnvio Remitente,
+    ParteEnvio Destinatario,
+    string CargadorTipo,
+    ParteEnvio? CargadorOtro,
+    DateTime FechaCarga,
+    string TransportistaNombre,
+    string TransportistaNif,
+    string Matricula,
+    string? MatriculaRemolque,
+    string? LugarCarga,
+    string? LugarDescarga,
+    string Mercancia,
+    string? Observaciones,
+    List<PaletDeca> Palets)
+{
+    public ParteEnvio? Cargador => CargadorTipo switch
+    {
+        TipoCargador.Remitente => Remitente,
+        TipoCargador.Destinatario => Destinatario,
+        _ => CargadorOtro
+    };
+}
+
+// Fila de la lista de DeCA, con los totales de sus palets
+public record DecaFila(
+    int Id,
+    string Numero,
+    DateTime FechaCarga,
+    string Remitente,
+    string Destinatario,
+    string Transportista,
+    int Palets,
+    int Cajas,
+    decimal PesoKg,
+    bool PdfAlDia);   // false si no se ha generado o se modificó después
+
+// DeCA completo. CodigoPublico da nombre al PDF publicado (y por tanto a la dirección del QR).
+// PdfGeneradoEn es null si nunca se generó o si se modificó después de generarlo.
+public record DecaGuardado(
+    int Id,
+    string Numero,
+    Guid CodigoPublico,
+    DatosDeca Datos,
+    string? ArchivoPdf,
+    DateTime? PdfGeneradoEn,
+    string CreadoPor,
+    DateTime CreadoEn,
+    string? ModificadoPor,
+    DateTime? ModificadoEn);

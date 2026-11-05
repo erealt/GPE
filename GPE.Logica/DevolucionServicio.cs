@@ -27,11 +27,15 @@ public class DevolucionServicio
         return fases;
     }
 
-    public List<DevolucionFila> ObtenerDevolucionesVisibles() => repositorio.ObtenerDevoluciones(FasesVisibles());
-
-    // Las visibles sin las cerradas, para el inicio y el aviso de abonos
+    // Las visibles sin las cerradas, para la lista, el inicio y el aviso de abonos
     public List<DevolucionFila> ObtenerDevolucionesEnCurso() =>
         repositorio.ObtenerDevoluciones(FasesVisibles().Where(f => f != Fase.Cierre));
+
+    // Las cerradas son cada vez más: la lista solo las pide al buscarlas o filtrar por su estado
+    public List<DevolucionFila> ObtenerDevolucionesCerradas() =>
+        repositorio.ObtenerDevoluciones(new[] { Fase.Cierre });
+
+    public string ObtenerNombreEstadoCierre() => repositorio.ObtenerEstados()[Fase.Cierre - 1];
 
     public DevolucionFila? ObtenerDevolucion(int devolucionId) => repositorio.ObtenerDevolucion(devolucionId);
 
