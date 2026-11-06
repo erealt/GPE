@@ -236,7 +236,9 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
 
 Cuando una devolución avanza se avisa a quien le toca el siguiente paso (el rol de `ESTADO_DEVOLUCION.rol_responsable_id` en la fábrica de la devolución). El aviso se apunta en `AVISO_CORREO` en la misma transacción que el cambio, y [`AvisoServicio`](GPE.Logica/AvisoServicio.cs) lo envía en segundo plano; si el correo falla, la devolución se guarda igual y se reintenta.
 
-Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`. La misma tarea borra los PDF del DeCA de más de un año (apartado 7); si una de las dos cosas falla, la otra se hace igual.
+Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (recogidas por solicitar a Transporte, revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Los viernes envía también al Almacén las devoluciones con la recogida gestionada que aún no han llegado, para poder reclamarlas; cada día no, porque no se sabe cuánto tardarán. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`. La misma tarea borra los PDF del DeCA de más de un año (apartado 7); si una de las dos cosas falla, la otra se hace igual.
+
+**Al abrir GPE.** A cada persona le sale una ventana con lo que espera algo de sus roles ([`AvisoPendientes.cs`](GPE.Escritorio/AvisoPendientes.cs)): Transporte, solicitar la recogida; Almacén, revisar la mercancía; Administración, registrar el abono. Sale una vez, al abrir, y la franja de la lista de devoluciones sigue recordándolo. Las de la fase 2 no salen, porque hasta que llegue la mercancía el almacén no puede hacer nada.
 
 **Cuenta de envío.** Se configura en cada ordenador con variables de entorno (`setx NOMBRE "valor"` y volver a abrir la aplicación). Sin ellas, los avisos se quedan pendientes.
 

@@ -219,11 +219,13 @@ public record AvisoPendiente(
     decimal? ImporteAbono,
     string? ObservacionesAbono);
 
-// Resúmenes diarios por correo (tabla AVISO_RESUMEN, una vez al día por destinatario)
+// Resúmenes por correo (tabla AVISO_RESUMEN, una vez al día por destinatario)
 public static class TipoResumen
 {
+    public const string RecogidaPendiente = "RECOGIDA_PENDIENTE";
     public const string RevisionPendiente = "REVISION_PENDIENTE";
     public const string AbonoPendiente = "ABONO_PENDIENTE";
+    public const string SinLlegar = "SIN_LLEGAR";   // solo los viernes
 }
 
 // Devolución que alguien tiene pendiente, con el correo de esa persona
@@ -232,7 +234,11 @@ public record DevolucionPendiente(
     string Numero,
     string Cliente,
     string CodigoCliente,
-    DateTime? FechaLlegada);
+    DateTime FechaSolicitud,
+    DateTime? FechaLlegada,
+    string? Transportista,
+    DateTime? FechaRecogidaPrevista,
+    DateTime? RecogidaGestionadaEn);
 
 public static class ResultadoAbono
 {

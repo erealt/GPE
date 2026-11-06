@@ -3,19 +3,19 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Aviso de devoluciones que llegaron hace días y siguen sin abono (lo lanza ModuloDevoluciones).
-public class FormAvisoAbonos : Form
+// Aviso al abrir GPE con las devoluciones que esperan algo del usuario (lo lanza ModuloDevoluciones).
+public class FormAvisoPendientes : Form
 {
 
     private readonly ListView lista = new();
     private readonly Button btnAbrir = Tema.BotonPrincipal("Abrir devolución", 180);
 
-    // La que el usuario ha elegido abrir, o null si ha pulsado "Más tarde"
+    // La que el usuario ha elegido abrir, o null si ha pulsado "Ahora no"
     public int? DevolucionElegida { get; private set; }
 
-    public FormAvisoAbonos(List<DevolucionFila> retrasadas)
+    public FormAvisoPendientes(List<DevolucionFila> pendientes)
     {
-        Text = "Abonos pendientes";
+        Text = "Devoluciones pendientes";
         ClientSize = new Size(760, 420);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -25,12 +25,12 @@ public class FormAvisoAbonos : Form
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 
-        int n = retrasadas.Count;
+        int n = pendientes.Count;
         var lblTitulo = new Label
         {
             Text = n == 1
-                ? "⚠  1 devolución está esperando el abono"
-                : $"⚠  {n} devoluciones están esperando el abono",
+                ? "⚠  Tienes 1 devolución pendiente"
+                : $"⚠  Tienes {n} devoluciones pendientes",
             Dock = DockStyle.Top,
             Height = 50,
             Padding = new Padding(20, 15, 20, 0),
@@ -40,8 +40,8 @@ public class FormAvisoAbonos : Form
         };
         var lblExplicacion = new Label
         {
-            Text = "La mercancía ya está en el almacén y el cliente está esperando el abono. " +
-                   "Revisa la devolución y registra el abono. Este aviso se repetirá hasta que se registre.",
+            Text = "Estas devoluciones están esperando algo de ti. " +
+                   "Volverán a salir aquí cada vez que abras GPE, hasta que las hagas.",
             Dock = DockStyle.Top,
             Height = 60,
             Padding = new Padding(20, 10, 20, 0),
@@ -56,20 +56,19 @@ public class FormAvisoAbonos : Form
         lista.HeaderStyle = ColumnHeaderStyle.Nonclickable;
         lista.Columns.Add("Nº devolución", 130);
         lista.Columns.Add("Cliente", 190);
-        lista.Columns.Add("Llegada", 100);
-        lista.Columns.Add("Llegó hace", 90);
-        lista.Columns.Add("Pendiente de", 180);
+        lista.Columns.Add("Desde", 100);
+        lista.Columns.Add("Esperando", 90);
+        lista.Columns.Add("Qué falta", 180);
 
-        foreach (var d in retrasadas.OrderByDescending(d => DevolucionServicio.DiasSinAbono(d)))
+        foreach (var d in pendientes.OrderByDescending(DevolucionServicio.DiasEsperando))
         {
-            int dias = DevolucionServicio.DiasSinAbono(d) ?? 0;
             lista.Items.Add(new ListViewItem(new[]
             {
                 d.Numero,
                 d.Cliente,
-                d.FechaLlegada?.ToString("dd/MM/yyyy", Componentes.Es) ?? "",
-                DevolucionServicio.TextoDias(dias),
-                d.Fase == Fase.MercanciaRecibida ? "Revisión del almacén" : "Registrar el abono"
+                DevolucionServicio.EsperaDesde(d).ToString("dd/MM/yyyy", Componentes.Es),
+                DevolucionServicio.TextoDias(DevolucionServicio.DiasEsperando(d)),
+                DevolucionServicio.TextoPendiente(d.Fase)
             }) { Tag = d });
         }
         lista.SelectedIndexChanged += (s, e) => btnAbrir.Enabled = lista.SelectedItems.Count > 0;
@@ -78,7 +77,7 @@ public class FormAvisoAbonos : Form
         var marcoLista = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 0, 20, 0) };
         marcoLista.Controls.Add(lista);
 
-        var btnMasTarde = Tema.BotonSecundario("Recordármelo más tarde", 220);
+        var btnMasTarde = Tema.BotonSecundario("Ahora no", 140);
         btnMasTarde.DialogResult = DialogResult.Cancel;
         btnAbrir.Click += (s, e) => Abrir();
 

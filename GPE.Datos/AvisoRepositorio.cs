@@ -101,17 +101,20 @@ public class AvisoRepositorio
     public List<DevolucionPendiente> ObtenerPendientes(int faseActual, string tipoResumen)
     {
         const string sql = @"
-            SELECT u.email, d.numero, c.nombre, c.codigo, d.fecha_llegada
+            SELECT u.email, d.numero, c.nombre, c.codigo, d.fecha_solicitud, d.fecha_llegada,
+                   t.nombre, r.fecha_recogida, r.creada_en
             FROM DEVOLUCION d
             JOIN ESTADO_DEVOLUCION e ON e.id = d.estado_id AND e.fase = @faseActual
             JOIN ESTADO_DEVOLUCION siguiente ON siguiente.fase = @faseSiguiente
             JOIN USUARIO_ROL ur ON ur.rol_id = siguiente.rol_responsable_id AND ur.fabrica_id = d.fabrica_id
             JOIN USUARIO u ON u.id = ur.usuario_id
             JOIN CLIENTE c ON c.id = d.cliente_id
+            LEFT JOIN RECOGIDA r ON r.devolucion_id = d.id
+            LEFT JOIN TRANSPORTISTA t ON t.id = r.transportista_id
             WHERE NOT EXISTS (
-                SELECT 1 FROM AVISO_RESUMEN r
-                WHERE r.fecha = CAST(SYSDATETIME() AS DATE) AND r.tipo = @tipo AND r.destinatario = u.email)
-            ORDER BY u.email, d.fecha_llegada, d.id;";
+                SELECT 1 FROM AVISO_RESUMEN ar
+                WHERE ar.fecha = CAST(SYSDATETIME() AS DATE) AND ar.tipo = @tipo AND ar.destinatario = u.email)
+            ORDER BY u.email, ISNULL(d.fecha_llegada, d.fecha_solicitud), d.id;";
 
         var pendientes = new List<DevolucionPendiente>();
 
@@ -129,7 +132,11 @@ public class AvisoRepositorio
                 Numero: lector.GetString(1),
                 Cliente: lector.GetString(2),
                 CodigoCliente: lector.GetString(3),
-                FechaLlegada: lector.IsDBNull(4) ? null : lector.GetDateTime(4)));
+                FechaSolicitud: lector.GetDateTime(4),
+                FechaLlegada: lector.IsDBNull(5) ? null : lector.GetDateTime(5),
+                Transportista: lector.IsDBNull(6) ? null : lector.GetString(6),
+                FechaRecogidaPrevista: lector.IsDBNull(7) ? null : lector.GetDateTime(7),
+                RecogidaGestionadaEn: lector.IsDBNull(8) ? null : lector.GetDateTime(8)));
         }
         return pendientes;
     }

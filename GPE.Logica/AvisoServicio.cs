@@ -70,18 +70,23 @@ public static class AvisoServicio
         }
     }
 
-    // Al almacén, las de la fase 3 sin revisar; a administración, las de la 4 sin abono.
+    // A transporte, las de la fase 1 sin recogida; al almacén, las de la 3 sin revisar; a administración,
+    // las de la 4 sin abono. Los viernes, además, al almacén las de la 2 que aún no han llegado, para
+    // poder reclamarlas (cada día no: no se sabe cuánto tardarán).
     // Uno por persona y tipo, sin repetir en el día. Devuelve cuántos ha enviado.
     public static int EnviarResumenDiario()
     {
         if (!Configurado(out string remitente, out _))
             throw new InvalidOperationException("Falta configurar GPE_SMTP_USUARIO y GPE_SMTP_CLAVE.");
 
-        var resumenes = new[]
+        var resumenes = new List<(string Tipo, List<DevolucionPendiente> Pendientes)>
         {
-            (Tipo: TipoResumen.RevisionPendiente, Pendientes: repositorio.ObtenerPendientes(Fase.MercanciaRecibida, TipoResumen.RevisionPendiente)),
-            (Tipo: TipoResumen.AbonoPendiente, Pendientes: repositorio.ObtenerPendientes(Fase.RevisadaAlmacen, TipoResumen.AbonoPendiente))
+            (TipoResumen.RecogidaPendiente, repositorio.ObtenerPendientes(Fase.SolicitudRecibida, TipoResumen.RecogidaPendiente)),
+            (TipoResumen.RevisionPendiente, repositorio.ObtenerPendientes(Fase.MercanciaRecibida, TipoResumen.RevisionPendiente)),
+            (TipoResumen.AbonoPendiente, repositorio.ObtenerPendientes(Fase.RevisadaAlmacen, TipoResumen.AbonoPendiente))
         };
+        if (DateTime.Today.DayOfWeek == DayOfWeek.Friday)
+            resumenes.Add((TipoResumen.SinLlegar, repositorio.ObtenerPendientes(Fase.RecogidaSolicitada, TipoResumen.SinLlegar)));
         if (resumenes.All(r => r.Pendientes.Count == 0)) return 0;
 
         int enviados = 0;
@@ -216,29 +221,43 @@ public static class AvisoServicio
         _ => throw new InvalidOperationException($"Tipo de aviso desconocido: {aviso.Tipo}")
     };
 
-    // pendientes llega ordenado por fecha de llegada: primero las que más llevan esperando
+    // pendientes llega ordenado por fecha: primero las que más llevan esperando
     private static (string Asunto, string Cuerpo) RedactarResumen(string tipo, List<DevolucionPendiente> pendientes)
     {
         int n = pendientes.Count;
-        bool abono = tipo == TipoResumen.AbonoPendiente;
-        var lineas = pendientes.Select(p =>
-        {
-            string llegada = p.FechaLlegada is DateTime f
-                ? $"llegó el {f.ToString("dd/MM/yyyy", Es)} ({Dias((DateTime.Today - f.Date).Days)})"
-                : "sin fecha de llegada";
-            return $"  · {p.Numero} · {p.CodigoCliente} · {p.Cliente} · {llegada}";
-        });
+        var lineas = pendientes.Select(p => $"  · {p.Numero} · {p.CodigoCliente} · {p.Cliente} · {DetalleResumen(tipo, p)}");
 
-        string pendiente = abono ? "de abono" : "de revisar";
-        string situacion = abono
-            ? (n == 1 ? "Esta devolución ya está revisada por el almacén y falta registrar el abono:"
-                      : "Estas devoluciones ya están revisadas por el almacén y falta registrar el abono:")
-            : (n == 1 ? "Esta devolución tiene la mercancía en el almacén y falta revisarla:"
-                      : "Estas devoluciones tienen la mercancía en el almacén y falta revisarlas:");
-        string accion = abono ? "registrar el abono" : "revisar la mercancía";
+        string pendientesDe(string que) =>
+            n == 1 ? $"Tienes 1 devolución pendiente {que}" : $"Tienes {n} devoluciones pendientes {que}";
+
+        var (asunto, situacion, cierre) = tipo switch
+        {
+            TipoResumen.RecogidaPendiente => (
+                pendientesDe("de recogida"),
+                n == 1 ? "Esta devolución está registrada y falta solicitar la recogida:"
+                       : "Estas devoluciones están registradas y falta solicitar la recogida:",
+                "Abre GPE para solicitar la recogida. Recibirás este resumen cada día mientras quede alguna pendiente."),
+            TipoResumen.RevisionPendiente => (
+                pendientesDe("de revisar"),
+                n == 1 ? "Esta devolución tiene la mercancía en el almacén y falta revisarla:"
+                       : "Estas devoluciones tienen la mercancía en el almacén y falta revisarlas:",
+                "Abre GPE para revisar la mercancía. Recibirás este resumen cada día mientras quede alguna pendiente."),
+            TipoResumen.AbonoPendiente => (
+                pendientesDe("de abono"),
+                n == 1 ? "Esta devolución ya está revisada por el almacén y falta registrar el abono:"
+                       : "Estas devoluciones ya están revisadas por el almacén y falta registrar el abono:",
+                "Abre GPE para registrar el abono. Recibirás este resumen cada día mientras quede alguna pendiente."),
+            TipoResumen.SinLlegar => (
+                n == 1 ? "1 devolución aún no ha llegado" : $"{n} devoluciones aún no han llegado",
+                n == 1 ? "Esta devolución tiene la recogida gestionada y todavía no consta como recibida:"
+                       : "Estas devoluciones tienen la recogida gestionada y todavía no constan como recibidas:",
+                "Si ya ha llegado, márcala como recibida en GPE. Si tarda demasiado, avisa a Transporte para reclamarla. " +
+                "Recibirás este resumen cada viernes mientras quede alguna sin llegar."),
+            _ => throw new InvalidOperationException($"Tipo de resumen desconocido: {tipo}")
+        };
 
         return (
-            n == 1 ? $"Tienes 1 devolución pendiente {pendiente}" : $"Tienes {n} devoluciones pendientes {pendiente}",
+            asunto,
             $"""
             Buenos días.
 
@@ -246,11 +265,25 @@ public static class AvisoServicio
 
             {string.Join(Environment.NewLine, lineas)}
 
-            Abre GPE para {accion}. Recibirás este resumen cada día mientras quede alguna pendiente.
+            {cierre}
 
             Este correo se ha enviado automáticamente; no hace falta responder.
             """);
     }
+
+    private static string DetalleResumen(string tipo, DevolucionPendiente p) => tipo switch
+    {
+        TipoResumen.RecogidaPendiente =>
+            $"solicitada el {FechaTexto(p.FechaSolicitud)} ({Dias((DateTime.Today - p.FechaSolicitud.Date).Days)})",
+        TipoResumen.SinLlegar =>
+            $"{p.Transportista ?? "sin transportista"} · gestionada el {FechaTexto(p.RecogidaGestionadaEn)} · " +
+            $"recogida prevista el {FechaTexto(p.FechaRecogidaPrevista)}",
+        _ => p.FechaLlegada is DateTime f
+            ? $"llegó el {FechaTexto(f)} ({Dias((DateTime.Today - f.Date).Days)})"
+            : "sin fecha de llegada"
+    };
+
+    private static string FechaTexto(DateTime? fecha) => fecha?.ToString("dd/MM/yyyy", Es) ?? "—";
 
     private static string TextoResultado(string? resultado) => resultado switch
     {

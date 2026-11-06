@@ -45,20 +45,20 @@ public class FormPrincipal : Form
 
         Mostrar(modulos[0]);
 
-        if (devoluciones != null) PrepararAvisoAbonos(devoluciones);
+        if (devoluciones != null) PrepararAvisoPendientes(devoluciones);
     }
 
-    // Devoluciones se crea al arrancar para que el aviso de abonos funcione sin entrar en el módulo
-    private void PrepararAvisoAbonos(ModuloDevoluciones devoluciones)
+    // Devoluciones se crea al arrancar para que el aviso de pendientes funcione sin entrar en el módulo
+    private void PrepararAvisoPendientes(ModuloDevoluciones devoluciones)
     {
         var moduloDevoluciones = modulos.First(m => m.Contenido == devoluciones);
         devoluciones.Visible = false;
         zonaModulo.Controls.Add(devoluciones);
 
         devoluciones.PideMostrarse += () => Mostrar(moduloDevoluciones);
-        Shown += (s, e) => devoluciones.MostrarAvisoAbonos();
+        Shown += (s, e) => devoluciones.MostrarAvisoPendientes();
         // Al volver de otra ventana, se muestra el aviso que se había saltado
-        Activated += (s, e) => { if (devoluciones.AvisoPendiente) BeginInvoke(devoluciones.MostrarAvisoAbonos); };
+        Activated += (s, e) => { if (devoluciones.AvisoPendiente) BeginInvoke(devoluciones.MostrarAvisoPendientes); };
     }
 
     private List<Modulo> CrearModulos()

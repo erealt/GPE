@@ -23,13 +23,11 @@ public class ModuloDevoluciones : UserControl
     private readonly Button btnNueva = Tema.BotonPrincipal("+  Nueva devolución", 210);
     private readonly Button btnHistorial = Tema.BotonSecundario("Ver historial", 140);
 
-    // Aviso de abonos pendientes: franja fija en la lista y ventana que se repite
-    private const int MinutosEntreAvisos = 60;
+    // Lo que tiene pendiente el usuario: franja fija en la lista y ventana al abrir GPE
     private readonly Panel franjaAviso = new();
     private readonly Label lblAviso = new();
-    private readonly Button btnVerRetrasadas = Tema.BotonSecundario("Ver solo esas", 150);
-    private readonly System.Windows.Forms.Timer temporizadorAviso = new() { Interval = MinutosEntreAvisos * 60_000 };
-    private bool soloRetrasadas;    // filtro activado desde la franja
+    private readonly Button btnVerPendientes = Tema.BotonSecundario("Ver solo esas", 150);
+    private bool soloPendientes;    // filtro activado desde la franja
 
     // Las cerradas se cargan la primera vez que se buscan o se filtra por su estado
     private bool cerradasCargadas;
@@ -49,9 +47,6 @@ public class ModuloDevoluciones : UserControl
 
         // Se crea al arrancar por el aviso; la lista se carga la primera vez que se ve
         Load += (s, e) => CargarDatos();
-        temporizadorAviso.Tick += (s, e) => MostrarAvisoAbonos();
-        temporizadorAviso.Start();
-        Disposed += (s, e) => temporizadorAviso.Dispose();
     }
 
     private Panel CrearContenido()
@@ -148,16 +143,16 @@ public class ModuloDevoluciones : UserControl
         lblAviso.Font = Tema.FuenteNegrita;
         lblAviso.AutoEllipsis = true;
 
-        btnVerRetrasadas.Dock = DockStyle.Right;
-        btnVerRetrasadas.Click += (s, e) =>
+        btnVerPendientes.Dock = DockStyle.Right;
+        btnVerPendientes.Click += (s, e) =>
         {
-            soloRetrasadas = !soloRetrasadas;
+            soloPendientes = !soloPendientes;
             AplicarFiltros();
         };
 
-        var marcoBoton = new Panel { Dock = DockStyle.Right, Width = btnVerRetrasadas.Width, Padding = new Padding(0, 8, 0, 8) };
-        marcoBoton.Controls.Add(btnVerRetrasadas);
-        btnVerRetrasadas.Dock = DockStyle.Fill;
+        var marcoBoton = new Panel { Dock = DockStyle.Right, Width = btnVerPendientes.Width, Padding = new Padding(0, 8, 0, 8) };
+        marcoBoton.Controls.Add(btnVerPendientes);
+        btnVerPendientes.Dock = DockStyle.Fill;
 
         franjaAviso.Controls.Add(lblAviso);
         franjaAviso.Controls.Add(marcoBoton);
@@ -166,31 +161,21 @@ public class ModuloDevoluciones : UserControl
 
     private void ActualizarFranjaAviso(List<DevolucionFila> devoluciones)
     {
-        var retrasadas = RetrasadasDelUsuario(devoluciones);
-        franjaAviso.Visible = retrasadas.Count > 0;
-        if (retrasadas.Count == 0)
+        var pendientes = devoluciones.Where(DevolucionServicio.EsPendienteDelUsuario).ToList();
+        franjaAviso.Visible = pendientes.Count > 0;
+        if (pendientes.Count == 0)
         {
-            soloRetrasadas = false;
+            soloPendientes = false;
             return;
         }
 
-        int maximo = retrasadas.Max(d => DevolucionServicio.DiasSinAbono(d) ?? 0);
-        lblAviso.Text = retrasadas.Count == 1
-            ? $"⚠  {retrasadas[0].Numero} está sin abono (llegó {(maximo == 0 ? "hoy" : "hace " + DevolucionServicio.TextoDias(maximo))}): " +
-              "el cliente está esperando."
-            : $"⚠  {retrasadas.Count} devoluciones están sin abono " +
-              $"(la más antigua llegó {(maximo == 0 ? "hoy" : "hace " + DevolucionServicio.TextoDias(maximo))}): " +
-              "los clientes están esperando.";
+        lblAviso.Text = pendientes.Count == 1
+            ? $"⚠  {pendientes[0].Numero}: {DevolucionServicio.TextoPendiente(pendientes[0].Fase)}."
+            : $"⚠  Tienes {pendientes.Count} devoluciones pendientes.";
     }
 
-    // El aviso de abonos retrasados es para quien registra el abono
-    private static List<DevolucionFila> RetrasadasDelUsuario(List<DevolucionFila> devoluciones) =>
-        Sesion.TieneRol(Rol.Administracion)
-            ? devoluciones.Where(DevolucionServicio.AbonoRetrasado).ToList()
-            : new List<DevolucionFila>();
-
-    // Al entrar y cada MinutosEntreAvisos mientras quede alguna, aunque se esté en otro módulo
-    public void MostrarAvisoAbonos()
+    // Al abrir GPE, con lo que tiene pendiente este usuario
+    public void MostrarAvisoPendientes()
     {
         if (Application.OpenForms.Count > 1)
         {
@@ -208,13 +193,13 @@ public class ModuloDevoluciones : UserControl
         {
             return;
         }
-        ActualizarFranjaAviso(devoluciones);   // los días cuentan aunque nadie recargue la lista
+        ActualizarFranjaAviso(devoluciones);
 
-        var retrasadas = RetrasadasDelUsuario(devoluciones);
-        if (retrasadas.Count == 0) return;
+        var pendientes = devoluciones.Where(DevolucionServicio.EsPendienteDelUsuario).ToList();
+        if (pendientes.Count == 0) return;
 
         int? elegida;
-        using (var aviso = new FormAvisoAbonos(retrasadas))
+        using (var aviso = new FormAvisoPendientes(pendientes))
         {
             aviso.ShowDialog(FindForm());   // la ventana principal: puede que este módulo no se esté viendo
             elegida = aviso.DevolucionElegida;
@@ -432,15 +417,15 @@ public class ModuloDevoluciones : UserControl
 
         grid.Rows[i].Tag = d;
 
-        // Está esperando el abono: se marca la fecha de llegada
-        if (DevolucionServicio.AbonoRetrasado(d) && Sesion.TieneRol(Rol.Administracion))
+        // Ya ha llegado y le toca a este usuario: se marca la fecha de llegada
+        if (DevolucionServicio.EsPendienteDelUsuario(d) && d.FechaLlegada != null)
         {
             var llegada = grid.Rows[i].Cells[6];
-            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.TextoDias(DevolucionServicio.DiasSinAbono(d) ?? 0)}";
+            llegada.Value = $"{Componentes.Fecha(d.FechaLlegada)} · {DevolucionServicio.TextoDias(DevolucionServicio.DiasEsperando(d))}";
             llegada.Style.ForeColor = Tema.Aviso;
             llegada.Style.BackColor = Tema.AvisoFondo;
             llegada.Style.SelectionForeColor = Tema.Aviso;
-            llegada.ToolTipText = "El cliente está esperando el abono";
+            llegada.ToolTipText = DevolucionServicio.TextoPendiente(d.Fase);
         }
     }
 
@@ -552,13 +537,13 @@ public class ModuloDevoluciones : UserControl
                 || ((desde == null || d.FechaSolicitud >= desde)
                     && (hasta == null || d.FechaSolicitud <= hasta));
 
-            bool coincideRetraso = !soloRetrasadas
-                || (fila.Tag is DevolucionFila r && DevolucionServicio.AbonoRetrasado(r));
+            bool coincidePendiente = !soloPendientes
+                || (fila.Tag is DevolucionFila r && DevolucionServicio.EsPendienteDelUsuario(r));
 
-            fila.Visible = coincideTexto && coincideEstado && coincideFecha && coincideRetraso;
+            fila.Visible = coincideTexto && coincideEstado && coincideFecha && coincidePendiente;
         }
 
-        btnVerRetrasadas.Text = soloRetrasadas ? "Ver todas" : "Ver solo esas";
+        btnVerPendientes.Text = soloPendientes ? "Ver todas" : "Ver solo esas";
 
         ActualizarContador(desde != null && hasta != null && desde > hasta);
         ActualizarBotones();
@@ -570,7 +555,7 @@ public class ModuloDevoluciones : UserControl
         cmbEstado.SelectedIndex = 0;
         dtpDesde.Checked = false;
         dtpHasta.Checked = false;
-        soloRetrasadas = false;
+        soloPendientes = false;
         AplicarFiltros();
     }
 

@@ -19,6 +19,30 @@ public class DevolucionServicio
         [Rol.Almacen] = new[] { Fase.RecogidaSolicitada, Fase.MercanciaRecibida },
     };
 
+    // Lo que le toca hacer a cada rol, para el aviso al abrir GPE. La fase 2 no está: el almacén no
+    // puede hacer nada hasta que llegue la mercancía (lo que no llega sale en el resumen de los viernes).
+    private static readonly Dictionary<string, int> FasePendientePorRol = new()
+    {
+        [Rol.Transporte] = Fase.SolicitudRecibida,
+        [Rol.Almacen] = Fase.MercanciaRecibida,
+        [Rol.Administracion] = Fase.RevisadaAlmacen,
+    };
+
+    public static bool EsPendienteDelUsuario(DevolucionFila devolucion) =>
+        FasePendientePorRol.Any(p => p.Value == devolucion.Fase && Sesion.TieneRol(p.Key));
+
+    public static string TextoPendiente(int fase) => fase switch
+    {
+        Fase.SolicitudRecibida => "Solicitar la recogida",
+        Fase.MercanciaRecibida => "Revisar la mercancía",
+        _ => "Registrar el abono"
+    };
+
+    // Desde cuándo espera: desde la llegada o, si aún no ha llegado, desde la solicitud
+    public static DateTime EsperaDesde(DevolucionFila devolucion) => devolucion.FechaLlegada ?? devolucion.FechaSolicitud;
+
+    public static int DiasEsperando(DevolucionFila devolucion) => (DateTime.Today - EsperaDesde(devolucion).Date).Days;
+
     // Fases de todos los roles del usuario. Las cerradas las ve cualquiera (filtrando por "Cierre").
     public static HashSet<int> FasesVisibles()
     {
@@ -27,7 +51,7 @@ public class DevolucionServicio
         return fases;
     }
 
-    // Las visibles sin las cerradas, para la lista, el inicio y el aviso de abonos
+    // Las visibles sin las cerradas, para la lista, el inicio y el aviso de pendientes
     public List<DevolucionFila> ObtenerDevolucionesEnCurso() =>
         repositorio.ObtenerDevoluciones(FasesVisibles().Where(f => f != Fase.Cierre));
 
@@ -166,9 +190,6 @@ public class DevolucionServicio
 
     // Abono y cierre
 
-    // Días desde la llegada sin abonar a partir de los que se avisa (0: el mismo día).
-    public const int DiasAvisoAbono = 0;
-
     // "hoy", "1 día", "5 días"
     public static string TextoDias(int dias) => dias switch
     {
@@ -176,15 +197,6 @@ public class DevolucionServicio
         1 => "1 día",
         _ => $"{dias} días"
     };
-
-    // Días desde que llegó la mercancía; null si no espera abono
-    public static int? DiasSinAbono(DevolucionFila devolucion) =>
-        devolucion.Fase is Fase.MercanciaRecibida or Fase.RevisadaAlmacen && devolucion.FechaLlegada is DateTime llegada
-            ? (DateTime.Today - llegada.Date).Days
-            : null;
-
-    public static bool AbonoRetrasado(DevolucionFila devolucion) =>
-        DiasSinAbono(devolucion) >= DiasAvisoAbono;
 
     public AbonoGuardado? ObtenerAbono(int devolucionId) => repositorio.ObtenerAbono(devolucionId);
 
