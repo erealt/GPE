@@ -20,7 +20,9 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`deca_normativa.sql`](BaseDatos/deca_normativa.sql): solo en bases de datos creadas antes de añadir al DeCA el cargador contractual, la matrícula del remolque y los lugares de carga y descarga. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
 
-   Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-f 65001`, por las tildes.
+   Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-I -f 65001`: `-I` lo necesitan los índices filtrados y `-f 65001`, las tildes.
+
+   En una base de datos nueva, [`instalar_base_datos.ps1`](BaseDatos/instalar_base_datos.ps1) hace todo esto y crea el primer usuario. Los pasos para instalar en el servidor están en [`INSTALACION_WEB.md`](INSTALACION_WEB.md).
 
 2. **Conexión**: por defecto `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos se define la variable de entorno `GPE_CONEXION`.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar `GPE.Escritorio`. Al entrar se elige el usuario (provisional hasta que haya login); queda registrado en el historial y sus roles deciden qué puede hacer.
@@ -219,7 +221,7 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
 
 - **Usuario**: la web no pide usuario. Todo lo que se guarda desde ella queda a nombre del usuario cuyo id está en `"UsuarioWeb"` de [`appsettings.json`](GPE.Web/appsettings.json) (por defecto 1), porque cada DeCA guarda quién lo creó y lo cambió. Cada operación que guarda va dentro de `using (UsuarioWeb.Operacion())`, que usa `Sesion.Como(usuario)` solo para esa operación, sin tocar `Sesion.UsuarioActual` como hace el escritorio.
 - **PDF y QR**: el botón *Generar PDF y QR* del formulario sube el PDF a la web igual que el escritorio y guarda la copia en `GPE_DECA_CARPETA` **del servidor**; *Ver PDF* y *Ver QR* los abren en el navegador para imprimirlos o guardarlos.
-- **Instalarla en un servidor** de la fábrica (Windows):
+- **Instalarla en un servidor** de la fábrica (Windows), con todos los comandos en [`INSTALACION_WEB.md`](INSTALACION_WEB.md):
   1. Instalar IIS y el *ASP.NET Core Hosting Bundle* de .NET 10.
   2. Publicar `GPE.Web` (clic derecho → *Publicar* → carpeta) y crear un sitio en IIS que apunte a esa carpeta.
   3. Conexión a la base de datos: o se da permiso en SQL Server a la cuenta del grupo de aplicaciones de IIS (`IIS APPPOOL\<nombre>`), o se pone en `GPE_CONEXION` un usuario de SQL.
