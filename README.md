@@ -22,7 +22,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
 
    Usuarios, clientes, productos y transportistas se dan de alta a mano. Para probar, [`permisos_prueba.sql`](BaseDatos/permisos_prueba.sql) crea un usuario por rol y [`prueba_avisos.sql`](BaseDatos/prueba_avisos.sql) uno con los tres roles, para recibir todos los avisos por correo. Con `sqlcmd` hay que ejecutarlos con `-I -f 65001`: `-I` lo necesitan los índices filtrados y `-f 65001`, las tildes.
 
-   En una base de datos nueva, [`instalar_base_datos.ps1`](BaseDatos/instalar_base_datos.ps1) hace todo esto y crea el primer usuario. Los pasos para instalar en el servidor están en [`INSTALACION_WEB.md`](INSTALACION_WEB.md).
+   Para instalar solo la web del DeCA en el servidor no se usan estos scripts: [`instalar_base_datos.ps1`](BaseDatos/instalar_base_datos.ps1) crea únicamente sus tablas ([`deca_web.sql`](BaseDatos/deca_web.sql)) y el primer usuario. Los pasos están en [`INSTALACION_WEB.md`](INSTALACION_WEB.md).
 
 2. **Conexión**: por defecto `Server=localhost;Database=GPE;Integrated Security=True`. Para usar otra base de datos se define la variable de entorno `GPE_CONEXION`.
 3. **Arrancar**: abrir `GPE.slnx` y ejecutar `GPE.Escritorio`. Al entrar se elige el usuario (provisional hasta que haya login); queda registrado en el historial y sus roles deciden qué puede hacer.

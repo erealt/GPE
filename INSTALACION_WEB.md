@@ -1,6 +1,6 @@
 # Instalar GPE en el servidor
 
-Esta guía instala la base de datos, la web del DeCA (`GPE.Web`) y la tarea diaria que borra los PDF del DeCA de más de un año (`GPE.Avisos`). La web no envía avisos por correo.
+Esta guía instala la base de datos con las tablas del DeCA, la web del DeCA (`GPE.Web`) y la tarea diaria que borra los PDF del DeCA de más de un año (`GPE.Avisos`). La web no envía avisos por correo.
 
 Los pasos se hacen en orden. Los comandos son de PowerShell y, en el servidor, se ejecutan **como administrador**.
 
@@ -107,6 +107,8 @@ powershell -ExecutionPolicy Bypass -File .\instalar_base_datos.ps1 -Servidor "PO
 
 Debe terminar con `Instalación terminada`. Si la base de datos ya tiene tablas, el script se niega y no cambia nada.
 
+Solo se crean las tres tablas que usa la web: `USUARIO`, `DECA` y `DECA_PALET`. El resto se instalará cuando se junte con lo demás de la aplicación. Entonces no se puede ejecutar `crear_tablas.sql` tal cual, porque estas tres ya existirán.
+
 El primer usuario es a cuyo nombre quedarán los DeCA que se guarden desde la web.
 
 ---
@@ -167,13 +169,13 @@ net start w3svc
 
 ## 6. Permisos en SQL Server
 
-La web entra con la cuenta `IIS APPPOOL\GPE.Web` y la tarea diaria con `NT AUTHORITY\SYSTEM`. Este comando les da permiso para leer y escribir en `GPE`, y vale cuando SQL Server está en el mismo servidor que IIS:
+La web entra con la cuenta `IIS APPPOOL\GPE.Web`. Este comando le da permiso para leer y escribir en `GPE`, y vale cuando SQL Server está en el mismo servidor que IIS. La tarea diaria no necesita permiso, porque sin correo no entra en la base de datos.
 
 ```powershell
-sqlcmd -S "PONER-SERVIDOR" -E -C -d GPE -Q "CREATE LOGIN [IIS APPPOOL\GPE.Web] FROM WINDOWS; CREATE USER [IIS APPPOOL\GPE.Web] FOR LOGIN [IIS APPPOOL\GPE.Web]; ALTER ROLE db_datareader ADD MEMBER [IIS APPPOOL\GPE.Web]; ALTER ROLE db_datawriter ADD MEMBER [IIS APPPOOL\GPE.Web]; IF SUSER_ID('NT AUTHORITY\SYSTEM') IS NULL CREATE LOGIN [NT AUTHORITY\SYSTEM] FROM WINDOWS; CREATE USER [NT AUTHORITY\SYSTEM] FOR LOGIN [NT AUTHORITY\SYSTEM]; ALTER ROLE db_datareader ADD MEMBER [NT AUTHORITY\SYSTEM]; ALTER ROLE db_datawriter ADD MEMBER [NT AUTHORITY\SYSTEM];"
+sqlcmd -S "PONER-SERVIDOR" -E -C -d GPE -Q "CREATE LOGIN [IIS APPPOOL\GPE.Web] FROM WINDOWS; CREATE USER [IIS APPPOOL\GPE.Web] FOR LOGIN [IIS APPPOOL\GPE.Web]; ALTER ROLE db_datareader ADD MEMBER [IIS APPPOOL\GPE.Web]; ALTER ROLE db_datawriter ADD MEMBER [IIS APPPOOL\GPE.Web];"
 ```
 
-Si SQL Server está en otro servidor, estas cuentas no sirven. Lo más sencillo es crear un usuario de SQL y ponerlo en `GPE_CONEXION`.
+Si SQL Server está en otro servidor, esta cuenta no sirve. Lo más sencillo es crear un usuario de SQL y ponerlo en `GPE_CONEXION`.
 
 ---
 
