@@ -20,12 +20,20 @@ public class ModuloSupervisionMaquinas : UserControl
     private readonly Panel filas = new();
     private readonly Label lblDesde = new(), lblHasta = new();
     private readonly MotivosFrecuentes motivos = new();
+    private readonly AvisosAbiertos avisosAbiertos = new();
+    private readonly Label lblAvisosAbiertos = new();
     private readonly Label lblMecanico = new();
     private readonly Label lblDetalle = new();
     private readonly DataGridView grid = new();
     private readonly System.Windows.Forms.Timer reloj = new() { Interval = 2000 };
 
-    private const int AltoFila = 66;
+    private const int AltoFila = 68;
+
+    // Colores de cada estado: (fondo de la etiqueta, texto y raya)
+    private static readonly (Color Fondo, Color Texto) ColorMarcha = (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70));
+    private static readonly (Color Fondo, Color Texto) ColorParada = (Tema.FondoError, Tema.Error);
+    private static readonly (Color Fondo, Color Texto) ColorMecanico = (Tema.AvisoFondo, Tema.Aviso);
+    private static readonly (Color Fondo, Color Texto) ColorApagada = (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95));
 
     public ModuloSupervisionMaquinas()
     {
@@ -49,19 +57,20 @@ public class ModuloSupervisionMaquinas : UserControl
         {
             Dock = DockStyle.Top,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(40, 30, 40, 20)
         };
-        int altoFilas = ModuloMaquina.Maquinas.Length * AltoFila + 60;
-        int[] altos = { 95, 80, 95, altoFilas, 380 };
+        int altoFilas = ModuloMaquina.Maquinas.Length * AltoFila + 92;
+        int[] altos = { 95, 84, 112, 150, altoFilas, 400 };
         foreach (int alto in altos) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, alto));
         layout.Height = altos.Sum() + layout.Padding.Vertical;
 
         layout.Controls.Add(CrearCabecera(), 0, 0);
         layout.Controls.Add(CrearFiltros(), 0, 1);
         layout.Controls.Add(CrearTotales(), 0, 2);
-        layout.Controls.Add(CrearZonaFilas(), 0, 3);
-        layout.Controls.Add(CrearAbajo(), 0, 4);
+        layout.Controls.Add(CrearAvisosAbiertos(), 0, 3);
+        layout.Controls.Add(CrearZonaFilas(), 0, 4);
+        layout.Controls.Add(CrearAbajo(), 0, 5);
 
         scroll.Controls.Add(layout);
         return scroll;
@@ -91,13 +100,14 @@ public class ModuloSupervisionMaquinas : UserControl
     // El día, como en el control de agua, y qué máquinas se ven
     private Control CrearFiltros()
     {
+        var tarjeta = new TarjetaRedondeada { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8), Padding = new Padding(15, 6, 15, 4) };
         var barra = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.White,
-            Padding = new Padding(15, 8, 15, 0),
             WrapContents = false
         };
+        tarjeta.Controls.Add(barra);
 
         dtpDia.Width = 135;
         dtpDia.Format = DateTimePickerFormat.Short;
@@ -124,59 +134,79 @@ public class ModuloSupervisionMaquinas : UserControl
             boton.Tag = maquina;
             botonesFiltro.Add(boton);
         }
-        return barra;
+        return tarjeta;
     }
 
     private Control CrearTotales()
     {
+        // Cada total con una raya de su color arriba, como en la aplicación del móvil
         var datosTotales = new[]
         {
-            ("En marcha ahora", lblMarchaAhora),
-            ("Tiempo en marcha", lblMarcha),
-            ("Tiempo parado", lblParado),
-            ("Nº de paradas", lblParadas),
-            ("Disponibilidad", lblDisponibilidad)
+            ("En marcha ahora", lblMarchaAhora, ColorMarcha.Texto),
+            ("Tiempo en marcha", lblMarcha, ColorMarcha.Texto),
+            ("Tiempo parado", lblParado, ModuloMaquina.Rojo),
+            ("Nº de paradas", lblParadas, ModuloMaquina.Naranja),
+            ("Disponibilidad", lblDisponibilidad, Tema.Acento)
         };
-        var totales = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = datosTotales.Length, Padding = new Padding(0, 8, 0, 8) };
+        var totales = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = datosTotales.Length, Padding = new Padding(0, 6, 0, 10) };
         for (int i = 0; i < datosTotales.Length; i++)
         {
-            var (titulo, valor) = datosTotales[i];
+            var (titulo, valor, color) = datosTotales[i];
             totales.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / datosTotales.Length));
-            var tarjeta = new Panel
+            var tarjeta = new TarjetaRedondeada
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.White,
-                Padding = new Padding(14, 8, 14, 0),
+                Raya = color,
+                Padding = new Padding(16, 14, 14, 4),
                 Margin = new Padding(i == 0 ? 0 : 6, 0, i == datosTotales.Length - 1 ? 0 : 6, 0)
             };
             valor.Dock = DockStyle.Top;
-            valor.Height = 32;
-            valor.Font = Tema.FuenteTituloTarjeta;
-            valor.ForeColor = Tema.Texto;
-            tarjeta.Controls.Add(valor);
+            valor.Height = 40;
+            valor.Font = Tema.FuenteTitulo;
+            valor.ForeColor = color == Tema.Acento ? Tema.Acento : Tema.Texto;
+            valor.BackColor = Color.White;
             tarjeta.Controls.Add(new Label
             {
                 Text = titulo,
                 Dock = DockStyle.Top,
                 Height = 22,
                 ForeColor = Tema.Suave,
+                BackColor = Color.White,
                 Font = Tema.FuentePequena
             });
+            tarjeta.Controls.Add(valor);
             totales.Controls.Add(tarjeta, i, 0);
         }
         return totales;
     }
 
+    // Los avisos al mecánico abiertos ahora: en qué máquina, si ya ha llegado y quién
+    private Control CrearAvisosAbiertos()
+    {
+        var tarjeta = new TarjetaRedondeada { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 12), Padding = new Padding(18, 12, 18, 12) };
+        avisosAbiertos.Dock = DockStyle.Fill;
+        lblAvisosAbiertos.Dock = DockStyle.Top;
+        lblAvisosAbiertos.Height = 30;
+        lblAvisosAbiertos.Font = Tema.FuenteApartado;
+        lblAvisosAbiertos.ForeColor = Tema.Texto;
+        lblAvisosAbiertos.BackColor = Color.White;
+        tarjeta.Controls.Add(avisosAbiertos);
+        tarjeta.Controls.Add(lblAvisosAbiertos);
+        return tarjeta;
+    }
+
     // Una fila por máquina (se rellenan en CrearFilas) y debajo las horas de las barras
     private Control CrearZonaFilas()
     {
-        var zona = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(15, 10, 15, 0) };
+        var tarjeta = new TarjetaRedondeada { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 12), Padding = new Padding(18, 12, 18, 6) };
+        var zona = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+        tarjeta.Controls.Add(zona);
 
         filas.Dock = DockStyle.Top;
         filas.Height = ModuloMaquina.Maquinas.Length * AltoFila;
 
         // Con el mismo margen que las barras, para que las horas caigan en sus puntas
-        var horas = new Panel { Dock = DockStyle.Top, Height = 24, Padding = new Padding(246, 0, 136, 0) };
+        var horas = new Panel { Dock = DockStyle.Top, Height = 24, Padding = new Padding(358, 0, 140, 0) };
         lblDesde.Dock = DockStyle.Left;
         lblHasta.Dock = DockStyle.Right;
         foreach (var lbl in new[] { lblDesde, lblHasta })
@@ -197,7 +227,8 @@ public class ModuloSupervisionMaquinas : UserControl
             ForeColor = Tema.Suave,
             Font = Tema.FuentePequena
         });
-        return zona;
+        zona.Controls.Add(Titulo("Máquinas"));
+        return tarjeta;
     }
 
     // Motivos a la izquierda y las paradas de la máquina elegida a la derecha
@@ -207,21 +238,25 @@ public class ModuloSupervisionMaquinas : UserControl
         abajo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
         abajo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
 
-        var izquierda = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(15, 10, 15, 10), Margin = new Padding(0, 0, 8, 0) };
+        var izquierda = new TarjetaRedondeada { Dock = DockStyle.Fill, Padding = new Padding(18, 12, 18, 12), Margin = new Padding(0, 0, 8, 0) };
         motivos.Dock = DockStyle.Fill;
         lblMecanico.Dock = DockStyle.Bottom;
-        lblMecanico.Height = 56;
+        lblMecanico.Height = 84;
         lblMecanico.ForeColor = Tema.Texto;
-        lblMecanico.Font = Tema.FuenteNegrita;
+        lblMecanico.BackColor = Color.White;
+        lblMecanico.Font = Tema.Fuente;
         izquierda.Controls.Add(motivos);
         izquierda.Controls.Add(Titulo("Motivos que más paran"));
         izquierda.Controls.Add(lblMecanico);
 
-        var derecha = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(15, 10, 15, 10), Margin = new Padding(8, 0, 0, 0) };
+        var derecha = new TarjetaRedondeada { Dock = DockStyle.Fill, Padding = new Padding(18, 12, 18, 12), Margin = new Padding(8, 0, 0, 0) };
         Componentes.EstiloTabla(grid, altoFila: 40);
         grid.Dock = DockStyle.Fill;
         grid.ReadOnly = true;
-        foreach (var (nombre, ancho) in new[] { ("PARADA", 80), ("DURACIÓN", 110), ("MOTIVO", 0), ("MAQUINISTA", 130), ("MECÁNICO", 220) })
+        foreach (var (nombre, ancho) in new[]
+                 {
+                     ("PARADA", 85), ("DURACIÓN", 100), ("MOTIVO", 0), ("MAQUINISTA", 125), ("MECÁNICO", 210), ("QUÉ HA HECHO", 0)
+                 })
         {
             var columna = new DataGridViewTextBoxColumn { HeaderText = nombre, SortMode = DataGridViewColumnSortMode.NotSortable };
             if (ancho > 0)
@@ -232,9 +267,10 @@ public class ModuloSupervisionMaquinas : UserControl
             grid.Columns.Add(columna);
         }
         lblDetalle.Dock = DockStyle.Top;
-        lblDetalle.Height = 30;
-        lblDetalle.Font = Tema.FuenteNegrita;
+        lblDetalle.Height = 34;
+        lblDetalle.Font = Tema.FuenteApartado;
         lblDetalle.ForeColor = Tema.Texto;
+        lblDetalle.BackColor = Color.White;
         derecha.Controls.Add(grid);
         derecha.Controls.Add(lblDetalle);
 
@@ -247,14 +283,15 @@ public class ModuloSupervisionMaquinas : UserControl
     {
         Text = texto,
         Dock = DockStyle.Top,
-        Height = 30,
-        Font = Tema.FuenteNegrita,
-        ForeColor = Tema.Texto
+        Height = 34,
+        Font = Tema.FuenteApartado,
+        ForeColor = Tema.Texto,
+        BackColor = Color.White
     };
 
     // Filas: nombre y estado, barra y disponibilidad. Se crean una vez; Mostrar las rellena.
     // Van con Dock Top, así que se añaden al revés para que la primera máquina quede arriba.
-    private readonly Dictionary<string, (TableLayoutPanel Fila, Label Estado, ModuloMaquina.BarraTramos Barra, Label Disponibilidad)> controlesFila = new();
+    private readonly Dictionary<string, (TableLayoutPanel Fila, Pastilla Estado, ModuloMaquina.BarraTramos Barra, Label Disponibilidad)> controlesFila = new();
 
     private void CrearFilas()
     {
@@ -266,17 +303,30 @@ public class ModuloSupervisionMaquinas : UserControl
                 Dock = DockStyle.Top,
                 ColumnCount = 3,
                 Margin = new Padding(0),
-                Padding = new Padding(6, 8, 6, 8),
-                Cursor = Cursors.Hand
+                Padding = new Padding(18, 8, 10, 8),
+                Cursor = Cursors.Hand,
+                Tag = ColorApagada.Texto
             };
-            fila.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240));
+            fila.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340));
             fila.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             fila.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            fila.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            // Raya del color del estado a la izquierda y una línea fina debajo
+            fila.Paint += (s, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (var ruta = Componentes.Redondeado(new Rectangle(4, 10, 5, fila.Height - 20), 2))
+                using (var pincel = new SolidBrush((Color)fila.Tag!))
+                    e.Graphics.FillPath(pincel, ruta);
+                using var linea = new Pen(Tema.Linea);
+                e.Graphics.DrawLine(linea, 0, fila.Height - 1, fila.Width, fila.Height - 1);
+            };
 
             var info = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            var estado = new Label { Dock = DockStyle.Top, Height = 22, Font = Tema.FuentePequenaNegrita };
+            var estado = new Pastilla { Dock = DockStyle.Top, Height = 26 };
             info.Controls.Add(estado);
-            info.Controls.Add(new Label { Text = maquina, Dock = DockStyle.Top, Height = 24, Font = Tema.FuenteNegrita, ForeColor = Tema.Texto });
+            info.Controls.Add(new Label { Text = maquina, Dock = DockStyle.Top, Height = 26, Font = Tema.FuenteDestacada, ForeColor = Tema.Texto });
 
             var barra = new ModuloMaquina.BarraTramos { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 10, 4) };
             var disponibilidad = new Label
@@ -388,11 +438,16 @@ public class ModuloSupervisionMaquinas : UserControl
             // Parada larga sin mecánico: la fila se resalta en rojo para que se vea sin buscarla
             bool alerta = hoy && ultimo != null && ultimo.LargaSinMecanico(hasta);
             fila.BackColor = alerta ? Tema.FondoError : maquina == elegida ? Tema.AcentoSuave : Color.White;
-            (estado.Text, estado.ForeColor) = !hoy ? ($"{lista.Count(t => !t.EnMarcha)} paradas", Tema.Suave)
-                : ultimo == null ? ("Sin arrancar", Tema.Suave)
-                : ultimo is { Fin: not null } ? ("Apagada", Tema.Suave)
-                : ultimo.EnMarcha ? ($"En marcha · {ultimo.Maquinista ?? "sin maquinista"}", Color.FromArgb(25, 120, 70))
-                : ($"{(alerta ? "⚠ " : "")}Parada {ModuloMaquina.Duracion(hasta - ultimo.Inicio)} · {ultimo.Motivo ?? "sin motivo"}", Tema.Error);
+            var (texto, colores) = !hoy ? ($"{lista.Count(t => !t.EnMarcha)} paradas", ColorApagada)
+                : ultimo == null ? ("Sin arrancar", ColorApagada)
+                : ultimo is { Fin: not null } ? ("Apagada", ColorApagada)
+                : ultimo.EnMarcha ? ($"En marcha · {ultimo.Maquinista ?? "sin maquinista"}", ColorMarcha)
+                : ($"{(alerta ? "⚠ " : "")}Parada {ModuloMaquina.Duracion(hasta - ultimo.Inicio)} · {ultimo.Motivo ?? "sin motivo"}" +
+                   (ultimo.LlegaMecanico != null ? $" · 🔧 {ultimo.Mecanico ?? "mecánico"}" : ultimo.AvisoMecanico != null ? " · 🔧 avisado" : ""),
+                   ultimo.LlegaMecanico != null ? ColorMecanico : ColorParada);
+            estado.Poner(texto, colores.Fondo, colores.Texto);
+            fila.Tag = hoy ? colores.Texto == ColorMecanico.Texto ? ModuloMaquina.Naranja : colores.Texto : Tema.Borde;
+            fila.Invalidate();
 
             barra.Mostrar(lista, desde, hasta, hasta);
             disponibilidad.Text = Disponibilidad(
@@ -402,8 +457,20 @@ public class ModuloSupervisionMaquinas : UserControl
         filas.ResumeLayout();
 
         motivos.Mostrar(tramos.Where(t => !t.EnMarcha).ToList(), hasta);
+        MostrarAvisosAbiertos(vistas, hoy);
         MostrarMecanico(tramos);
         MostrarDetalle();
+    }
+
+    // Solo hoy: los avisos al mecánico que siguen abiertos, el más antiguo primero
+    private void MostrarAvisosAbiertos(List<string> vistas, bool hoy)
+    {
+        var abiertos = !hoy ? new List<(string, Tramo)>() : vistas
+            .SelectMany(m => datos[m].Where(t => t.AvisoMecanico != null && t.ResueltoMecanico == null && !t.EnMarcha).Select(t => (m, t)))
+            .OrderBy(a => a.t.AvisoMecanico)
+            .ToList();
+        lblAvisosAbiertos.Text = !hoy ? "Mecánicos ahora" : abiertos.Count == 0 ? "Mecánicos ahora" : $"Mecánicos ahora ({abiertos.Count})";
+        avisosAbiertos.Mostrar(abiertos, hasta, hoy);
     }
 
     // Cuántas veces se ha avisado al mecánico y cuánto tarda de media en llegar y en resolver
@@ -416,10 +483,16 @@ public class ModuloSupervisionMaquinas : UserControl
         string llegar = Media(avisos.Where(t => t.LlegaMecanico != null).Select(t => t.LlegaMecanico!.Value - t.AvisoMecanico!.Value));
         string resolver = Media(avisos.Where(t => t.LlegaMecanico != null && t.ResueltoMecanico != null)
             .Select(t => t.ResueltoMecanico!.Value - t.LlegaMecanico!.Value));
+        // Y cuántos ha atendido cada mecánico (los que se han apuntado desde el móvil)
+        var porMecanico = avisos.Where(t => t.Mecanico != null).GroupBy(t => t.Mecanico!)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Key} {g.Count()}")
+            .ToList();
         lblMecanico.Text = avisos.Count == 0
             ? "🔧  Mecánico: ningún aviso"
             : $"🔧  Mecánico: {avisos.Count} {(avisos.Count == 1 ? "aviso" : "avisos")}\n" +
-              $"De media tarda {llegar} en llegar y {resolver} en resolver";
+              $"De media tarda {llegar} en llegar y {resolver} en resolver" +
+              (porMecanico.Count > 0 ? $"\nAtendidos: {string.Join("  ·  ", porMecanico)}" : "");
     }
 
     // Las paradas de la máquina elegida, la última arriba
@@ -446,7 +519,7 @@ public class ModuloSupervisionMaquinas : UserControl
                 _ => parada.Motivo ?? ""
             };
             int i = grid.Rows.Add(parada.Inicio.ToString("HH:mm"), ModuloMaquina.Duracion(parada.Duracion(hasta)), motivo,
-                parada.Maquinista ?? "—", parada.TextoMecanico());
+                parada.Maquinista ?? "—", parada.TextoMecanico(conInforme: false), parada.QueHaHecho ?? "");
             var celda = grid.Rows[i].Cells[2];
             celda.Style.ForeColor = parada switch
             {
@@ -519,6 +592,82 @@ public class ModuloSupervisionMaquinas : UserControl
         // A las 22:00 se apaga
         if (tramos.Count > 0) tramos[^1].Fin = fin;
         return tramos;
+    }
+
+    // Un recuadro por aviso abierto, en fila: rojo mientras se espera al mecánico y naranja con él trabajando
+    private class AvisosAbiertos : Control
+    {
+        private List<(string Maquina, Tramo Parada)> avisos = new();
+        private DateTime ahora;
+        private bool hoy;
+
+        public AvisosAbiertos()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
+                | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+            BackColor = Color.White;
+        }
+
+        public void Mostrar(List<(string, Tramo)> lista, DateTime hora, bool esHoy)
+        {
+            avisos = lista;
+            ahora = hora;
+            hoy = esHoy;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(BackColor);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            if (!hoy || avisos.Count == 0)
+            {
+                // Círculo verde con ✓ y el texto al lado
+                var circulo = new Rectangle(0, (Height - 34) / 2, 34, 34);
+                using (var verde = new SolidBrush(ColorMarcha.Fondo)) g.FillEllipse(verde, circulo);
+                TextRenderer.DrawText(g, "✓", Tema.FuenteAviso, circulo, ColorMarcha.Texto,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(g, hoy ? "Ningún aviso abierto: no hay ninguna máquina esperando al mecánico" : "Solo se ve el día de hoy",
+                    Tema.Fuente, new Rectangle(46, 0, Width - 46, Height), Tema.Suave, TextFormatFlags.VerticalCenter);
+                return;
+            }
+
+            const int ancho = 290, separacion = 12;
+            int alto = Math.Min(Height, 84);
+            for (int i = 0; i < avisos.Count; i++)
+            {
+                int x = i * (ancho + separacion);
+                if (x + 60 > Width) break;
+                var (maquina, parada) = avisos[i];
+                bool trabajando = parada.LlegaMecanico != null;
+                var (fondo, texto) = trabajando ? ColorMecanico : ColorParada;
+
+                var caja = new Rectangle(x, 0, Math.Min(ancho, Width - x - 1), alto - 1);
+                using (var ruta = Componentes.Redondeado(caja, 10))
+                {
+                    using (var relleno = new SolidBrush(fondo)) g.FillPath(relleno, ruta);
+                    var antes = g.Clip;
+                    g.SetClip(ruta);
+                    using (var raya = new SolidBrush(trabajando ? ModuloMaquina.Naranja : ModuloMaquina.Rojo))
+                        g.FillRectangle(raya, caja.X, caja.Y, 6, caja.Height);
+                    g.Clip = antes;
+                }
+
+                var dentro = new Rectangle(caja.X + 18, caja.Y + 8, caja.Width - 28, caja.Height - 16);
+                int tercio = dentro.Height / 3;
+                string estado = trabajando
+                    ? $"🔧 {parada.Mecanico ?? "Mecánico"} trabajando · {ModuloMaquina.Duracion(ahora - parada.LlegaMecanico!.Value)}"
+                    : $"Esperando al mecánico · {ModuloMaquina.Duracion(ahora - parada.AvisoMecanico!.Value)}";
+                var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
+                TextRenderer.DrawText(g, maquina, Tema.FuenteNegrita, new Rectangle(dentro.X, dentro.Y, dentro.Width, tercio), Tema.Texto, flags);
+                TextRenderer.DrawText(g, parada.Motivo ?? "Sin motivo todavía", Tema.FuentePequena,
+                    new Rectangle(dentro.X, dentro.Y + tercio, dentro.Width, tercio), Tema.Suave, flags);
+                TextRenderer.DrawText(g, estado, Tema.FuentePequenaNegrita,
+                    new Rectangle(dentro.X, dentro.Y + 2 * tercio, dentro.Width, tercio), texto, flags);
+            }
+        }
     }
 
     // Barras horizontales con los minutos de parada de cada motivo, de más a menos

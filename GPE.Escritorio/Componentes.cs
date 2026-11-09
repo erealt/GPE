@@ -287,7 +287,7 @@ public static class Componentes
         e.Handled = true;
     }
 
-    private static GraphicsPath Redondeado(Rectangle r, int radio)
+    internal static GraphicsPath Redondeado(Rectangle r, int radio)
     {
         var ruta = new GraphicsPath();
         int d = radio * 2;

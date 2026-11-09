@@ -84,14 +84,15 @@ public class ModuloMaquina : UserControl
         }
 
         // "Avisado 10:42 · esperando", "Llegó en 5 min · trabajando" o "Llegó en 5 min · resuelto en 12 min"
-        public string TextoMecanico()
+        // Sin el informe: para las tablas que lo enseñan en su propia columna
+        public string TextoMecanico(bool conInforme = true)
         {
             if (AvisoMecanico is not DateTime aviso) return "";
             if (LlegaMecanico is not DateTime llega)
                 return ResueltoMecanico == null ? $"Avisado {aviso:HH:mm} · esperando" : $"Avisado {aviso:HH:mm} · no llegó";
             string llegada = (Mecanico is string quien ? $"{quien} llegó" : "Llegó") + $" en {ModuloMaquina.Duracion(llega - aviso)}";
             return ResueltoMecanico is DateTime resuelto
-                ? $"{llegada} · resuelto en {ModuloMaquina.Duracion(resuelto - llega)}" + (QueHaHecho is string hecho ? $" · {hecho}" : "")
+                ? $"{llegada} · resuelto en {ModuloMaquina.Duracion(resuelto - llega)}" + (conInforme && QueHaHecho is string hecho ? $" · {hecho}" : "")
                 : $"{llegada} · trabajando";
         }
     }
