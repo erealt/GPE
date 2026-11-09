@@ -463,8 +463,14 @@ public class ModuloMaquina : UserControl
     private void ElegirMaquinista(Action? despues)
     {
         var puesto = Actual;
+        // Los que ya están en otra máquina en este turno no salen
+        var turno = TurnoDe(DateTime.Now).Inicio;
+        var ocupados = puestos.Values
+            .Where(p => p != puesto && p.Maquinista != null && p.TurnoDelMaquinista == turno)
+            .Select(p => p.Maquinista!)
+            .ToHashSet();
         var panel = new ElegirOpcion($"¿Quién está en la {maquina}?",
-            Maquinistas.Select(m => (m, m, true)).ToList(), puesto.Maquinista);
+            Maquinistas.Where(m => !ocupados.Contains(m)).Select(m => (m, m, true)).ToList(), puesto.Maquinista);
         panel.Abrir(this, btnMaquinista.PointToScreen(new Point(0, btnMaquinista.Height)), () =>
         {
             if (panel.Elegida is not string nombre) return;
