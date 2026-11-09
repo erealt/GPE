@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GPE Mecánicos">
+<meta name="theme-color" content="#5900f6">
+<link rel="apple-touch-icon" href="icono-180.png">
+<link rel="icon" type="image/png" href="icono-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>GPE Mecánicos</title>
+<!-- Las mismas pantallas que la app de Android (GPE.Movil), para probarla desde cualquier móvil en el navegador.
+     PRUEBA: mira la API cada 5 segundos mientras la página está abierta. -->
+<style>
+  :root {
+    --fondo: #f3f4f1; --tarjeta: #ffffff; --texto: #14231e; --suave: #6e7873; --tenue: #9aa29e; --linea: #e8eae6;
+    --acento: #5900f6; --acento-oscuro: #3f00b0; --acento-suave: #f0ecff;
+    --rojo: #d73c3c; --rojo-suave: #fdecec;
+    --naranja: #f0961e; --naranja-texto: #8a5300; --naranja-suave: #fff3dd;
+    --verde: #3f8f24; --verde-suave: #e6f4df;
+    --sombra: 0 1px 2px rgba(20, 35, 30, .05), 0 4px 14px rgba(20, 35, 30, .07);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body {
+    background: var(--fondo); color: var(--texto);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; border: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+  /* Cabecera morada con el resumen */
+  header {
+    background: linear-gradient(160deg, var(--acento) 0%, var(--acento-oscuro) 100%); color: #fff;
+    padding: 12px 16px 64px; padding-top: max(14px, env(safe-area-inset-top));
+  }
+  .barra, .hola, .resumen { max-width: 640px; margin-left: auto; margin-right: auto; }
+  .barra { display: flex; align-items: center; gap: 8px; }
+  .logo { font-weight: 800; font-size: 20px; letter-spacing: .5px; }
+  .seccion { opacity: .8; font-weight: 500; }
+  .yo {
+    margin-left: auto; display: flex; align-items: center; gap: 8px; max-width: 55%;
+    background: rgba(255, 255, 255, .16); color: #fff; font-weight: 600; font-size: 15px;
+    padding: 5px 12px 5px 5px; border-radius: 999px;
+  }
+  .inicial {
+    width: 28px; height: 28px; border-radius: 50%; background: #fff; color: var(--acento);
+    display: grid; place-items: center; font-weight: 800; font-size: 14px; flex: none;
+  }
+  .yo span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hola { margin-top: 20px; }
+  .hola h1 { margin: 0; font-size: 26px; font-weight: 750; letter-spacing: -.2px; }
+  .linea-estado { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: 14px; opacity: .9; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; background: #b9f59c; box-shadow: 0 0 0 3px rgba(185, 245, 156, .25); }
+  .punto.mal { background: #ffb4b4; box-shadow: 0 0 0 3px rgba(255, 180, 180, .3); }
+
+  main { max-width: 640px; margin: -48px auto 0; padding: 0 16px calc(40px + env(safe-area-inset-bottom)); }
+
+  .resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .cifra {
+    background: var(--tarjeta); border-radius: 16px; padding: 12px 12px 10px; box-shadow: var(--sombra);
+    border-top: 4px solid var(--linea);
+  }
+  .cifra b { display: block; font-size: 30px; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; }
+  .cifra small { display: block; margin-top: 6px; color: var(--suave); font-size: 13px; font-weight: 500; }
+  .cifra.esperando { border-top-color: var(--rojo); } .cifra.esperando b { color: var(--rojo); }
+  .cifra.trabajando { border-top-color: var(--naranja); } .cifra.trabajando b { color: var(--naranja-texto); }
+  .cifra.resueltos { border-top-color: var(--verde); } .cifra.resueltos b { color: var(--verde); }
+  .cifra.cero b { color: var(--tenue); }
+
+  h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; margin: 26px 2px 12px; }
+  h2 .cuantos { font-size: 13px; font-weight: 700; color: var(--suave); background: var(--linea); border-radius: 999px; padding: 1px 9px; }
+
+  /* Avisos pendientes */
+  .aviso {
+    background: var(--tarjeta); border-radius: 18px; box-shadow: var(--sombra); margin-bottom: 14px;
+    padding: 16px; border-left: 6px solid var(--rojo); animation: entra .3s ease-out;
+  }
+  .aviso.trabajando { border-left-color: var(--naranja); }
+  @keyframes entra { from { opacity: 0; transform: translateY(8px); } }
+  .arriba { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .estado {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 750; letter-spacing: .5px;
+    text-transform: uppercase; padding: 5px 10px; border-radius: 999px; background: var(--rojo-suave); color: var(--rojo);
+    min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .trabajando .estado { background: var(--naranja-suave); color: var(--naranja-texto); }
+  .estado::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .esperando .estado::before { animation: latido 1.2s ease-in-out infinite; }
+  @keyframes latido { 50% { opacity: .2; } }
+  .crono { text-align: right; flex: none; }
+  .crono b { display: block; font-size: 22px; line-height: 1.1; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--rojo); }
+  .trabajando .crono b { color: var(--naranja-texto); }
+  .crono small { color: var(--tenue); font-size: 12px; }
+  .maquina { font-size: 24px; font-weight: 800; margin-top: 12px; letter-spacing: -.2px; }
+  .motivo { font-size: 17px; color: var(--texto); margin-top: 1px; }
+  .motivo.falta { color: var(--tenue); font-style: italic; }
+  .fichas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .ficha { background: var(--fondo); border-radius: 999px; padding: 5px 11px; font-size: 14px; color: var(--suave); }
+  .ficha b { color: var(--texto); font-weight: 600; }
+  .nota { margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: var(--fondo); color: var(--texto); font-size: 15px; border-left: 3px solid var(--linea); }
+  .accion {
+    width: 100%; height: 56px; margin-top: 16px; border-radius: 14px; color: #fff; font-size: 18px; font-weight: 700;
+    background: var(--acento); box-shadow: 0 4px 12px rgba(89, 0, 246, .25); transition: transform .08s, opacity .15s;
+  }
+  .accion.verde { background: var(--verde); box-shadow: 0 4px 12px rgba(63, 143, 36, .25); }
+  .accion:active { transform: scale(.98); }
+  .accion:disabled { opacity: .5; }
+
+  .vacio { text-align: center; color: var(--suave); padding: 30px 16px 26px; background: var(--tarjeta); border-radius: 18px; box-shadow: var(--sombra); }
+  .vacio .sello {
+    width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 50%; background: var(--verde-suave); color: var(--verde);
+    display: grid; place-items: center; font-size: 28px; font-weight: 800;
+  }
+  .vacio b { display: block; color: var(--texto); font-size: 18px; margin-bottom: 2px; }
+
+  /* Resueltos */
+  .lista { background: var(--tarjeta); border-radius: 18px; box-shadow: var(--sombra); overflow: hidden; }
+  .resuelto { display: flex; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--linea); }
+  .resuelto:first-child { border-top: 0; }
+  .check {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--verde-suave); color: var(--verde);
+    display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; margin-top: 1px;
+  }
+  .resuelto .datos { flex: 1; min-width: 0; }
+  .resuelto .fila { display: flex; justify-content: space-between; gap: 10px; }
+  .resuelto .titulo { font-weight: 700; }
+  .resuelto .hora { color: var(--tenue); font-size: 14px; white-space: nowrap; }
+  .resuelto .tiempos { color: var(--suave); font-size: 14px; margin-top: 1px; }
+  .resuelto .hecho { margin-top: 8px; white-space: pre-wrap; background: var(--fondo); border-radius: 10px; padding: 9px 12px; font-size: 15px; }
+  .resuelto .hecho small { display: block; color: var(--suave); font-size: 12px; margin-top: 3px; }
+  .poner { margin-top: 8px; color: var(--acento); background: var(--acento-suave); font-weight: 650; padding: 9px 14px; border-radius: 10px; font-size: 15px; }
+  .nada { color: var(--tenue); text-align: center; padding: 18px; background: var(--tarjeta); border-radius: 18px; box-shadow: var(--sombra); }
+
+  #sinConexion {
+    position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 3;
+    max-width: 608px; margin: 0 auto; background: var(--texto); color: #fff; font-weight: 600; font-size: 15px;
+    border-radius: 14px; padding: 12px 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+    transform: translateY(150%); transition: transform .25s;
+  }
+  #sinConexion.visible { transform: none; }
+  #sinConexion span { color: #ffb4b4; }
+
+  /* Hojas que suben desde abajo: el nombre y el informe */
+  .velo {
+    position: fixed; inset: 0; z-index: 5; background: rgba(20, 35, 30, .45);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .velo.abierto { opacity: 1; pointer-events: auto; }
+  .hoja {
+    width: 100%; max-width: 640px; background: var(--tarjeta); border-radius: 22px 22px 0 0;
+    padding: 10px 20px calc(20px + env(safe-area-inset-bottom));
+    transform: translateY(100%); transition: transform .25s ease-out;
+  }
+  .velo.abierto .hoja { transform: none; }
+  .asa { width: 40px; height: 5px; border-radius: 3px; background: var(--linea); margin: 0 auto 16px; }
+  .hoja h3 { margin: 0; font-size: 22px; }
+  .hoja p { margin: 4px 0 0; color: var(--suave); }
+  .hoja label { display: block; font-weight: 650; margin-top: 18px; }
+  .hoja input, .hoja textarea {
+    width: 100%; margin-top: 6px; padding: 13px 14px; font: inherit; font-size: 17px; color: var(--texto);
+    border: 1.5px solid var(--linea); border-radius: 12px; background: var(--fondo); outline: none; transition: border-color .15s, background .15s;
+  }
+  .hoja input:focus, .hoja textarea:focus { border-color: var(--acento); background: #fff; }
+  .hoja textarea { height: 140px; resize: none; }
+  .contador { text-align: right; color: var(--tenue); font-size: 13px; margin-top: 4px; }
+  .error { color: var(--rojo); font-weight: 600; min-height: 1.3em; margin-top: 6px; }
+  .cancelar { width: 100%; height: 46px; margin-top: 6px; background: transparent; color: var(--suave); font-weight: 600; }
+  .marca {
+    width: 56px; height: 56px; border-radius: 16px; background: var(--acento); color: #fff;
+    display: grid; place-items: center; font-weight: 800; font-size: 17px; margin-bottom: 14px;
+  }
+  .que-maquina { display: flex; align-items: center; gap: 10px; }
+  .que-maquina .estado { background: var(--naranja-suave); color: var(--naranja-texto); }
+</style>
+</head>
+<body>
+<header>
+  <div class="barra">
+    <span class="logo">GPE</span>
+    <span class="seccion">Mecánicos</span>
+    <button class="yo" id="yo"><span class="inicial" id="inicial">?</span><span id="miNombre"></span></button>
+  </div>
+  <div class="hola">
+    <h1 id="saludo">Avisos de máquinas</h1>
+    <div class="linea-estado"><span class="punto" id="punto"></span><span id="textoEstado">Conectando…</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="resumen">
+    <div class="cifra esperando" id="cEsperando"><b id="nEsperando">0</b><small>Esperando</small></div>
+    <div class="cifra trabajando" id="cTrabajando"><b id="nTrabajando">0</b><small>Trabajando</small></div>
+    <div class="cifra resueltos" id="cResueltos"><b id="nResueltos">0</b><small>Resueltos hoy</small></div>
+  </div>
+
+  <h2>Pendientes <span class="cuantos" id="cuantosPendientes">0</span></h2>
+  <div id="pendientes"></div>
+
+  <h2>Resueltos hoy <span class="cuantos" id="cuantosResueltos">0</span></h2>
+  <div id="resueltos"></div>
+</main>
+
+<div id="sinConexion"><span>●</span>  Sin conexión con el servidor · reintentando…</div>
+
+<!-- Quién es el mecánico: se pregunta la primera vez y se guarda en el móvil -->
+<div class="velo" id="bienvenida">
+  <div class="hoja">
+    <div class="asa"></div>
+    <div class="marca">GPE</div>
+    <h3>¿Quién eres?</h3>
+    <p>Se apuntará tu nombre cuando llegues a una máquina y cuando la dejes resuelta.</p>
+    <label for="nombre">Nombre</label>
+    <input id="nombre" maxlength="40" autocomplete="name" autocapitalize="words" enterkeyhint="done" placeholder="Tu nombre">
+    <div class="error" id="errorNombre"></div>
+    <button class="accion" id="entrar">Entrar</button>
+    <button class="cancelar" id="cancelarNombre">Cancelar</button>
+  </div>
+</div>
+
+<!-- Al dar por resuelto: qué ha hecho -->
+<div class="velo" id="informe">
+  <div class="hoja">
+    <div class="asa"></div>
+    <div class="que-maquina"><span class="estado">Resolviendo</span></div>
+    <h3 id="informeTitulo" style="margin-top:10px"></h3>
+    <p id="informeSub"></p>
+    <label for="queHaHecho">¿Qué has hecho?</label>
+    <textarea id="queHaHecho" maxlength="500" placeholder="Por ejemplo: cambiada la correa del rodillo"></textarea>
+    <div class="contador"><span id="cuenta">0</span>/500</div>
+    <div class="error" id="errorInforme"></div>
+    <button class="accion verde" id="guardar">✓  Guardar y dar por resuelto</button>
+    <button class="cancelar" id="cancelarInforme">Cancelar</button>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let avisos = [];
+  let pintado = "";
+  let vistos = null;          // para avisar al llegar uno nuevo (no al abrir la página)
+  let enInforme = null;       // el aviso del que se está escribiendo el informe
+
+  // El nombre se guarda en el móvil; si el navegador no deja guardarlo, se pregunta cada vez
+  const guardado = {
+    leer() { try { return localStorage.getItem("mecanico") || ""; } catch { return ""; } },
+    poner(v) { try { localStorage.setItem("mecanico", v); } catch { } }
+  };
+  let mecanico = guardado.leer();
+
+  // Igual que en el escritorio: "45 s", "3 min 20 s", "1 h 5 min"
+  function duracion(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`;
+    if (s >= 60) return `${Math.floor(s / 60)} min ${s % 60} s`;
+    return `${s} s`;
+  }
+  const hora = f => new Date(f).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // Sonido al llegar un aviso. Los móviles solo dejan sonar después de tocar la pantalla una vez.
+  let audio = null;
+  document.addEventListener("touchend", activarSonido, { once: true });
+  document.addEventListener("click", activarSonido, { once: true });
+  function activarSonido() {
+    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch { }
+  }
+  function sonar() {
+    if (navigator.vibrate) navigator.vibrate([400, 150, 400]);
+    if (!audio) return;
+    try {
+      [0, .25].forEach(t => {
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
+        g.gain.setValueAtTime(.0001, audio.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(.4, audio.currentTime + t + .02);
+        g.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + t + .2);
+        o.start(audio.currentTime + t); o.stop(audio.currentTime + t + .22);
+      });
+    } catch { }
+  }
+
+  function pintarNombre() {
+    $("miNombre").textContent = mecanico || "¿Quién eres?";
+    $("inicial").textContent = mecanico ? mecanico[0].toUpperCase() : "?";
+    $("saludo").textContent = mecanico ? `Hola, ${mecanico.split(" ")[0]}` : "Avisos de máquinas";
+  }
+
+  async function refrescar() {
+    let lista;
+    try {
+      const r = await fetch("avisos", { cache: "no-store" });
+      if (!r.ok) throw new Error();
+      lista = await r.json();
+    } catch {
+      $("punto").className = "punto mal";
+      $("textoEstado").textContent = "Sin conexión";
+      $("sinConexion").classList.add("visible");
+      return;
+    }
+    $("punto").className = "punto";
+    $("textoEstado").textContent = `Conectado · actualizado a las ${new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
+    $("sinConexion").classList.remove("visible");
+    avisos = lista;
+
+    const ids = new Set(lista.map(a => a.id));
+    if (vistos && [...ids].some(id => !vistos.has(id))) sonar();
+    vistos = ids;
+
+    const estado = JSON.stringify(lista);
+    if (estado !== pintado) { pintado = estado; pintar(); }
+  }
+
+  function relojDe(a) {
+    return a.llegada
+      ? { tiempo: duracion(Date.now() - new Date(a.llegada)), texto: `llegó a las ${hora(a.llegada)}` }
+      : { tiempo: duracion(Date.now() - new Date(a.avisado)), texto: `avisado a las ${hora(a.avisado)}` };
+  }
+
+  function cifra(caja, numero, n) {
+    $(numero).textContent = n;
+    $(caja).classList.toggle("cero", n === 0);
+  }
+
+  function pintar() {
+    const abiertos = avisos.filter(a => !a.resuelto);
+    const hechos = avisos.filter(a => a.resuelto).sort((x, y) => new Date(y.resuelto) - new Date(x.resuelto));
+    cifra("cEsperando", "nEsperando", abiertos.filter(a => !a.llegada).length);
+    cifra("cTrabajando", "nTrabajando", abiertos.filter(a => a.llegada).length);
+    cifra("cResueltos", "nResueltos", hechos.length);
+    $("cuantosPendientes").textContent = abiertos.length;
+    $("cuantosResueltos").textContent = hechos.length;
+    document.title = abiertos.length ? `(${abiertos.length}) GPE Mecánicos` : "GPE Mecánicos";
+
+    $("pendientes").innerHTML = abiertos.length ? abiertos.map(a => {
+      const reloj = relojDe(a);
+      const estado = a.llegada ? `Trabajando${a.mecanico ? " · " + esc(a.mecanico) : ""}` : "Esperando mecánico";
+      return `<article class="aviso ${a.llegada ? "trabajando" : "esperando"}">
+        <div class="arriba">
+          <span class="estado">${estado}</span>
+          <div class="crono"><b data-reloj="${a.id}">${reloj.tiempo}</b><small data-texto="${a.id}">${reloj.texto}</small></div>
+        </div>
+        <div class="maquina">${esc(a.maquina)}</div>
+        <div class="motivo ${a.motivo ? "" : "falta"}">${esc(a.motivo ?? "Sin motivo todavía")}</div>
+        ${a.maquinista ? `<div class="fichas"><span class="ficha">Maquinista <b>${esc(a.maquinista)}</b></span></div>` : ""}
+        ${a.comentario ? `<div class="nota">${esc(a.comentario)}</div>` : ""}
+        <button class="accion ${a.llegada ? "verde" : ""}" data-accion="${a.llegada ? "resuelto" : "llegada"}" data-id="${a.id}">
+          ${a.llegada ? "✓  Resuelto" : "He llegado"}</button>
+      </article>`;
+    }).join("") : `<div class="vacio"><div class="sello">✓</div><b>Todo en marcha</b>No hay avisos pendientes</div>`;
+
+    $("resueltos").innerHTML = hechos.length ? `<div class="lista">${hechos.map(a => {
+      const tiempos = a.llegada
+        ? `${a.mecanico ? esc(a.mecanico) + " llegó" : "Llegó"} en ${duracion(new Date(a.llegada) - new Date(a.avisado))} · resuelto en ${duracion(new Date(a.resuelto) - new Date(a.llegada))}`
+        : `La máquina arrancó sin mecánico`;
+      return `<div class="resuelto">
+        <div class="check">✓</div>
+        <div class="datos">
+          <div class="fila"><span class="titulo">${esc(a.maquina)} · ${esc(a.motivo ?? "Sin motivo")}</span><span class="hora">${hora(a.resuelto)}</span></div>
+          <div class="tiempos">${tiempos}</div>
+          ${a.queHaHecho
+            ? `<div class="hecho">${esc(a.queHaHecho)}${a.resueltoPor ? `<small>${esc(a.resueltoPor)}</small>` : ""}</div>`
+            : `<button class="poner" data-accion="resuelto" data-id="${a.id}">+ Poner qué se ha hecho</button>`}
+        </div>
+      </div>`;
+    }).join("")}</div>` : `<div class="nada">Todavía ninguno</div>`;
+  }
+
+  async function enviar(ruta, datos) {
+    try {
+      const r = await fetch(ruta, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(datos) });
+      return r.ok;
+    } catch { return false; }
+  }
+
+  // Sin nombre no se puede apuntar quién va: primero se pregunta
+  function conNombre(despues) {
+    if (mecanico) despues();
+    else abrirNombre(despues);
+  }
+
+  document.addEventListener("click", async e => {
+    const boton = e.target.closest("button[data-accion]");
+    if (!boton) return;
+    const aviso = avisos.find(a => a.id == boton.dataset.id);
+    if (!aviso) return;
+    if (boton.dataset.accion === "llegada") {
+      conNombre(async () => {
+        boton.disabled = true;
+        if (!await enviar(`avisos/${aviso.id}/llegada`, { mecanico })) alert("No se ha podido apuntar. Prueba otra vez.");
+        await refrescar();
+        boton.disabled = false;
+      });
+    } else conNombre(() => abrirInforme(aviso));
+  });
+
+  // Nombre
+  let trasNombre = null;
+  function abrirNombre(despues) {
+    trasNombre = despues || null;
+    $("nombre").value = mecanico;
+    $("errorNombre").textContent = "";
+    $("cancelarNombre").style.display = mecanico || despues ? "" : "none";
+    $("bienvenida").classList.add("abierto");
+    setTimeout(() => $("nombre").focus(), 250);
+  }
+  function guardarNombre() {
+    const nombre = $("nombre").value.trim().replace(/\s+/g, " ");
+    if (!nombre) { $("errorNombre").textContent = "Escribe tu nombre."; return; }
+    mecanico = nombre;
+    guardado.poner(nombre);
+    pintarNombre();
+    $("bienvenida").classList.remove("abierto");
+    $("nombre").blur();
+    const despues = trasNombre; trasNombre = null;
+    if (despues) despues();
+  }
+  $("entrar").onclick = guardarNombre;
+  $("nombre").addEventListener("keydown", e => { if (e.key === "Enter") guardarNombre(); });
+  $("cancelarNombre").onclick = () => { trasNombre = null; $("bienvenida").classList.remove("abierto"); };
+  $("yo").onclick = () => abrirNombre();
+
+  // Informe
+  function abrirInforme(aviso) {
+    enInforme = aviso;
+    $("informeTitulo").textContent = aviso.maquina;
+    $("informeSub").textContent = aviso.motivo ?? "Sin motivo";
+    $("queHaHecho").value = aviso.queHaHecho ?? "";
+    $("cuenta").textContent = $("queHaHecho").value.length;
+    $("errorInforme").textContent = "";
+    $("informe").classList.add("abierto");
+    setTimeout(() => $("queHaHecho").focus(), 250);
+  }
+  $("queHaHecho").addEventListener("input", () => $("cuenta").textContent = $("queHaHecho").value.length);
+  $("cancelarInforme").onclick = () => { $("informe").classList.remove("abierto"); $("queHaHecho").blur(); };
+  $("guardar").onclick = async () => {
+    const queHaHecho = $("queHaHecho").value.trim();
+    if (!queHaHecho) { $("errorInforme").textContent = "Escribe qué has hecho."; return; }
+    $("guardar").disabled = true;
+    if (await enviar(`avisos/${enInforme.id}/resuelto`, { queHaHecho, mecanico })) {
+      $("informe").classList.remove("abierto");
+      $("queHaHecho").blur();
+      await refrescar();
+    } else $("errorInforme").textContent = "No se ha podido guardar. Prueba otra vez.";
+    $("guardar").disabled = false;
+  };
+
+  // Cada segundo avanzan los relojes; cada 5, se mira la API (y al volver a la página)
+  setInterval(() => {
+    document.querySelectorAll("[data-reloj]").forEach(el => {
+      const a = avisos.find(x => x.id == el.dataset.reloj);
+      if (!a) return;
+      const reloj = relojDe(a);
+      el.textContent = reloj.tiempo;
+      document.querySelector(`[data-texto="${a.id}"]`).textContent = reloj.texto;
+    });
+  }, 1000);
+  setInterval(refrescar, 5000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refrescar(); });
+
+  pintarNombre();
+  if (!mecanico) abrirNombre();
+  refrescar();
+</script>
+</body>
+</html>

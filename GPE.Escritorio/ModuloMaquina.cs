@@ -62,6 +62,9 @@ public class ModuloMaquina : UserControl
         public DateTime? AvisoMecanico, LlegaMecanico, ResueltoMecanico;
         public string Turno = "";
         public string? Maquinista;   // quien estaba en la máquina cuando empezó
+        public int? IdAviso;         // el aviso en la API del móvil, si llegó
+        public string? QueHaHecho;   // el informe del mecánico desde el móvil
+        public string? Mecanico;     // el que pulsó "He llegado" en el móvil
 
         public TimeSpan Duracion(DateTime ahora) => (Fin ?? ahora) - Inicio;
         public bool Prevista => Motivo != null && MotivosPrevistos.Contains(Motivo);
@@ -86,9 +89,9 @@ public class ModuloMaquina : UserControl
             if (AvisoMecanico is not DateTime aviso) return "";
             if (LlegaMecanico is not DateTime llega)
                 return ResueltoMecanico == null ? $"Avisado {aviso:HH:mm} · esperando" : $"Avisado {aviso:HH:mm} · no llegó";
-            string llegada = $"Llegó en {ModuloMaquina.Duracion(llega - aviso)}";
+            string llegada = (Mecanico is string quien ? $"{quien} llegó" : "Llegó") + $" en {ModuloMaquina.Duracion(llega - aviso)}";
             return ResueltoMecanico is DateTime resuelto
-                ? $"{llegada} · resuelto en {ModuloMaquina.Duracion(resuelto - llega)}"
+                ? $"{llegada} · resuelto en {ModuloMaquina.Duracion(resuelto - llega)}" + (QueHaHecho is string hecho ? $" · {hecho}" : "")
                 : $"{llegada} · trabajando";
         }
     }
@@ -143,6 +146,7 @@ public class ModuloMaquina : UserControl
         reloj.Tick += (s, e) => Refrescar();
         reloj.Start();
         Disposed += (s, e) => reloj.Dispose();
+        AvisosMovil.Empezar();
 
         ElegirMaquina(maquina);
     }
@@ -545,19 +549,22 @@ public class ModuloMaquina : UserControl
     }
 
     // Un botón para todo el aviso: avisar, que ha llegado y que está resuelto.
-    // En la prueba solo se apuntan las horas; en la versión definitiva el aviso les llegará al móvil.
-    private void AvisarMecanico()
+    // El aviso va a la API que lee la aplicación del móvil; lo que pulse el mecánico allí llega aquí solo.
+    private async void AvisarMecanico()
     {
         if (EnCurso is not { EnMarcha: false } parada || parada.ResueltoMecanico != null) return;
         var ahora = DateTime.Now;
+        // Una segunda pulsación seguida (doble clic) no cuenta como que ha llegado el mecánico
+        if (parada.AvisoMecanico is DateTime avisado && ahora - avisado < TimeSpan.FromSeconds(5)) return;
         if (parada.AvisoMecanico == null)
         {
             parada.AvisoMecanico = ahora;
             Refrescar();
-            Mensajes.Informacion(this, "Aviso al mecánico",
-                $"Aviso apuntado a las {ahora:HH:mm}.\n\n" +
-                "Es una prueba: cuando esté la aplicación del móvil, a los mecánicos les saltará el aviso " +
-                $"con la máquina ({maquina}), el motivo y quién está en ella. Ellos mismos podrán marcar que van y que está resuelto.");
+            await AvisosMovil.Avisar(maquina, parada);
+            Mensajes.Informacion(this, "Aviso al mecánico", parada.IdAviso != null
+                ? $"Aviso enviado a los móviles a las {ahora:HH:mm}."
+                : $"Aviso apuntado a las {ahora:HH:mm}, pero no se ha podido enviar a los móviles " +
+                  "(la API no está arrancada). Se enviará en cuanto se pueda.");
             return;
         }
         if (parada.LlegaMecanico == null) parada.LlegaMecanico = ahora;
