@@ -19,7 +19,6 @@ public class AvisosPage : ContentPage
 
     private List<Aviso> avisos = new();
     private string pintado = "";
-    private HashSet<int>? vistos;    // para avisar al llegar uno nuevo (no al abrir la aplicación)
     private bool abierta, relojEnMarcha, pidiendoNombre;
 
     public AvisosPage()
@@ -188,7 +187,15 @@ public class AvisosPage : ContentPage
         }
         await Refrescar();
         if (string.IsNullOrEmpty(Api.Mecanico)) await PedirNombre(primeraVez: true);
+        // Avisos con la pantalla bloqueada (Platforms/Android/ServicioAvisos.cs)
+        if (!servicioPreparado && !string.IsNullOrEmpty(Api.Mecanico))
+        {
+            servicioPreparado = true;
+            await Avisador.Preparar();
+        }
     }
+
+    private static bool servicioPreparado;
 
     protected override void OnDisappearing()
     {
@@ -206,7 +213,6 @@ public class AvisosPage : ContentPage
         pidiendoNombre = false;
         PintarNombre();
         pintado = "";
-        vistos = null;
         await Refrescar();
     }
 
@@ -218,12 +224,6 @@ public class AvisosPage : ContentPage
         textoEstado.Text = lista == null ? "Sin conexión" : $"Conectado · actualizado a las {DateTime.Now:HH:mm}";
         if (lista == null) return;
         avisos = lista;
-
-        // Uno nuevo: vibra
-        var ids = lista.Select(a => a.Id).ToHashSet();
-        if (vistos != null && ids.Except(vistos).Any())
-            try { Vibration.Default.Vibrate(TimeSpan.FromMilliseconds(900)); } catch (Exception) { }
-        vistos = ids;
 
         string estado = string.Join("|", lista.Select(a =>
             $"{a.Id}~{a.Motivo}~{a.Comentario}~{a.Llegada}~{a.Mecanico}~{a.Resuelto}~{a.QueHaHecho}~{a.ResueltoPor}"));

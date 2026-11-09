@@ -20,7 +20,7 @@ public class ModuloMaquina : UserControl
     // Nombres inventados para la prueba
     internal static readonly string[] Maquinistas =
     {
-        "Ana García", "Luis Martín", "Marta López", "Pedro Sánchez", "Lucía Fernández", "Jorge Ruiz"
+        "Ana García", "Luis Martín", "Marta López", "Pedro Martínez", "Lucía Fernández", "Jorge Ruiz"
     };
 
     private const int LargoComentario = 300;
