@@ -195,8 +195,17 @@ public class ModuloNoConformidades : UserControl
         btnLimpiar.Margin = new Padding(0);
         btnLimpiar.Click += (s, e) => LimpiarFiltros();
 
+        var btnAnalisis = Tema.BotonSecundario("Análisis", 120);
+        btnAnalisis.Height = 34;
+        btnAnalisis.Anchor = AnchorStyles.Right;
+        btnAnalisis.Margin = new Padding(0, 0, 10, 0);
+        btnAnalisis.Click += (s, e) => AbrirAnalisis();
+
+        barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        barra.ColumnCount = 3;
         barra.Controls.Add(lblContador, 0, 0);
-        barra.Controls.Add(btnLimpiar, 1, 0);
+        barra.Controls.Add(btnAnalisis, 1, 0);
+        barra.Controls.Add(btnLimpiar, 2, 0);
         return barra;
     }
 
@@ -472,6 +481,18 @@ public class ModuloNoConformidades : UserControl
         lblVacio.ForeColor = fechasCruzadas ? Tema.Error : Tema.Suave;
         lblVacio.Visible = visibles.Count == 0;
         grid.Visible = visibles.Count > 0;
+    }
+
+    // Cuenta todos los registros, sin los filtros de la lista; si se cambia alguna ficha desde allí, se recarga
+    private void AbrirAnalisis()
+    {
+        bool hayCambios;
+        using (var ventana = new FormAnalisisNc(registros))
+        {
+            ventana.ShowDialog(this);
+            hayCambios = ventana.HayCambios;
+        }
+        if (hayCambios) CargarDatos();
     }
 
     // Abre el registro (o uno nuevo con null) y, si se guarda, recarga la lista y lo selecciona
