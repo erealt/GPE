@@ -43,7 +43,24 @@ public static class Api
         catch (Exception) { return null; }
     }
 
-    public static Task<bool> Llegada(int id) => Enviar($"avisos/{id}/llegada", new { mecanico = Mecanico });
+    // null si se ha apuntado; si no, el motivo para enseñárselo al mecánico
+    public static async Task<string?> Llegada(int id)
+    {
+        try
+        {
+            var respuesta = await http.PostAsJsonAsync(Url($"avisos/{id}/llegada"), new { mecanico = Mecanico });
+            if (respuesta.IsSuccessStatusCode) return null;
+            if (respuesta.StatusCode == System.Net.HttpStatusCode.Conflict)
+                return await respuesta.Content.ReadFromJsonAsync<string>() ?? "Ya tienes otro aviso abierto.";
+        }
+        catch (Exception) { }
+        return "No se ha podido apuntar. Prueba otra vez.";
+    }
+
+    // El aviso en el que está ahora este mecánico (llegó y aún no lo ha resuelto)
+    public static Aviso? Mio(IEnumerable<Aviso> avisos) => avisos.FirstOrDefault(a =>
+        a.Llegada != null && a.Resuelto == null && Mecanico != "" &&
+        string.Equals(a.Mecanico, Mecanico, StringComparison.OrdinalIgnoreCase));
 
     public static Task<bool> Resuelto(int id, string queHaHecho) =>
         Enviar($"avisos/{id}/resuelto", new { queHaHecho, mecanico = Mecanico });

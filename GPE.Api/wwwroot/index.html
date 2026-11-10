@@ -109,6 +109,7 @@
   .accion.verde { background: var(--verde); box-shadow: 0 4px 12px rgba(63, 143, 36, .25); }
   .accion:active { transform: scale(.98); }
   .accion:disabled { opacity: .5; }
+  .accion.ocupado, .accion.ocupado:disabled { background: #E6E9E7; color: #6E7873; box-shadow: none; opacity: 1; font-size: 16px; }
 
   .vacio { text-align: center; color: var(--suave); padding: 30px 16px 26px; background: var(--tarjeta); border-radius: 18px; box-shadow: var(--sombra); }
   .vacio .sello {
@@ -336,8 +337,16 @@
     $("cuantosResueltos").textContent = hechos.length;
     document.title = abiertos.length ? `(${abiertos.length}) GPE Mecánicos` : "GPE Mecánicos";
 
+    // Si ya está en otra máquina, no puede coger otra hasta resolver aquella
+    const mio = abiertos.find(a => a.llegada && mecanico && (a.mecanico || "").toLowerCase() === mecanico.toLowerCase());
+
     $("pendientes").innerHTML = abiertos.length ? abiertos.map(a => {
       const reloj = relojDe(a);
+      const boton = a.llegada
+        ? `<button class="accion verde" data-accion="resuelto" data-id="${a.id}">✓  Resuelto</button>`
+        : mio
+          ? `<button class="accion ocupado" disabled>Estás en la ${esc(mio.maquina)}</button>`
+          : `<button class="accion" data-accion="llegada" data-id="${a.id}">He llegado</button>`;
       const estado = a.llegada ? `Trabajando${a.mecanico ? " · " + esc(a.mecanico) : ""}` : "Esperando mecánico";
       return `<article class="aviso ${a.llegada ? "trabajando" : "esperando"}">
         <div class="arriba">
@@ -348,8 +357,7 @@
         <div class="motivo ${a.motivo ? "" : "falta"}">${esc(a.motivo ?? "Sin motivo todavía")}</div>
         ${a.maquinista ? `<div class="fichas"><span class="ficha">Maquinista <b>${esc(a.maquinista)}</b></span></div>` : ""}
         ${a.comentario ? `<div class="nota">${esc(a.comentario)}</div>` : ""}
-        <button class="accion ${a.llegada ? "verde" : ""}" data-accion="${a.llegada ? "resuelto" : "llegada"}" data-id="${a.id}">
-          ${a.llegada ? "✓  Resuelto" : "He llegado"}</button>
+        ${boton}
       </article>`;
     }).join("") : `<div class="vacio"><div class="sello">✓</div><b>Todo en marcha</b>No hay avisos pendientes</div>`;
 
@@ -377,6 +385,16 @@
     } catch { return false; }
   }
 
+  // null si se ha apuntado; si no, el motivo para enseñárselo al mecánico
+  async function llegar(id) {
+    try {
+      const r = await fetch(`avisos/${id}/llegada`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mecanico }) });
+      if (r.ok) return null;
+      if (r.status === 409) return await r.json();
+    } catch { }
+    return "No se ha podido apuntar. Prueba otra vez.";
+  }
+
   // Sin nombre no se puede apuntar quién va: primero se pregunta
   function conNombre(despues) {
     if (mecanico) despues();
@@ -391,7 +409,8 @@
     if (boton.dataset.accion === "llegada") {
       conNombre(async () => {
         boton.disabled = true;
-        if (!await enviar(`avisos/${aviso.id}/llegada`, { mecanico })) alert("No se ha podido apuntar. Prueba otra vez.");
+        const error = await llegar(aviso.id);
+        if (error) alert(error);
         await refrescar();
         boton.disabled = false;
       });
@@ -414,6 +433,7 @@
     mecanico = nombre;
     guardado.poner(nombre);
     pintarNombre();
+    pintar();
     $("bienvenida").classList.remove("abierto");
     $("nombre").blur();
     const despues = trasNombre; trasNombre = null;

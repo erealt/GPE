@@ -308,10 +308,21 @@ public class AvisosPage : ContentPage
         {
             boton.IsEnabled = false;
             if (trabajando) await AbrirInforme(aviso);
-            else if (!await Api.Llegada(aviso.Id)) await DisplayAlertAsync("Sin conexión", "No se ha podido apuntar. Prueba otra vez.", "Aceptar");
+            else if (await Api.Llegada(aviso.Id) is string error) await DisplayAlertAsync("No se ha apuntado", error, "Aceptar");
             boton.IsEnabled = true;
             await Refrescar();
         };
+
+        // Si ya está en otra máquina, no puede coger este hasta resolver aquella
+        if (!trabajando && Api.Mio(avisos) is Aviso mio)
+        {
+            boton.Text = $"Estás en la {mio.Maquina}";
+            boton.IsEnabled = false;
+            boton.BackgroundColor = Estilo.Linea;
+            boton.TextColor = Estilo.Suave;
+            boton.FontSize = 16;
+            boton.Shadow = null;
+        }
 
         var cuerpo = new VerticalStackLayout
         {

@@ -26,14 +26,10 @@ app.MapPost("/avisos", (NuevoAviso nuevo, Avisos avisos) => avisos.Crear(nuevo))
 app.MapPost("/avisos/{id:int}/datos", (int id, DatosAviso datos, Avisos avisos) =>
     avisos.Cambiar(id, a => { a.Motivo = datos.Motivo; a.Comentario = datos.Comentario; }));
 
-// Desde el móvil llega con el nombre del mecánico; desde la pantalla Máquina, sin él
+// Desde el móvil llega con el nombre del mecánico; desde la pantalla Máquina, sin él.
+// Un mecánico no puede coger otro aviso hasta resolver el que tiene.
 app.MapPost("/avisos/{id:int}/llegada", (int id, Llegada llegada, Avisos avisos) =>
-    avisos.Cambiar(id, a =>
-    {
-        if (a.Llegada != null) return;
-        a.Llegada = DateTime.Now;
-        a.Mecanico = Limpio(llegada.Mecanico);
-    }));
+    avisos.Llegar(id, Limpio(llegada.Mecanico)));
 
 // Resuelto desde el móvil (con lo que ha hecho) o porque la máquina ha vuelto a arrancar (sin informe todavía)
 app.MapPost("/avisos/{id:int}/resuelto", (int id, Informe informe, Avisos avisos) =>
@@ -100,6 +96,23 @@ public class Avisos
             };
             lista.Add(aviso);
             return aviso;
+        }
+    }
+
+    public IResult Llegar(int id, string? mecanico)
+    {
+        lock (cerrojo)
+        {
+            if (lista.FirstOrDefault(a => a.Id == id) is not Aviso aviso) return Results.NotFound();
+            if (aviso.Llegada != null) return Results.Ok(aviso);
+
+            if (mecanico != null && lista.FirstOrDefault(a => a.Id != id && a.Llegada != null && a.Resuelto == null &&
+                    string.Equals(a.Mecanico, mecanico, StringComparison.OrdinalIgnoreCase)) is Aviso otro)
+                return Results.Conflict($"Ya estás en la {otro.Maquina}. Márcala como resuelta antes de coger otro aviso.");
+
+            aviso.Llegada = DateTime.Now;
+            aviso.Mecanico = mecanico;
+            return Results.Ok(aviso);
         }
     }
 
