@@ -44,20 +44,56 @@ public class AguaRepositorio
 
         using var lector = comando.ExecuteReader();
         while (lector.Read())
-            controles.Add(new ControlAgua(
-                Id: lector.GetInt32(0),
-                Fecha: lector.GetDateTime(1),
-                TomaId: lector.GetInt32(2),
-                Cloro: lector.IsDBNull(3) ? null : lector.GetDecimal(3),
-                SaborOk: lector.GetBoolean(4),
-                OlorOk: lector.GetBoolean(5),
-                ColorOk: lector.GetBoolean(6),
-                TurbidezOk: lector.GetBoolean(7),
-                Comentario: lector.IsDBNull(8) ? null : lector.GetString(8),
-                CreadoPor: lector.GetString(9),
-                Version: (byte[])lector[10]));
+            controles.Add(LeerControl(lector));
         return controles;
     }
+
+    // Los controles entre dos días (ambos incluidos), por fecha y en el orden en que se apuntaron.
+    // Trae el punto aunque esté dado de baja, para que no desaparezcan controles antiguos.
+    public List<ControlAguaConToma> ObtenerControles(DateTime desde, DateTime hasta)
+    {
+        const string sql = @"
+            SELECT c.id, c.fecha, c.toma_id, c.cloro, c.sabor_ok, c.olor_ok, c.color_ok, c.turbidez_ok,
+                   c.comentario, u.nombre, c.version, t.nombre, t.cloro_min, t.cloro_max
+            FROM AGUA_CONTROL c
+            JOIN USUARIO u ON u.id = c.creado_por
+            JOIN AGUA_TOMA t ON t.id = c.toma_id
+            WHERE c.fecha BETWEEN @desde AND @hasta
+            ORDER BY c.fecha, c.id;";
+
+        var controles = new List<ControlAguaConToma>();
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@desde", desde.Date);
+        comando.Parameters.AddWithValue("@hasta", hasta.Date);
+
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+        {
+            var control = LeerControl(lector);
+            controles.Add(new ControlAguaConToma(control, new AguaToma(
+                Id: control.TomaId,
+                Nombre: lector.GetString(11),
+                CloroMin: lector.IsDBNull(12) ? null : lector.GetDecimal(12),
+                CloroMax: lector.IsDBNull(13) ? null : lector.GetDecimal(13))));
+        }
+        return controles;
+    }
+
+    // Las 11 primeras columnas de las dos consultas de controles
+    private static ControlAgua LeerControl(SqlDataReader lector) => new(
+        Id: lector.GetInt32(0),
+        Fecha: lector.GetDateTime(1),
+        TomaId: lector.GetInt32(2),
+        Cloro: lector.IsDBNull(3) ? null : lector.GetDecimal(3),
+        SaborOk: lector.GetBoolean(4),
+        OlorOk: lector.GetBoolean(5),
+        ColorOk: lector.GetBoolean(6),
+        TurbidezOk: lector.GetBoolean(7),
+        Comentario: lector.IsDBNull(8) ? null : lector.GetString(8),
+        CreadoPor: lector.GetString(9),
+        Version: (byte[])lector[10]);
 
     // Guarda el día en una transacción. false si otro lo ha cambiado mientras tanto (no se guarda nada).
     public bool GuardarDia(IReadOnlyList<ControlAgua> cambiados, IReadOnlyList<ControlAgua> borrados, int usuarioId)

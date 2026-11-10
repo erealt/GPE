@@ -15,6 +15,13 @@ public class AguaServicio
 
     public List<ControlAgua> ObtenerDia(DateTime fecha) => repositorio.ObtenerControles(fecha.Date);
 
+    // Todos los controles del mes de ese día
+    public List<ControlAguaConToma> ObtenerMes(DateTime mes)
+    {
+        var primero = new DateTime(mes.Year, mes.Month, 1);
+        return repositorio.ObtenerControles(primero, primero.AddMonths(1).AddDays(-1));
+    }
+
     // "Hoy: sin controles" o "Hoy: 2 controles", para la tarjeta del inicio
     public string ResumenHoy()
     {

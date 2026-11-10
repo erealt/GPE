@@ -188,9 +188,23 @@ public class ModuloControlAgua : UserControl
             if (DescartarCambios()) Cargar(fecha, recargarTomas: true);
         };
 
+        // La gráfica es solo para mirar: no hace falta guardar antes
+        var btnGrafica = Tema.BotonSecundario("Ver gráfica", 130);
+        btnGrafica.Height = 40;
+        btnGrafica.Margin = new Padding(0, 12, 10, 0);
+        btnGrafica.Click += (s, e) =>
+        {
+            using var ventana = new FormAguaGrafica(fecha, tomas);
+            ventana.ShowDialog(this);
+        };
+
+        var botones = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+        botones.Controls.Add(btnGrafica);
+        botones.Controls.Add(btnRecargar);
+
         barra.Controls.Add(filtros, 0, 0);
         barra.Controls.Add(datos, 1, 0);
-        barra.Controls.Add(btnRecargar, 2, 0);
+        barra.Controls.Add(botones, 2, 0);
         return barra;
     }
 

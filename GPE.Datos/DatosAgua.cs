@@ -2,6 +2,9 @@ namespace GPE.Datos;
 
 public record AguaToma(int Id, string Nombre, decimal? CloroMin, decimal? CloroMax);
 
+// Un control con su punto, para las consultas de varios días (el punto puede estar ya dado de baja)
+public record ControlAguaConToma(ControlAgua Control, AguaToma Toma);
+
 public record ControlAgua(
     int Id,
     DateTime Fecha,
