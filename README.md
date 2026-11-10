@@ -219,7 +219,7 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
 
 - **Usuario**: la web no pide usuario. Todo lo que se guarda desde ella queda a nombre del usuario cuyo id está en `"UsuarioWeb"` de [`appsettings.json`](GPE.Web/appsettings.json) (por defecto 1), porque cada DeCA guarda quién lo creó y lo cambió. Cada operación que guarda va dentro de `using (UsuarioWeb.Operacion())`, que usa `Sesion.Como(usuario)` solo para esa operación, sin tocar `Sesion.UsuarioActual` como hace el escritorio.
 - **PDF y QR**: el botón *Generar PDF y QR* del formulario sube el PDF a la web igual que el escritorio y guarda la copia en `GPE_DECA_CARPETA` **del servidor**; *Ver PDF* y *Ver QR* los abren en el navegador para imprimirlos o guardarlos.
-- **Instalarla en un servidor** de la fábrica (Windows):
+- **Instalarla en un servidor** de la fábrica (Windows). Lo hace [`Despliegue/instalar-servidor.ps1`](Despliegue/instalar-servidor.ps1): se prepara el paquete con [`Despliegue/preparar-paquete.ps1`](Despliegue/preparar-paquete.ps1), se copia al servidor y se sigue [`LEEME.txt`](Despliegue/LEEME.txt). Lo que hace el script, por pasos:
   1. Instalar IIS y el *ASP.NET Core Hosting Bundle* de .NET 10.
   2. Publicar `GPE.Web` (clic derecho → *Publicar* → carpeta) y crear un sitio en IIS que apunte a esa carpeta.
   3. Conexión a la base de datos: o se da permiso en SQL Server a la cuenta del grupo de aplicaciones de IIS (`IIS APPPOOL\<nombre>`), o se pone en `GPE_CONEXION` un usuario de SQL.

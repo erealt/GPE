@@ -11,3 +11,5 @@ obj/
 appsettings.*.json
 
 .claude/
+# Paquete para el servidor (se genera con Despliegue/preparar-paquete.ps1)
+Despliegue/paquete/
