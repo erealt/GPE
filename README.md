@@ -226,7 +226,7 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
   4. `GPE_DECA_CARPETA`: una carpeta del servidor donde esa cuenta pueda escribir. Y `GPE_WP_USUARIO` y `GPE_WP_CLAVE` para subir los PDF a la web.
   5. En `appsettings.json` de la carpeta publicada, `"UsuarioWeb"` con el id del usuario a cuyo nombre se guardan los DeCA.
   6. Se entra con `http://<servidor>/`, solo desde la red de la fábrica.
-  7. **Borrado de los DeCA de más de un año**: en el mismo servidor, la tarea programada de `GPE.Avisos` (apartado 8). Las variables (`GPE_CONEXION`, `GPE_DECA_CARPETA`, `GPE_WP_USUARIO`, `GPE_WP_CLAVE`) conviene ponerlas para todo el servidor (`setx NOMBRE "valor" /M`, como administrador), así las ven tanto la web como la tarea y las dos usan la misma carpeta.
+  7. **Borrado de los DeCA de más de un año**: en el mismo servidor, la tarea programada de `GPE.Avisos` (apartado 8) con el argumento `--solo-deca`: así solo borra los PDF y no intenta mandar correos (en el servidor no hace falta configurar el correo). Las variables (`GPE_CONEXION`, `GPE_DECA_CARPETA`, `GPE_WP_USUARIO`, `GPE_WP_CLAVE`) conviene ponerlas para todo el servidor (`setx NOMBRE "valor" /M`, como administrador), así las ven tanto la web como la tarea y las dos usan la misma carpeta.
 
 ---
 
@@ -234,7 +234,7 @@ Lo mismo que el módulo del escritorio, pero en el navegador, para usarlo en la 
 
 Cuando una devolución avanza se avisa a quien le toca el siguiente paso (el rol de `ESTADO_DEVOLUCION.rol_responsable_id` en la fábrica de la devolución). El aviso se apunta en `AVISO_CORREO` en la misma transacción que el cambio, y [`AvisoServicio`](GPE.Logica/AvisoServicio.cs) lo envía en segundo plano; si el correo falla, la devolución se guarda igual y se reintenta.
 
-Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`. La misma tarea borra los PDF del DeCA de más de un año (apartado 7); si una de las dos cosas falla, la otra se hace igual.
+Además, [`GPE.Avisos`](GPE.Avisos/Program.cs) envía cada mañana un resumen por persona con lo que tiene pendiente (revisiones al Almacén, abonos a Administración) y los avisos que quedaron sin enviar. Lo ejecuta una tarea programada de Windows y deja un registro en `%LOCALAPPDATA%\GPE\avisos.log`. La misma tarea borra los PDF del DeCA de más de un año (apartado 7); si una de las dos cosas falla, la otra se hace igual. Con `GPE.Avisos --solo-deca` solo hace el borrado.
 
 **Cuenta de envío.** Se configura en cada ordenador con variables de entorno (`setx NOMBRE "valor"` y volver a abrir la aplicación). Sin ellas, los avisos se quedan pendientes.
 
