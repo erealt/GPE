@@ -105,6 +105,167 @@ public static class AvisoServicio
         return enviados;
     }
 
+    // Acciones de calidad
+
+    private static readonly AvisoAccionRepositorio repositorioAcciones = new();
+    private const string ResumenAcciones = "ACCIONES_NC";   // tipo en AVISO_RESUMEN
+    private const string NombreCalidad = "GPE · Calidad";
+    private static int enviandoAcciones;
+
+    // Al guardar una ficha: no bloquea la pantalla y un fallo del correo no impide seguir
+    public static void EnviarAsignacionesEnSegundoPlano() => Task.Run(() =>
+    {
+        try { EnviarAsignaciones(); }
+        catch (Exception) { /* se reintenta al guardar otra ficha o en la tarea diaria */ }
+    });
+
+    // Un correo a cada responsable con las acciones que se le acaban de poner. Devuelve cuántos ha enviado.
+    public static int EnviarAsignaciones()
+    {
+        // Sin cuenta configurada no se reserva nada: si no, se darían por avisadas sin haberlo hecho
+        if (!Configurado(out string remitente, out _)) return 0;
+        if (Interlocked.Exchange(ref enviandoAcciones, 1) == 1) return 0;
+        try
+        {
+            var acciones = repositorioAcciones.ReservarAsignaciones();
+            if (acciones.Count == 0) return 0;
+
+            SmtpClient cliente;
+            try
+            {
+                cliente = Conectar();
+            }
+            catch (Exception)
+            {
+                // Sin conexión o sin acceso a la cuenta: se vuelven a intentar la próxima vez
+                foreach (var accion in acciones) repositorioAcciones.QuitarAviso(accion.AccionId);
+                throw;
+            }
+
+            int enviados = 0;
+            using (cliente)
+            {
+                foreach (var grupo in acciones.GroupBy(a => a.Destinatario, StringComparer.OrdinalIgnoreCase))
+                {
+                    var lista = Ordenar(grupo);
+                    try
+                    {
+                        var (asunto, cuerpo) = RedactarAsignacion(lista);
+                        cliente.Send(Mensaje(remitente, grupo.Key, asunto, cuerpo, NombreCalidad));
+                        enviados++;
+                    }
+                    catch (Exception ex) when (ex is not DbException)
+                    {
+                        foreach (var accion in lista) repositorioAcciones.QuitarAviso(accion.AccionId);
+                    }
+                }
+                cliente.Disconnect(true);
+            }
+            return enviados;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref enviandoAcciones, 0);
+        }
+    }
+
+    // Cada día, a cada responsable con correo, todas sus acciones sin hacer. Una vez al día como mucho.
+    public static int EnviarResumenAcciones()
+    {
+        if (!Configurado(out string remitente, out _))
+            throw new InvalidOperationException("Falta configurar GPE_SMTP_USUARIO y GPE_SMTP_CLAVE.");
+
+        var pendientes = repositorioAcciones.ObtenerPendientesResumen(ResumenAcciones);
+        if (pendientes.Count == 0) return 0;
+
+        int enviados = 0;
+        using var cliente = Conectar();
+        foreach (var grupo in pendientes.GroupBy(a => a.Destinatario, StringComparer.OrdinalIgnoreCase))
+        {
+            var (asunto, cuerpo) = RedactarResumenAcciones(Ordenar(grupo));
+            cliente.Send(Mensaje(remitente, grupo.Key, asunto, cuerpo, NombreCalidad));
+            repositorio.MarcarResumenEnviado(ResumenAcciones, grupo.Key);
+            enviados++;
+        }
+        cliente.Disconnect(true);
+        return enviados;
+    }
+
+    // Primero las de prioridad alta; dentro de cada prioridad, la de plazo más cercano (sin plazo, al final)
+    private static List<AccionPendienteAviso> Ordenar(IEnumerable<AccionPendienteAviso> acciones) => acciones
+        .OrderBy(a => PrioridadAccion.Orden(a.Prioridad))
+        .ThenBy(a => a.Fecha ?? DateTime.MaxValue)
+        .ThenBy(a => a.AccionId)
+        .ToList();
+
+    private static (string Asunto, string Cuerpo) RedactarAsignacion(List<AccionPendienteAviso> acciones)
+    {
+        int n = acciones.Count;
+        string asunto = n == 1
+            ? $"Tienes una acción de calidad nueva: {Registro(acciones[0])}"
+            : $"Tienes {n} acciones de calidad nuevas";
+
+        return (asunto, $"""
+            Hola, {acciones[0].Responsable}.
+
+            {(n == 1 ? "Te han puesto como responsable de esta acción en GPE:" : "Te han puesto como responsable de estas acciones en GPE:")}
+
+            {string.Join(Environment.NewLine + Environment.NewLine, acciones.Select(DescribirAccion))}
+
+            Cuando la termines, avisa a Calidad para que la marque como hecha. Mientras esté pendiente,
+            te llegará cada día un resumen con todas tus acciones sin hacer.
+
+            Este correo se ha enviado automáticamente; no hace falta responder.
+            """);
+    }
+
+    private static (string Asunto, string Cuerpo) RedactarResumenAcciones(List<AccionPendienteAviso> acciones)
+    {
+        int n = acciones.Count;
+        int fuera = acciones.Count(a => a.Fecha?.Date < DateTime.Today);
+        string asunto = (n == 1 ? "Tienes 1 acción de calidad pendiente" : $"Tienes {n} acciones de calidad pendientes")
+            + (fuera == 0 ? "" : fuera == 1 ? " (1 fuera de plazo)" : $" ({fuera} fuera de plazo)");
+
+        return (asunto, $"""
+            Buenos días, {acciones[0].Responsable}.
+
+            {(n == 1 ? "Esta es la acción de calidad que tienes pendiente:" : "Estas son las acciones de calidad que tienes pendientes, de más a menos prioridad:")}
+
+            {string.Join(Environment.NewLine + Environment.NewLine, acciones.Select(DescribirAccion))}
+
+            Cuando termines una, avisa a Calidad para que la marque como hecha. Recibirás este resumen
+            cada día mientras tengas alguna pendiente.
+
+            Este correo se ha enviado automáticamente; no hace falta responder.
+            """);
+    }
+
+    //   · [Prioridad alta] Acción correctora · No conformidad 558
+    //     Qué hay que hacer: ...
+    //     Plazo: 20/11/2026 (fuera de plazo)
+    //     Problema: ...
+    private static string DescribirAccion(AccionPendienteAviso a)
+    {
+        string prioridad = a.Prioridad == null ? "" : $"[Prioridad {a.Prioridad.ToLower(Es)}] ";
+        string clase = a.Clase == ClaseAccion.Inmediata ? "Acción inmediata" : "Acción correctora";
+        string plazo = a.Fecha is DateTime f
+            ? FechaTexto(f) + (f.Date < DateTime.Today ? "  (FUERA DE PLAZO)" : f.Date == DateTime.Today ? "  (hoy)" : "")
+            : "sin fecha";
+        string problema = a.Problema.Split('\n')[0].Trim();
+        if (problema.Length > 200) problema = problema[..200] + "…";
+
+        return $"""
+              · {prioridad}{clase} · {Registro(a)}
+                Qué hay que hacer: {a.Accion.Replace("\n", "\n    ")}
+                Plazo: {plazo}
+                Problema: {problema}
+            """;
+    }
+
+    // "No conformidad 558", "Incidencia 840"
+    private static string Registro(AccionPendienteAviso a) =>
+        $"{TipoRegistro.Nombre(a.TipoRegistro)} {a.NumeroNc ?? "(sin número)"}";
+
     private static bool Configurado(out string remitente, out string clave)
     {
         remitente = Environment.GetEnvironmentVariable("GPE_SMTP_USUARIO") ?? "";
@@ -133,10 +294,11 @@ public static class AvisoServicio
         }
     }
 
-    private static MimeMessage Mensaje(string remitente, string destinatario, string asunto, string cuerpo)
+    private static MimeMessage Mensaje(string remitente, string destinatario, string asunto, string cuerpo,
+        string nombreRemitente = "GPE · Devoluciones")
     {
         var mensaje = new MimeMessage();
-        mensaje.From.Add(new MailboxAddress("GPE · Devoluciones", remitente));
+        mensaje.From.Add(new MailboxAddress(nombreRemitente, remitente));
         mensaje.To.Add(MailboxAddress.Parse(destinatario));
         mensaje.Subject = asunto;
         mensaje.Body = new TextPart("plain") { Text = cuerpo };

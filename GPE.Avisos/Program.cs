@@ -33,6 +33,23 @@ catch (Exception ex)
     todoBien = false;
 }
 
+// Acciones de calidad: las asignaciones que no salieron al guardar la ficha y el resumen de cada responsable
+try
+{
+    int asignadas = AvisoServicio.EnviarAsignaciones();
+    if (asignadas > 0) Log($"Acciones de calidad: {asignadas} correo(s) de acciones nuevas enviado(s).");
+
+    int resumenes = AvisoServicio.EnviarResumenAcciones();
+    Log(resumenes == 0
+        ? "Acciones de calidad: ningún resumen que enviar (nadie con correo tiene acciones pendientes o ya se envió hoy)."
+        : $"Acciones de calidad: {resumenes} resumen(es) enviado(s).");
+}
+catch (Exception ex)
+{
+    Log("ERROR en los avisos de acciones de calidad: " + AvisoServicio.DescribirError(ex));
+    todoBien = false;
+}
+
 try
 {
     var (web, carpeta) = DecaServicio.BorrarPdfsAntiguos();

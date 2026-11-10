@@ -222,7 +222,9 @@ public class NoConformidadServicio
             Accion = accion.Accion.Trim(),
             Fecha = accion.Fecha?.Date,
             Responsable = Limpio(accion.Responsable),
-            Observaciones = Limpio(accion.Observaciones)
+            Observaciones = Limpio(accion.Observaciones),
+            // Los seguimientos no llevan prioridad
+            Prioridad = accion.Clase == ClaseAccion.Seguimiento ? null : Limpio(accion.Prioridad)
         };
     }
 
@@ -267,7 +269,9 @@ public class NoConformidadServicio
         {
             if (Sesion.UsuarioActual is not Usuario usuario)
                 throw new ReglaNegocioException("No hay ningún usuario elegido.");
-            return repositorio.Insertar(nc with { Numero = null }, lista, serie, usuario.Id);
+            int id = repositorio.Insertar(nc with { Numero = null }, lista, serie, usuario.Id);
+            AvisoServicio.EnviarAsignacionesEnSegundoPlano();   // a los responsables nuevos de las acciones
+            return id;
         }
 
         // Se mira el número guardado, no el que trae la pantalla
@@ -278,6 +282,7 @@ public class NoConformidadServicio
         if (!repositorio.Actualizar(nc, lista, Renumerar(anterior, serie) ? serie : null))
             throw new ReglaNegocioException(
                 repositorio.ObtenerRegistro(nc.Id) == null ? MensajeBorrado : MensajeModificado);
+        AvisoServicio.EnviarAsignacionesEnSegundoPlano();
         return nc.Id;
     }
 

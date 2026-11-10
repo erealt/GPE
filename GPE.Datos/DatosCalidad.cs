@@ -78,6 +78,25 @@ public static class ClaseAccion
     public const string Seguimiento = "SEGUIMIENTO";
 }
 
+// Columna NC_ACCION.prioridad (solo inmediatas y correctoras; null = sin prioridad)
+public static class PrioridadAccion
+{
+    public const string Alta = "Alta";
+    public const string Media = "Media";
+    public const string Baja = "Baja";
+
+    public static readonly string[] Todas = { Alta, Media, Baja };
+
+    // Para ordenar: primero las altas, al final las que no tienen
+    public static int Orden(string? prioridad) => prioridad switch
+    {
+        Alta => 0,
+        Media => 1,
+        Baja => 2,
+        _ => 3
+    };
+}
+
 // Acción inmediata, correctora o seguimiento (NC_ACCION). Id = 0 si es nueva.
 public record AccionNc(
     int Id,
@@ -86,4 +105,18 @@ public record AccionNc(
     DateTime? Fecha,
     string? Responsable,
     string? Observaciones,
-    bool Hecha);
+    bool Hecha,
+    string? Prioridad = null);
+
+// Acción de calidad para avisar a su responsable por correo (al asignarla y en el resumen diario)
+public record AccionPendienteAviso(
+    int AccionId,
+    string Destinatario,
+    string Responsable,
+    string? NumeroNc,
+    string TipoRegistro,
+    string Problema,
+    string Clase,
+    string Accion,
+    DateTime? Fecha,
+    string? Prioridad);

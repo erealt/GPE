@@ -86,7 +86,7 @@ public class NoConformidadRepositorio
     public List<AccionNc> ObtenerAcciones(int noConformidadId)
     {
         const string sql = @"
-            SELECT id, clase, accion, fecha, responsable, observaciones, hecha
+            SELECT id, clase, accion, fecha, responsable, observaciones, hecha, prioridad
             FROM NC_ACCION
             WHERE no_conformidad_id = @id
             ORDER BY clase, orden, id;";
@@ -107,7 +107,8 @@ public class NoConformidadRepositorio
                 Fecha: lector.IsDBNull(3) ? null : lector.GetDateTime(3),
                 Responsable: lector.IsDBNull(4) ? null : lector.GetString(4),
                 Observaciones: lector.IsDBNull(5) ? null : lector.GetString(5),
-                Hecha: lector.GetBoolean(6)));
+                Hecha: lector.GetBoolean(6),
+                Prioridad: lector.IsDBNull(7) ? null : lector.GetString(7)));
         }
 
         return acciones;
@@ -286,12 +287,12 @@ public class NoConformidadRepositorio
         }
 
         const string sqlInsertar = @"
-            INSERT INTO NC_ACCION (no_conformidad_id, clase, orden, accion, fecha, responsable, observaciones, hecha)
-            VALUES (@nc, @clase, @orden, @accion, @fecha, @responsable, @observaciones, @hecha);";
+            INSERT INTO NC_ACCION (no_conformidad_id, clase, orden, accion, fecha, responsable, observaciones, hecha, prioridad)
+            VALUES (@nc, @clase, @orden, @accion, @fecha, @responsable, @observaciones, @hecha, @prioridad);";
         const string sqlActualizar = @"
             UPDATE NC_ACCION SET
                 clase = @clase, orden = @orden, accion = @accion, fecha = @fecha,
-                responsable = @responsable, observaciones = @observaciones, hecha = @hecha
+                responsable = @responsable, observaciones = @observaciones, hecha = @hecha, prioridad = @prioridad
             WHERE id = @id AND no_conformidad_id = @nc;";
 
         // El orden se cuenta por separado en cada clase (inmediatas 1, 2...; correctoras 1, 2...)
@@ -313,6 +314,7 @@ public class NoConformidadRepositorio
                 Valor("@responsable", accion.Responsable);
                 Valor("@observaciones", accion.Observaciones);
                 Valor("@hecha", accion.Hecha);
+                Valor("@prioridad", accion.Prioridad);
                 if (!nueva) Valor("@id", accion.Id);
                 comando.ExecuteNonQuery();
             }

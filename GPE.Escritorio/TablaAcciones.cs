@@ -7,13 +7,14 @@ namespace GPE.Escritorio;
 // Acciones o seguimientos de la ficha de calidad. Los seguimientos no tienen "hecha" y la fecha es obligatoria.
 public class TablaAcciones : TableLayoutPanel
 {
-    private const int ColHecha = 0, ColAccion = 1, ColFecha = 2, ColResponsable = 3, ColObservaciones = 4, ColQuitar = 5;
+    private const int ColHecha = 0, ColAccion = 1, ColFecha = 2, ColResponsable = 3, ColPrioridad = 4, ColObservaciones = 5, ColQuitar = 6;
     private static readonly string[] FormatosFecha = { "d/M/yyyy", "d/M/yy", "d-M-yyyy", "d-M-yy" };
 
     private readonly string clase;
     private bool EsSeguimiento => clase == ClaseAccion.Seguimiento;
     private readonly DataGridView grid = new();
     private readonly DataGridViewComboBoxColumn colResponsable = new();
+    private readonly DataGridViewComboBoxColumn colPrioridad = new();
     private readonly Label lblVacia = new();
     private readonly Label lblError = CamposFormulario.EtiquetaError();
     private readonly Button btnAnadir;
@@ -106,6 +107,18 @@ public class TablaAcciones : TableLayoutPanel
             colResponsable.Items.Add(persona);
         grid.Columns.Add(colResponsable);
 
+        // Solo en inmediatas y correctoras. Fija: no se puede dejar un valor que no sea de la lista.
+        colPrioridad.HeaderText = "PRIORIDAD";
+        colPrioridad.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+        colPrioridad.Width = 105;
+        colPrioridad.FlatStyle = FlatStyle.Flat;
+        colPrioridad.DisplayStyle = DataGridViewComboBoxDisplayStyle.Nothing;
+        colPrioridad.SortMode = DataGridViewColumnSortMode.NotSortable;
+        colPrioridad.Items.Add("");   // sin prioridad
+        colPrioridad.Items.AddRange(PrioridadAccion.Todas);
+        colPrioridad.Visible = !EsSeguimiento;
+        grid.Columns.Add(colPrioridad);
+
         grid.Columns.Add(ColumnaTexto("OBSERVACIONES", 29, 1000));
         grid.Columns.Add(new DataGridViewLinkColumn
         {
@@ -123,6 +136,21 @@ public class TablaAcciones : TableLayoutPanel
         foreach (int col in new[] { ColAccion, ColObservaciones })
             grid.Columns[col].DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         grid.Columns[ColFecha].DefaultCellStyle.NullValue = "";
+
+        // Prioridad de un vistazo: alta en rojo, media en naranja y baja en verde
+        grid.CellFormatting += (s, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != ColPrioridad || e.CellStyle == null) return;
+            Color? color = (e.Value as string) switch
+            {
+                PrioridadAccion.Alta => Tema.Error,
+                PrioridadAccion.Media => Color.FromArgb(215, 110, 0),
+                PrioridadAccion.Baja => Tema.FaseHecha.Texto,
+                _ => null
+            };
+            e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = color ?? Tema.Texto;
+            e.CellStyle.Font = color == null ? Tema.Fuente : Tema.FuenteNegrita;
+        };
 
         // La casilla cuenta en cuanto se marca, sin tener que salir de la celda
         grid.CurrentCellDirtyStateChanged += (s, e) =>
@@ -238,7 +266,7 @@ public class TablaAcciones : TableLayoutPanel
                 colResponsable.Items.Add(accion.Responsable);
 
             int i = grid.Rows.Add(accion.Hecha, accion.Accion, accion.Fecha?.ToString("dd/MM/yyyy") ?? "",
-                accion.Responsable ?? "", accion.Observaciones ?? "");
+                accion.Responsable ?? "", accion.Prioridad ?? "", accion.Observaciones ?? "");
             grid.Rows[i].Tag = accion.Id;
         }
         cargando = false;
@@ -250,7 +278,7 @@ public class TablaAcciones : TableLayoutPanel
         grid.EndEdit();
         // Un seguimiento casi siempre se apunta el mismo día en que se hace
         string fecha = EsSeguimiento ? DateTime.Today.ToString("dd/MM/yyyy") : "";
-        int i = grid.Rows.Add(false, "", fecha, "", "");
+        int i = grid.Rows.Add(false, "", fecha, "", "", "");
         grid.Rows[i].Tag = 0;
         AjustarAlto();
         AvisarCambio();
@@ -280,6 +308,7 @@ public class TablaAcciones : TableLayoutPanel
             string accion = Texto(fila, ColAccion);
             string fechaTexto = Texto(fila, ColFecha);
             string responsable = Texto(fila, ColResponsable);
+            string prioridad = Texto(fila, ColPrioridad);
             string observaciones = Texto(fila, ColObservaciones);
             bool hecha = fila.Cells[ColHecha].Value is true;
 
@@ -296,7 +325,7 @@ public class TablaAcciones : TableLayoutPanel
             }
 
             var leidaAccion = NoConformidadServicio.NormalizarAccion(new AccionNc(
-                (int)(fila.Tag ?? 0), clase, accion, fecha, responsable, observaciones, hecha));
+                (int)(fila.Tag ?? 0), clase, accion, fecha, responsable, observaciones, hecha, prioridad));
 
             if (NoConformidadServicio.ErrorAccion(leidaAccion, fechaDetectado) is string error)
             {
@@ -327,7 +356,7 @@ public class TablaAcciones : TableLayoutPanel
 
     private static bool FilaVacia(DataGridViewRow fila) =>
         fila.Cells[ColHecha].Value is not true
-        && new[] { ColAccion, ColFecha, ColResponsable, ColObservaciones }.All(col => Texto(fila, col) == "");
+        && new[] { ColAccion, ColFecha, ColResponsable, ColPrioridad, ColObservaciones }.All(col => Texto(fila, col) == "");
 
     private static string Texto(DataGridViewRow fila, int col) =>
         (fila.Cells[col].Value?.ToString() ?? "").Trim();

@@ -26,6 +26,7 @@ static class Program
 
             // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)
             GPE.Logica.AvisoServicio.EnviarPendientesEnSegundoPlano();
+            GPE.Logica.AvisoServicio.EnviarAsignacionesEnSegundoPlano();
 
             using var principal = new FormPrincipal();
             Application.Run(principal);
