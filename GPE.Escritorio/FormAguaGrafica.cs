@@ -349,15 +349,18 @@ public class GraficaCloro : Control
             if (minimo is decimal min && min > 0) Raya(min, "Mínimo");
         }
 
-        // Un punto por control (si un día hay dos del mismo punto de agua, salen los dos, uno encima de otro).
-        // Solo se unen con una línea cuando se ve un punto de agua: con todos, las líneas se cruzan y no se entiende nada.
+        // Un punto por control (si un día hay dos del mismo punto de agua, salen los dos, uno encima de otro),
+        // unidos con una línea del color de su punto de agua. Primero todas las líneas y luego todos los puntos,
+        // para que ninguna línea tape los puntos de otro punto de agua.
+        PointF[] Puntos(Serie serie) => serie.Medidas.Select(m => new PointF(X(m.Fecha), Y(m.Cloro))).ToArray();
+        foreach (var serie in series)
+            if (Puntos(serie) is { Length: > 1 } linea)
+                using (var lapiz = new Pen(serie.Color, 2f))
+                    g.DrawLines(lapiz, linea);
+
         foreach (var serie in series)
         {
-            var puntos = serie.Medidas.Select(m => new PointF(X(m.Fecha), Y(m.Cloro))).ToArray();
-            if (series.Count == 1 && puntos.Length > 1)
-                using (var linea = new Pen(serie.Color, 2f))
-                    g.DrawLines(linea, puntos);
-
+            var puntos = Puntos(serie);
             for (int i = 0; i < puntos.Length; i++)
             {
                 var medida = serie.Medidas[i];
