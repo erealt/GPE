@@ -111,6 +111,7 @@ public record AccionNc(
 // Acción de calidad para avisar a su responsable por correo (al asignarla y en el resumen diario)
 public record AccionPendienteAviso(
     int AccionId,
+    int NoConformidadId,
     string Destinatario,
     string Responsable,
     string? NumeroNc,

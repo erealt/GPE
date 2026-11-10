@@ -150,8 +150,10 @@ public static class AvisoServicio
                     var lista = Ordenar(grupo);
                     try
                     {
-                        var (asunto, cuerpo) = RedactarAsignacion(lista);
-                        cliente.Send(Mensaje(remitente, grupo.Key, asunto, cuerpo, NombreCalidad));
+                        var (fotos, sinAdjuntar) = FotosParaCorreo(lista);
+                        var (asunto, cuerpo) = RedactarAsignacion(lista, fotos.Count, sinAdjuntar);
+                        var mensaje = Mensaje(remitente, grupo.Key, asunto, cuerpo, NombreCalidad, fotos);
+                        cliente.Send(mensaje);
                         enviados++;
                     }
                     catch (Exception ex) when (ex is not DbException)
@@ -191,6 +193,24 @@ public static class AvisoServicio
         return enviados;
     }
 
+    // Hasta 15 MB de fotos por correo (los servidores suelen rechazar los de más de 20-25 MB).
+    // Las que no caben no se envían: se dice en el correo cuántas son.
+    private const int MaximoFotosCorreo = 15 * 1024 * 1024;
+
+    private static (List<ArchivoNuevo> Fotos, int SinAdjuntar) FotosParaCorreo(List<AccionPendienteAviso> acciones)
+    {
+        var todas = repositorioAcciones.ObtenerFotos(acciones.Select(a => a.NoConformidadId));
+        var adjuntas = new List<ArchivoNuevo>();
+        long total = 0;
+        foreach (var foto in todas)
+        {
+            if (total + foto.Contenido.Length > MaximoFotosCorreo) continue;
+            adjuntas.Add(foto);
+            total += foto.Contenido.Length;
+        }
+        return (adjuntas, todas.Count - adjuntas.Count);
+    }
+
     // Primero las de prioridad alta; dentro de cada prioridad, la de plazo más cercano (sin plazo, al final)
     private static List<AccionPendienteAviso> Ordenar(IEnumerable<AccionPendienteAviso> acciones) => acciones
         .OrderBy(a => PrioridadAccion.Orden(a.Prioridad))
@@ -198,12 +218,20 @@ public static class AvisoServicio
         .ThenBy(a => a.AccionId)
         .ToList();
 
-    private static (string Asunto, string Cuerpo) RedactarAsignacion(List<AccionPendienteAviso> acciones)
+    private static (string Asunto, string Cuerpo) RedactarAsignacion(List<AccionPendienteAviso> acciones,
+        int fotos = 0, int fotosSinAdjuntar = 0)
     {
         int n = acciones.Count;
         string asunto = n == 1
             ? $"Tienes una acción de calidad nueva: {Registro(acciones[0])}"
             : $"Tienes {n} acciones de calidad nuevas";
+
+        string textoFotos = (fotos, fotosSinAdjuntar) switch
+        {
+            (0, 0) => "",
+            (_, 0) => fotos == 1 ? "Va adjunta la foto del problema." : $"Van adjuntas las {fotos} fotos del problema.",
+            _ => $"Van adjuntas {fotos} fotos del problema; hay {fotosSinAdjuntar} más en GPE que no caben en el correo."
+        };
 
         return (asunto, $"""
             Hola, {acciones[0].Responsable}.
@@ -212,7 +240,7 @@ public static class AvisoServicio
 
             {string.Join(Environment.NewLine + Environment.NewLine, acciones.Select(DescribirAccion))}
 
-            Cuando la termines, avisa a Calidad para que la marque como hecha. Mientras esté pendiente,
+            {(textoFotos == "" ? "" : textoFotos + Environment.NewLine + Environment.NewLine)}Cuando la termines, avisa a Calidad para que la marque como hecha. Mientras esté pendiente,
             te llegará cada día un resumen con todas tus acciones sin hacer.
 
             Este correo se ha enviado automáticamente; no hace falta responder.
@@ -295,13 +323,17 @@ public static class AvisoServicio
     }
 
     private static MimeMessage Mensaje(string remitente, string destinatario, string asunto, string cuerpo,
-        string nombreRemitente = "GPE · Devoluciones")
+        string nombreRemitente = "GPE · Devoluciones", IEnumerable<ArchivoNuevo>? adjuntos = null)
     {
         var mensaje = new MimeMessage();
         mensaje.From.Add(new MailboxAddress(nombreRemitente, remitente));
         mensaje.To.Add(MailboxAddress.Parse(destinatario));
         mensaje.Subject = asunto;
-        mensaje.Body = new TextPart("plain") { Text = cuerpo };
+
+        var cuerpoCorreo = new BodyBuilder { TextBody = cuerpo };
+        foreach (var adjunto in adjuntos ?? Enumerable.Empty<ArchivoNuevo>())
+            cuerpoCorreo.Attachments.Add(adjunto.NombreArchivo, adjunto.Contenido);
+        mensaje.Body = cuerpoCorreo.ToMessageBody();
         return mensaje;
     }
 

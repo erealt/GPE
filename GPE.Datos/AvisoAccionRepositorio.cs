@@ -21,7 +21,8 @@ public class AvisoAccionRepositorio
           AND n.fecha_fin IS NULL";
 
     private const string Columnas = @"
-        a.id, persona.email, a.responsable, n.numero, n.tipo_registro, n.problema, a.clase, a.accion, a.fecha, a.prioridad";
+        a.id, persona.email, a.responsable, n.numero, n.tipo_registro, n.problema, a.clase, a.accion, a.fecha, a.prioridad,
+        a.no_conformidad_id";
 
     // Apunta como avisadas las acciones con un responsable nuevo (o cambiado) y devuelve las que hay
     // que enviar. Las de personas sin correo se apuntan igual y no se devuelven: no se les envía nada.
@@ -80,6 +81,24 @@ public class AvisoAccionRepositorio
         return Leer(comando);
     }
 
+    // Las fotos de esos registros, para adjuntarlas al correo, en el orden en que se subieron
+    public List<ArchivoNuevo> ObtenerFotos(IEnumerable<int> noConformidadIds)
+    {
+        const string sql = @"
+            SELECT nombre_archivo, contenido FROM NC_FOTO
+            WHERE no_conformidad_id IN (SELECT value FROM STRING_SPLIT(@ids, ','))
+            ORDER BY no_conformidad_id, subido_en, id;";
+
+        var fotos = new List<ArchivoNuevo>();
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@ids", string.Join(",", noConformidadIds.Distinct()));
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+            fotos.Add(new ArchivoNuevo(lector.GetString(0), (byte[])lector[1]));
+        return fotos;
+    }
+
     private static List<AccionPendienteAviso> Leer(SqlCommand comando)
     {
         var acciones = new List<AccionPendienteAviso>();
@@ -87,6 +106,7 @@ public class AvisoAccionRepositorio
         while (lector.Read())
             acciones.Add(new AccionPendienteAviso(
                 AccionId: lector.GetInt32(0),
+                NoConformidadId: lector.GetInt32(10),
                 Destinatario: lector.IsDBNull(1) ? "" : lector.GetString(1),
                 Responsable: lector.GetString(2),
                 NumeroNc: lector.IsDBNull(3) ? null : lector.GetString(3),

@@ -61,6 +61,7 @@ public class FormNoConformidad : Form
     private TablaAcciones tablaInmediatas = null!;
     private TablaAcciones tablaCorrectoras = null!;
     private TablaAcciones tablaSeguimientos = null!;
+    private readonly ControlFotosNc fotos = new();
     private List<AccionNc> acciones = new();
 
     private readonly Label lblEstado = new();
@@ -95,6 +96,7 @@ public class FormNoConformidad : Form
         if (SoloLectura) Controls.Add(CrearFranjaBloqueo());
         Controls.Add(CrearFranjaFases());   // después: así se coloca arriba y el contenido debajo
         CargarValores();
+        fotos.Cargar(original?.Id ?? 0);
         ActualizarSegunTipo();
         ActualizarEstado();
 
@@ -117,6 +119,7 @@ public class FormNoConformidad : Form
         tablaInmediatas.Cambiado += (s, e) => hayCambios = true;
         tablaCorrectoras.Cambiado += (s, e) => hayCambios = true;
         tablaSeguimientos.Cambiado += (s, e) => hayCambios = true;
+        fotos.Cambiado += (s, e) => hayCambios = true;
         FormClosing += AvisarCambiosSinGuardar;
         // Lo que trae el borrador también se pierde si se cierra sin guardar
         hayCambios = borrador != null;
@@ -213,6 +216,7 @@ public class FormNoConformidad : Form
         tablaInmediatas.SoloLectura = true;
         tablaCorrectoras.SoloLectura = true;
         tablaSeguimientos.SoloLectura = true;
+        fotos.SoloLectura = true;
     }
 
     private static string Titulo(NoConformidad nc) =>
@@ -396,6 +400,10 @@ public class FormNoConformidad : Form
         pila.Controls.Add(registro);
         pila.Controls.Add(tarjetaIncidencia = CrearTarjetaIncidencia());
         PintarRaya(tarjetaIncidencia, Tema.ColorSeccionCalidad(1));   // es parte del registro: lleva su color
+        var tarjetaFotos = Componentes.Tarjeta("Fotos", "Fotos del problema. Van adjuntas en el correo a los responsables de las acciones nuevas.");
+        tarjetaFotos.Controls.Add(fotos);
+        PintarRaya(tarjetaFotos, Tema.ColorSeccionCalidad(1));
+        pila.Controls.Add(tarjetaFotos);
         pila.Controls.Add(inmediata);
         pila.Controls.Add(analisis);
         pila.Controls.Add(correctora);
@@ -826,7 +834,8 @@ public class FormNoConformidad : Form
         // El número lo pone el servicio
         try
         {
-            IdGuardado = servicio.Guardar(registro, inmediatas.Concat(correctoras).Concat(seguimientos));
+            IdGuardado = servicio.Guardar(registro, inmediatas.Concat(correctoras).Concat(seguimientos),
+                fotos.Nuevas.ToList(), fotos.Quitadas.ToList());
         }
         catch (ReglaNegocioException ex)
         {

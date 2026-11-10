@@ -186,7 +186,8 @@ public class NoConformidadRepositorio
     // Escritura
 
     // Crea el registro numerándolo en su serie (sin serie, sin número), con sus acciones. Devuelve el id.
-    public int Insertar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? serie, int usuarioId)
+    public int Insertar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? serie, int usuarioId,
+        IReadOnlyList<ArchivoNuevo>? fotosNuevas = null)
     {
         const string sql = @"
             INSERT INTO NO_CONFORMIDAD
@@ -221,6 +222,7 @@ public class NoConformidadRepositorio
             id = (int)comando.ExecuteScalar();
         }
         GuardarAcciones(id, acciones, conexion, transaccion);
+        GuardarFotos(id, fotosNuevas, null, usuarioId, conexion, transaccion);
 
         transaccion.Commit();
         return id;
@@ -228,7 +230,8 @@ public class NoConformidadRepositorio
 
     // Guarda la cabecera y sus acciones (con serie, le da número nuevo). false si otro lo ha
     // borrado o guardado mientras tanto; la versión de la cabecera cubre también las acciones.
-    public bool Actualizar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? numerarEn)
+    public bool Actualizar(NoConformidad nc, IReadOnlyList<AccionNc> acciones, SerieNumero? numerarEn,
+        int usuarioId, IReadOnlyList<ArchivoNuevo>? fotosNuevas = null, IReadOnlyList<int>? fotosQuitadas = null)
     {
         const string sql = @"
             UPDATE NO_CONFORMIDAD SET
@@ -260,9 +263,69 @@ public class NoConformidadRepositorio
         }
         if (filas == 0) return false;
         GuardarAcciones(nc.Id, acciones, conexion, transaccion);
+        GuardarFotos(nc.Id, fotosNuevas, fotosQuitadas, usuarioId, conexion, transaccion);
 
         transaccion.Commit();
         return true;
+    }
+
+    // Fotos (NC_FOTO). Se guardan con el resto de la ficha, en la misma transacción: así el correo
+    // de las acciones nuevas, que sale después de guardar, ya las lleva.
+
+    public List<AdjuntoInfo> ObtenerFotos(int noConformidadId)
+    {
+        // Sin el contenido: solo hace falta al abrir una foto
+        const string sql = @"
+            SELECT f.id, f.nombre_archivo, f.tamano_bytes, f.subido_en, u.nombre
+            FROM NC_FOTO f
+            JOIN USUARIO u ON u.id = f.usuario_id
+            WHERE f.no_conformidad_id = @nc
+            ORDER BY f.subido_en, f.id;";
+
+        var fotos = new List<AdjuntoInfo>();
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@nc", noConformidadId);
+        using var lector = comando.ExecuteReader();
+        while (lector.Read())
+            fotos.Add(new AdjuntoInfo(lector.GetInt32(0), lector.GetString(1), lector.GetInt32(2),
+                lector.GetDateTime(3), lector.GetString(4)));
+        return fotos;
+    }
+
+    public byte[] ObtenerContenidoFoto(int fotoId)
+    {
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand("SELECT contenido FROM NC_FOTO WHERE id = @id;", conexion);
+        comando.Parameters.AddWithValue("@id", fotoId);
+        return (byte[])comando.ExecuteScalar()!;
+    }
+
+    private static void GuardarFotos(int noConformidadId, IReadOnlyList<ArchivoNuevo>? nuevas, IReadOnlyList<int>? quitadas,
+        int usuarioId, SqlConnection conexion, SqlTransaction transaccion)
+    {
+        foreach (int id in quitadas ?? Array.Empty<int>())
+        {
+            using var borrar = new SqlCommand(
+                "DELETE FROM NC_FOTO WHERE id = @id AND no_conformidad_id = @nc;", conexion, transaccion);
+            borrar.Parameters.AddWithValue("@id", id);
+            borrar.Parameters.AddWithValue("@nc", noConformidadId);
+            borrar.ExecuteNonQuery();
+        }
+
+        const string sqlInsertar = @"
+            INSERT INTO NC_FOTO (no_conformidad_id, nombre_archivo, tamano_bytes, contenido, usuario_id)
+            VALUES (@nc, @nombre, @tamano, @contenido, @usuario);";
+        foreach (var foto in nuevas ?? Array.Empty<ArchivoNuevo>())
+        {
+            using var insertar = new SqlCommand(sqlInsertar, conexion, transaccion);
+            insertar.Parameters.AddWithValue("@nc", noConformidadId);
+            insertar.Parameters.AddWithValue("@nombre", foto.NombreArchivo);
+            insertar.Parameters.AddWithValue("@tamano", foto.Contenido.Length);
+            insertar.Parameters.Add("@contenido", System.Data.SqlDbType.VarBinary, -1).Value = foto.Contenido;
+            insertar.Parameters.AddWithValue("@usuario", usuarioId);
+            insertar.ExecuteNonQuery();
+        }
     }
 
     // Deja en NC_ACCION justo estas acciones, en el orden de la lista.

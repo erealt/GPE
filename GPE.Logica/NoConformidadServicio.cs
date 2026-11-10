@@ -250,8 +250,46 @@ public class NoConformidadServicio
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
         "Copia lo que hayas escrito, cierra la ficha y vuelve a abrirla para ver lo último.";
 
-    // Crea o guarda el registro con sus acciones y devuelve su id. El número se calcula aquí.
-    public int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones)
+    // Fotos
+
+    public static readonly string[] ExtensionesFoto = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
+    public const int TamanoMaximoFoto = 10 * 1024 * 1024;   // como los adjuntos de las devoluciones
+
+    public static bool EsFoto(string ruta) => ExtensionesFoto.Contains(Path.GetExtension(ruta).ToLowerInvariant());
+
+    public List<AdjuntoInfo> ObtenerFotos(int noConformidadId) => repositorio.ObtenerFotos(noConformidadId);
+
+    public byte[] ObtenerContenidoFoto(int fotoId) => repositorio.ObtenerContenidoFoto(fotoId);
+
+    // Error de una foto del disco que se va a añadir (null si se puede)
+    public static string? ErrorFoto(string ruta)
+    {
+        string nombre = Path.GetFileName(ruta);
+        if (Path.GetExtension(ruta).Equals(".heic", StringComparison.OrdinalIgnoreCase))
+            return $"\"{nombre}\" es una foto de iPhone en formato HEIC, que no se puede ver en GPE. " +
+                   "En el iPhone, en Ajustes > Cámara > Formatos, elige \"Más compatible\" y las fotos saldrán en JPG.";
+        if (!EsFoto(ruta))
+            return $"\"{nombre}\" no es una foto (se admiten {string.Join(", ", ExtensionesFoto)}).";
+        if (new FileInfo(ruta).Length > TamanoMaximoFoto)
+            return $"\"{nombre}\" ocupa más de 10 MB.";
+        return null;
+    }
+
+    private static List<ArchivoNuevo> LeerFotos(IEnumerable<string>? rutas)
+    {
+        var fotos = new List<ArchivoNuevo>();
+        foreach (string ruta in rutas ?? Enumerable.Empty<string>())
+        {
+            if (ErrorFoto(ruta) is string error) throw new ReglaNegocioException(error);
+            fotos.Add(new ArchivoNuevo(Path.GetFileName(ruta), File.ReadAllBytes(ruta)));
+        }
+        return fotos;
+    }
+
+    // Crea o guarda el registro con sus acciones y fotos y devuelve su id. El número se calcula aquí.
+    // fotosNuevas: rutas en el disco; fotosQuitadas: ids de NC_FOTO.
+    public int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones,
+        IEnumerable<string>? fotosNuevas = null, IEnumerable<int>? fotosQuitadas = null)
     {
         nc = Normalizar(nc);
         var lista = acciones.Select(NormalizarAccion).ToList();
@@ -263,13 +301,16 @@ public class NoConformidadServicio
             if (ErrorAccion(accion, nc.FechaDetectado) is string error)
                 throw new ReglaNegocioException(error);
 
+        if (Sesion.UsuarioActual is not Usuario usuario)
+            throw new ReglaNegocioException("No hay ningún usuario elegido.");
+        var fotos = LeerFotos(fotosNuevas);
+        var quitadas = fotosQuitadas?.ToList();
+
         var serie = Serie(nc);
 
         if (nc.Id == 0)
         {
-            if (Sesion.UsuarioActual is not Usuario usuario)
-                throw new ReglaNegocioException("No hay ningún usuario elegido.");
-            int id = repositorio.Insertar(nc with { Numero = null }, lista, serie, usuario.Id);
+            int id = repositorio.Insertar(nc with { Numero = null }, lista, serie, usuario.Id, fotos);
             AvisoServicio.EnviarAsignacionesEnSegundoPlano();   // a los responsables nuevos de las acciones
             return id;
         }
@@ -279,7 +320,7 @@ public class NoConformidadServicio
             ?? throw new ReglaNegocioException(MensajeBorrado);
         nc = nc with { Numero = serie == null ? null : anterior.Numero };
 
-        if (!repositorio.Actualizar(nc, lista, Renumerar(anterior, serie) ? serie : null))
+        if (!repositorio.Actualizar(nc, lista, Renumerar(anterior, serie) ? serie : null, usuario.Id, fotos, quitadas))
             throw new ReglaNegocioException(
                 repositorio.ObtenerRegistro(nc.Id) == null ? MensajeBorrado : MensajeModificado);
         AvisoServicio.EnviarAsignacionesEnSegundoPlano();
