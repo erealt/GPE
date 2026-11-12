@@ -120,4 +120,8 @@ public record AccionPendienteAviso(
     string Clase,
     string Accion,
     DateTime? Fecha,
-    string? Prioridad);
+    string? Prioridad,
+    // Clasificación de la incidencia (vacía en las no conformidades)
+    string? McPccBpm = null,
+    string? Parametro = null,
+    string? Operario = null);

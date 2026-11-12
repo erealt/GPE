@@ -22,7 +22,7 @@ public class AvisoAccionRepositorio
 
     private const string Columnas = @"
         a.id, persona.email, a.responsable, n.numero, n.tipo_registro, n.problema, a.clase, a.accion, a.fecha, a.prioridad,
-        a.no_conformidad_id";
+        a.no_conformidad_id, n.mc_pcc_bpm, n.parametro, n.operario";
 
     // Apunta como avisadas las acciones con un responsable nuevo (o cambiado) y devuelve las que hay
     // que enviar. Las de personas sin correo se apuntan igual y no se devuelven: no se les envía nada.
@@ -115,7 +115,10 @@ public class AvisoAccionRepositorio
                 Clase: lector.GetString(6),
                 Accion: lector.GetString(7),
                 Fecha: lector.IsDBNull(8) ? null : lector.GetDateTime(8),
-                Prioridad: lector.IsDBNull(9) ? null : lector.GetString(9)));
+                Prioridad: lector.IsDBNull(9) ? null : lector.GetString(9),
+                McPccBpm: lector.IsDBNull(11) ? null : lector.GetString(11),
+                Parametro: lector.IsDBNull(12) ? null : lector.GetString(12),
+                Operario: lector.IsDBNull(13) ? null : lector.GetString(13)));
         return acciones;
     }
 }

@@ -152,7 +152,8 @@ public static class AvisoServicio
                     {
                         var (fotos, sinAdjuntar) = FotosParaCorreo(lista);
                         var (asunto, cuerpo) = RedactarAsignacion(lista, fotos.Count, sinAdjuntar);
-                        var mensaje = Mensaje(remitente, grupo.Key, asunto, cuerpo, NombreCalidad, fotos);
+                        string html = RedactarAsignacionHtml(lista, fotos.Count, sinAdjuntar);
+                        var mensaje = Mensaje(remitente, grupo.Key, asunto, cuerpo, NombreCalidad, fotos, html);
                         cliente.Send(mensaje);
                         enviados++;
                     }
@@ -247,6 +248,94 @@ public static class AvisoServicio
             """);
     }
 
+    // Lo mismo que RedactarAsignacion, con formato. Estilos en línea y tablas: es lo que respetan Outlook y Gmail.
+    private static string RedactarAsignacionHtml(List<AccionPendienteAviso> acciones, int fotos = 0, int fotosSinAdjuntar = 0)
+    {
+        static string H(string? texto) => System.Net.WebUtility.HtmlEncode(texto ?? "").Replace("\n", "<br>");
+        int n = acciones.Count;
+
+        string textoFotos = (fotos, fotosSinAdjuntar) switch
+        {
+            (0, 0) => "",
+            (_, 0) => fotos == 1 ? "Va adjunta la foto del problema." : $"Van adjuntas las {fotos} fotos del problema.",
+            _ => $"Van adjuntas {fotos} fotos del problema; hay {fotosSinAdjuntar} más en GPE que no caben en el correo."
+        };
+
+        string Fila(string etiqueta, string valorHtml) => $"""
+            <tr>
+              <td style="padding:6px 12px 6px 0;color:#6b7280;font-size:13px;vertical-align:top;white-space:nowrap;">{etiqueta}</td>
+              <td style="padding:6px 0;color:#111827;font-size:14px;vertical-align:top;">{valorHtml}</td>
+            </tr>
+            """;
+
+        string Ficha(AccionPendienteAviso a)
+        {
+            var (fondo, letra) = a.Prioridad switch
+            {
+                "Alta" => ("#fee2e2", "#b91c1c"),
+                "Media" => ("#fef3c7", "#92400e"),
+                "Baja" => ("#dcfce7", "#166534"),
+                _ => ("", "")
+            };
+            string etiquetaPrioridad = a.Prioridad == null ? "" :
+                $"""<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:{fondo};color:{letra};font-size:12px;font-weight:bold;">Prioridad {H(a.Prioridad.ToLower(Es))}</span>""";
+
+            string plazo = a.Fecha is DateTime f
+                ? H(FechaTexto(f)) + (f.Date < DateTime.Today
+                    ? """ <span style="color:#b91c1c;font-weight:bold;">· fuera de plazo</span>"""
+                    : f.Date == DateTime.Today ? """ <span style="color:#92400e;font-weight:bold;">· hoy</span>""" : "")
+                : """<span style="color:#6b7280;">sin fecha</span>""";
+
+            string problema = a.Problema.Split('\n')[0].Trim();
+            if (problema.Length > 200) problema = problema[..200] + "…";
+            string clase = a.Clase == ClaseAccion.Inmediata ? "Acción inmediata" : "Acción correctora";
+
+            return $"""
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;margin:0 0 14px 0;">
+                  <tr><td style="padding:14px 16px;">
+                    <div style="margin:0 0 8px 0;">
+                      <span style="font-size:15px;font-weight:bold;color:#111827;">{clase} · {H(Registro(a))}</span>
+                      {(etiquetaPrioridad == "" ? "" : "&nbsp;" + etiquetaPrioridad)}
+                    </div>
+                    <table role="presentation" cellpadding="0" cellspacing="0">
+                      {Fila("Qué hay que hacer", "<b>" + H(a.Accion) + "</b>")}
+                      {Fila("Plazo", plazo)}
+                      {Fila("Problema", H(problema))}
+                      {string.Concat(Clasificacion(a).Select(c => Fila(c.Etiqueta, H(c.Valor))))}
+                    </table>
+                  </td></tr>
+                </table>
+                """;
+        }
+
+        return $"""
+            <!DOCTYPE html>
+            <html lang="es"><head><meta charset="utf-8"></head>
+            <body style="margin:0;padding:0;background:#f3f4f6;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+                <tr><td align="center" style="padding:24px 12px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;">
+                    <tr><td style="background:#1f4e79;color:#ffffff;padding:14px 20px;border-radius:8px 8px 0 0;font-size:16px;font-weight:bold;">
+                      GPE · Calidad
+                    </td></tr>
+                    <tr><td style="padding:20px;color:#111827;font-size:14px;line-height:1.5;">
+                      <p style="margin:0 0 12px 0;">Hola, {H(acciones[0].Responsable)}.</p>
+                      <p style="margin:0 0 16px 0;">{(n == 1 ? "Te han puesto como responsable de esta acción:" : $"Te han puesto como responsable de estas {n} acciones:")}</p>
+                      {string.Concat(acciones.Select(Ficha))}
+                      {(textoFotos == "" ? "" : $"""<p style="margin:0 0 12px 0;color:#374151;">📎 {textoFotos}</p>""")}
+                      <p style="margin:0 0 12px 0;">Cuando {(n == 1 ? "la termines" : "termines una")}, avisa a Calidad para que la marque como hecha.
+                      Mientras tengas alguna pendiente, te llegará cada día un resumen con todas tus acciones sin hacer.</p>
+                    </td></tr>
+                    <tr><td style="padding:12px 20px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;">
+                      Este correo se ha enviado automáticamente desde GPE; no hace falta responder.
+                    </td></tr>
+                  </table>
+                </td></tr>
+              </table>
+            </body></html>
+            """;
+    }
+
     private static (string Asunto, string Cuerpo) RedactarResumenAcciones(List<AccionPendienteAviso> acciones)
     {
         int n = acciones.Count;
@@ -282,12 +371,22 @@ public static class AvisoServicio
         string problema = a.Problema.Split('\n')[0].Trim();
         if (problema.Length > 200) problema = problema[..200] + "…";
 
+        string clasificacion = string.Concat(Clasificacion(a).Select(c => $"{Environment.NewLine}    {c.Etiqueta}: {c.Valor}"));
+
         return $"""
               · {prioridad}{clase} · {Registro(a)}
                 Qué hay que hacer: {a.Accion.Replace("\n", "\n    ")}
                 Plazo: {plazo}
-                Problema: {problema}
+                Problema: {problema}{clasificacion}
             """;
+    }
+
+    // La sección "Clasificación de la incidencia" de la ficha: solo los campos rellenos
+    private static IEnumerable<(string Etiqueta, string Valor)> Clasificacion(AccionPendienteAviso a)
+    {
+        foreach (var (etiqueta, valor) in new[]
+                 { ("MC / PCC / BPM", a.McPccBpm), ("Parámetro", a.Parametro), ("Operario causante", a.Operario) })
+            if (!string.IsNullOrWhiteSpace(valor)) yield return (etiqueta, valor.Trim());
     }
 
     // "No conformidad 558", "Incidencia 840"
@@ -322,15 +421,17 @@ public static class AvisoServicio
         }
     }
 
+    // cuerpoHtml: el correo con formato; cuerpo queda como texto plano para quien no vea el HTML
     private static MimeMessage Mensaje(string remitente, string destinatario, string asunto, string cuerpo,
-        string nombreRemitente = "GPE · Devoluciones", IEnumerable<ArchivoNuevo>? adjuntos = null)
+        string nombreRemitente = "GPE · Devoluciones", IEnumerable<ArchivoNuevo>? adjuntos = null,
+        string? cuerpoHtml = null)
     {
         var mensaje = new MimeMessage();
         mensaje.From.Add(new MailboxAddress(nombreRemitente, remitente));
         mensaje.To.Add(MailboxAddress.Parse(destinatario));
         mensaje.Subject = asunto;
 
-        var cuerpoCorreo = new BodyBuilder { TextBody = cuerpo };
+        var cuerpoCorreo = new BodyBuilder { TextBody = cuerpo, HtmlBody = cuerpoHtml };
         foreach (var adjunto in adjuntos ?? Enumerable.Empty<ArchivoNuevo>())
             cuerpoCorreo.Attachments.Add(adjunto.NombreArchivo, adjunto.Contenido);
         mensaje.Body = cuerpoCorreo.ToMessageBody();
