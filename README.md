@@ -20,6 +20,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`deca_normativa.sql`](BaseDatos/deca_normativa.sql): solo en bases de datos creadas antes de añadir al DeCA el cargador contractual, la matrícula del remolque y los lugares de carga y descarga. Se puede ejecutar más de una vez.
    - [`agua_varias_por_dia.sql`](BaseDatos/agua_varias_por_dia.sql): solo en bases de datos creadas antes de poder apuntar el mismo punto de agua varias veces el mismo día.
    - [`agua_hora.sql`](BaseDatos/agua_hora.sql): solo en bases de datos creadas antes de apuntar la hora de cada control de agua. Se puede ejecutar más de una vez.
+   - [`agua_repeticion.sql`](BaseDatos/agua_repeticion.sql): solo en bases de datos creadas antes de poder repetir una toma de agua que no convence. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
    - [`importar_agua.ps1`](BaseDatos/importar_agua.ps1), una sola vez: pasa los controles de la hoja AGUA (`-UsuarioId` de quien figura como creador; `-Probar` para verlo sin guardar). Pasa a 2025 las filas 154-262, que tienen el año mal, y crea el punto LAVAMANOS LINEA 3.
    - [`nc_fotos.sql`](BaseDatos/nc_fotos.sql): fotos de las incidencias y no conformidades (tabla `NC_FOTO`). Se guardan con la ficha y van adjuntas en el correo de las acciones nuevas. Se puede ejecutar más de una vez.

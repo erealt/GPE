@@ -181,6 +181,7 @@ public class FormAguaGrafica : Form
         int? punto = (cmbPunto.SelectedItem as OpcionPunto)?.Id;
         var conCloro = controles
             .Where(c => c.Control.Cloro != null && (punto == null || c.Toma.Id == punto))
+            .Where(c => !controles.Any(o => o.Control.RepiteId == c.Control.Id))   // sin las repetidas, que no convencieron
             .ToList();
 
         // Una línea por punto, cada una de un color, en el orden de la lista de puntos

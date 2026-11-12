@@ -4,38 +4,41 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Control de agua (hoja AGUA, MT-RG09): el día arriba y los puntos revisados debajo.
-// Pensado también para tablet: todo se hace pulsando.
+// Control de agua (hoja AGUA, MT-RG09): las tomas de un mes, la más reciente arriba.
+// No se hacen todos los días: cada toma se apunta suelta con "+ Nueva toma".
+// Si una no convence se repite: la nueva queda como "repetición" y la otra como "repetida".
 public class ModuloControlAgua : UserControl
 {
     private readonly AguaServicio servicio = new();
     private List<AguaToma> tomas = new();
-    private DateTime fecha = DateTime.Today;
-    private List<ControlAgua> originales = new();   // los del día tal como se leyeron
-    private bool hayCambios;
-    private bool cargando;
+    private DateTime mes = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private List<ControlAguaConToma> controles = new();
+    private HashSet<int> repetidas = new();   // ids de las tomas que alguna otra repite
 
-    private readonly DateTimePicker dtpFecha = new();
-    private readonly Label lblDia = new();
-    private readonly Label lblEstado = new();
+    private readonly Label lblMes = new();
+    private readonly Button btnSiguiente;
+    private readonly ComboBox cmbPunto = new();
+    private readonly Label lblResumen = new();
     private readonly DataGridView grid = new();
-    private readonly Button btnGuardar = Tema.BotonPrincipal("Guardar", 150);
-    private readonly Button btnAnadir = Tema.BotonSecundario("+  Añadir punto de agua", 220);
+    private readonly Label lblVacio = new();
 
-    private const string ColHora = "hora", ColToma = "toma", ColCloro = "cloro", ColSabor = "sabor", ColOlor = "olor",
-        ColColor = "color", ColTurbidez = "turbidez", ColComentario = "comentario", ColQuitar = "quitar";
+    private const string ColFecha = "fecha", ColHora = "hora", ColToma = "toma", ColCloro = "cloro", ColSabor = "sabor",
+        ColOlor = "olor", ColColor = "color", ColTurbidez = "turbidez", ColComentario = "comentario",
+        ColRepeticion = "repeticion", ColRepetir = "repetir";
     private static readonly string[] ColumnasSiNo = { ColSabor, ColOlor, ColColor, ColTurbidez };
+
+    // Opción del filtro de punto: null = todos
+    private record OpcionPunto(int? Id, string Nombre)
+    {
+        public override string ToString() => Nombre;
+    }
 
     public ModuloControlAgua()
     {
         Dock = DockStyle.Fill;
+        btnSiguiente = Flecha("▶", 1);
         Controls.Add(CrearContenido());
-        Load += (s, e) =>
-        {
-            Cargar(DateTime.Today, recargarTomas: true);
-            // La ventana principal no sabe de este día: avisa él al cerrar con cambios
-            if (FindForm() is Form ventana) ventana.FormClosing += AvisarAlCerrar;
-        };
+        Load += (s, e) => Cargar(recargarTomas: true);
     }
 
     private Control CrearContenido()
@@ -56,8 +59,8 @@ public class ModuloControlAgua : UserControl
         layout.Controls.Add(CrearBarra(), 0, 1);
         layout.Controls.Add(new Label
         {
-            Text = "Pulsa \"+ Añadir punto de agua\" y elige el punto. Pulsa una casilla para cambiarla: " +
-                   "el cloro abre un teclado, Sí / No cambia con cada toque y la hora (la de ahora en las nuevas de hoy) se escribe. ✕ quita la fila.",
+            Text = "Pulsa \"+ Nueva toma\" para apuntar una. Doble clic en una toma para corregirla o borrarla. " +
+                   "Si el resultado no convence, \"Repetir\" apunta otra del mismo punto y la primera se queda como repetida.",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Tema.Suave,
@@ -65,26 +68,6 @@ public class ModuloControlAgua : UserControl
         }, 0, 2);
         layout.Controls.Add(CrearZonaTabla(), 0, 3);
         return layout;
-    }
-
-    // "Añadir fila" va justo debajo de la última fila; si no cabe, se desplaza todo junto
-    private Control CrearZonaTabla()
-    {
-        var zona = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-
-        btnAnadir.Dock = DockStyle.Top;
-        btnAnadir.Height = 52;
-        btnAnadir.TextAlign = ContentAlignment.MiddleLeft;
-        btnAnadir.Padding = new Padding(10, 0, 0, 0);
-        btnAnadir.ForeColor = Tema.Acento;
-        btnAnadir.FlatAppearance.BorderColor = Tema.LineaTabla;
-        btnAnadir.FlatAppearance.MouseOverBackColor = Tema.AcentoSuave;
-        btnAnadir.Click += (s, e) => AnadirFila();
-
-        // El último añadido queda arriba
-        zona.Controls.Add(btnAnadir);
-        zona.Controls.Add(ConfigurarGrid());
-        return zona;
     }
 
     private Control CrearCabecera()
@@ -110,209 +93,175 @@ public class ModuloControlAgua : UserControl
             ForeColor = Tema.Texto
         });
 
-        btnGuardar.Height = 46;
-        btnGuardar.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnGuardar.Margin = new Padding(0, 10, 0, 0);
-        btnGuardar.Enabled = false;
-        btnGuardar.Click += (s, e) => Guardar();
+        var btnNueva = Tema.BotonPrincipal("+  Nueva toma", 180);
+        btnNueva.Height = 46;
+        btnNueva.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnNueva.Margin = new Padding(0, 10, 0, 0);
+        btnNueva.Click += (s, e) => NuevaToma();
 
         cabecera.Controls.Add(titulos, 0, 0);
-        cabecera.Controls.Add(btnGuardar, 1, 0);
+        cabecera.Controls.Add(btnNueva, 1, 0);
         return cabecera;
     }
 
-    // El día, como en la rutina: calendario, flechas y "Hoy"
+    // El mes con flechas, el punto y el resumen; a la derecha la gráfica y recargar
     private Control CrearBarra()
     {
         var barra = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 2,
             BackColor = Color.White,
             Padding = new Padding(15, 8, 15, 0)
         };
-        barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        dtpFecha.Width = 135;
-        dtpFecha.Format = DateTimePickerFormat.Short;
-        dtpFecha.MaxDate = DateTime.Today;
-        dtpFecha.ValueChanged += (s, e) => { if (!cargando) CambiarDia(dtpFecha.Value.Date); };
+        lblMes.AutoSize = false;
+        lblMes.Size = new Size(170, 40);
+        lblMes.TextAlign = ContentAlignment.MiddleCenter;
+        lblMes.Font = Tema.FuenteNegrita;
+        lblMes.Margin = new Padding(0, 18, 6, 0);
 
-        // Botones algo más grandes que los de la rutina: aquí se cambia de día con el dedo
-        Button Flecha(string texto, int dias)
-        {
-            var boton = Tema.BotonSecundario(texto, 48);
-            boton.Height = 40;
-            boton.Margin = new Padding(0, 18, 6, 0);
-            boton.Click += (s, e) =>
-            {
-                var dia = dtpFecha.Value.Date.AddDays(dias);
-                if (dia <= dtpFecha.MaxDate) CambiarDia(dia);
-            };
-            return boton;
-        }
-        var btnHoy = Tema.BotonSecundario("Hoy", 70);
-        btnHoy.Height = 40;
-        btnHoy.Margin = new Padding(0, 18, 20, 0);
-        btnHoy.Click += (s, e) => CambiarDia(DateTime.Today);
+        var btnEsteMes = Tema.BotonSecundario("Este mes", 100);
+        btnEsteMes.Height = 40;
+        btnEsteMes.Margin = new Padding(0, 18, 30, 0);
+        btnEsteMes.Click += (s, e) => CambiarMes(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1));
+
+        cmbPunto.Width = 300;
+        cmbPunto.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbPunto.MaxDropDownItems = 15;
+        cmbPunto.SelectedIndexChanged += (s, e) => Mostrar();
+
+        lblResumen.AutoSize = true;
+        lblResumen.ForeColor = Tema.Suave;
+        lblResumen.Margin = new Padding(20, 28, 0, 0);
 
         var filtros = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-        filtros.Controls.Add(Componentes.CampoFiltro("Día", dtpFecha));
         filtros.Controls.Add(Flecha("◀", -1));
-        filtros.Controls.Add(Flecha("▶", 1));
-        filtros.Controls.Add(btnHoy);
+        filtros.Controls.Add(lblMes);
+        filtros.Controls.Add(btnSiguiente);
+        filtros.Controls.Add(btnEsteMes);
+        filtros.Controls.Add(Componentes.CampoFiltro("Punto de agua", cmbPunto));
+        filtros.Controls.Add(lblResumen);
 
-        var datos = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Padding = new Padding(10, 6, 0, 0)
-        };
-        lblDia.AutoSize = true;
-        lblDia.ForeColor = Tema.Texto;
-        lblDia.Font = Tema.FuenteNegrita;
-        lblEstado.AutoSize = true;
-        lblEstado.ForeColor = Tema.Suave;
-        lblEstado.Margin = new Padding(0, 4, 0, 0);
-        datos.Controls.Add(lblDia);
-        datos.Controls.Add(lblEstado);
-
-        var btnRecargar = Tema.BotonSecundario("Recargar", 110);
-        btnRecargar.Height = 40;
-        btnRecargar.Margin = new Padding(0, 12, 0, 0);
-        btnRecargar.Click += (s, e) =>
-        {
-            if (DescartarCambios()) Cargar(fecha, recargarTomas: true);
-        };
-
-        // La gráfica es solo para mirar: no hace falta guardar antes
         var btnGrafica = Tema.BotonSecundario("Ver gráfica", 130);
         btnGrafica.Height = 40;
         btnGrafica.Margin = new Padding(0, 12, 10, 0);
         btnGrafica.Click += (s, e) =>
         {
-            using var ventana = new FormAguaGrafica(fecha, tomas);
+            using var ventana = new FormAguaGrafica(mes, tomas);
             ventana.ShowDialog(this);
         };
+        var btnRecargar = Tema.BotonSecundario("Recargar", 110);
+        btnRecargar.Height = 40;
+        btnRecargar.Margin = new Padding(0, 12, 0, 0);
+        btnRecargar.Click += (s, e) => Cargar(recargarTomas: true);
 
         var botones = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
         botones.Controls.Add(btnGrafica);
         botones.Controls.Add(btnRecargar);
 
         barra.Controls.Add(filtros, 0, 0);
-        barra.Controls.Add(datos, 1, 0);
-        barra.Controls.Add(botones, 2, 0);
+        barra.Controls.Add(botones, 1, 0);
         return barra;
+    }
+
+    private Button Flecha(string texto, int meses)
+    {
+        var boton = Tema.BotonSecundario(texto, 48);
+        boton.Height = 40;
+        boton.Margin = new Padding(0, 18, 6, 0);
+        boton.Click += (s, e) => CambiarMes(mes.AddMonths(meses));
+        return boton;
+    }
+
+    // Tabla
+
+    private Control CrearZonaTabla()
+    {
+        var zona = new Panel { Dock = DockStyle.Fill };
+
+        lblVacio.Dock = DockStyle.Fill;
+        lblVacio.BackColor = Color.White;
+        lblVacio.ForeColor = Tema.Suave;
+        lblVacio.TextAlign = ContentAlignment.MiddleCenter;
+        lblVacio.Visible = false;
+
+        zona.Controls.Add(lblVacio);
+        zona.Controls.Add(ConfigurarGrid());
+        return zona;
     }
 
     private Control ConfigurarGrid()
     {
-        Componentes.EstiloTabla(grid, altoFila: 48);
-        grid.Dock = DockStyle.Top;
-        Componentes.AjustarAltoTabla(grid);
-        grid.RowsAdded += (s, e) => Componentes.AjustarAltoTabla(grid);
-        grid.RowsRemoved += (s, e) => Componentes.AjustarAltoTabla(grid);
-        grid.AllowUserToDeleteRows = true;   // Supr, además de ✕
-        // Solo la hora y el comentario se escriben en la celda; lo demás se cambia al pulsarlo (CeldaPulsada)
-        grid.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
-        grid.GridColor = Tema.LineaTabla;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.Single;
+        Componentes.EstiloTabla(grid, altoFila: 44);
+        grid.Dock = DockStyle.Fill;
+        grid.ReadOnly = true;
         grid.MultiSelect = false;
+        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        grid.ShowCellToolTips = true;
+        grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
+        grid.DefaultCellStyle.SelectionForeColor = Tema.Texto;
 
-        var hora = new DataGridViewTextBoxColumn
+        (string Nombre, string Cabecera, int Ancho)[] columnas =
         {
-            Name = ColHora,
-            HeaderText = "HORA",
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-            Width = 90,
-            MaxInputLength = 5,
-            SortMode = DataGridViewColumnSortMode.NotSortable,
-            ToolTipText = "Hora de la toma, por ejemplo 9:30"
+            (ColFecha, "FECHA", 115), (ColHora, "HORA", 75), (ColToma, "PUNTO DE AGUA", 0), (ColCloro, "CLORO (ppm)", 110),
+            (ColSabor, "SABOR OK", 95), (ColOlor, "OLOR OK", 95), (ColColor, "COLOR OK", 95), (ColTurbidez, "TURBIDEZ OK", 105),
+            (ColComentario, "COMENTARIO", 0), (ColRepeticion, "", 130), (ColRepetir, "", 125)
         };
-        hora.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-        grid.Columns.Add(hora);
-
-        var toma = Columna(ColToma, "PUNTO DE AGUA", 0);
-        toma.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        toma.FillWeight = 160;
-        grid.Columns.Add(toma);
-
-        var cloro = Columna(ColCloro, "CLORO (ppm)", 120);
-        cloro.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-        cloro.DefaultCellStyle.Font = Tema.FuenteNegrita;
-        grid.Columns.Add(cloro);
-
-        foreach (var (nombre, cabecera) in new[] { (ColSabor, "SABOR OK"), (ColOlor, "OLOR OK"), (ColColor, "COLOR OK"), (ColTurbidez, "TURBIDEZ OK") })
-            grid.Columns.Add(Columna(nombre, cabecera, 110));
-
-        grid.Columns.Add(new DataGridViewTextBoxColumn
+        foreach (var (nombre, cabecera, ancho) in columnas)
         {
-            Name = ColComentario,
-            HeaderText = "COMENTARIO",
-            FillWeight = 140,
-            MaxInputLength = AguaServicio.LargoComentario,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
+            var columna = new DataGridViewTextBoxColumn
+            {
+                Name = nombre,
+                HeaderText = cabecera,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            };
+            if (ancho > 0)
+            {
+                columna.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                columna.Width = ancho;
+            }
+            grid.Columns.Add(columna);
+        }
+        grid.Columns[ColToma]!.FillWeight = 120;
+        grid.Columns[ColComentario]!.FillWeight = 100;
+        grid.Columns[ColHora]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        grid.Columns[ColCloro]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        grid.Columns[ColCloro]!.DefaultCellStyle.Font = Tema.FuenteNegrita;
+        grid.Columns[ColRepetir]!.ToolTipText = "Apuntar otra toma de este punto porque esta no convence";
 
-        var quitar = Columna(ColQuitar, "", 56);
-        quitar.ToolTipText = "Quitar la fila";
-        grid.Columns.Add(quitar);
-
-        grid.CellClick += CeldaPulsada;
-        grid.KeyDown += TeclaPulsada;
         grid.CellPainting += PintarCelda;
-        grid.CellValueChanged += (s, e) => { if (!cargando) MarcarCambios(); };
-        grid.UserDeletedRow += (s, e) => MarcarCambios();
         grid.CellFormatting += Formatear;
+        grid.CellClick += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && grid.Columns[e.ColumnIndex].Name == ColRepetir)
+                Repetir(grid.Rows[e.RowIndex]);
+        };
+        grid.CellDoubleClick += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].Name != ColRepetir))
+                Corregir(grid.Rows[e.RowIndex]);
+        };
+        grid.KeyDown += (s, e) =>
+        {
+            if (e.KeyCode != Keys.Enter || grid.CurrentRow == null) return;
+            e.Handled = true;   // si no, Enter baja a la fila siguiente
+            Corregir(grid.CurrentRow);
+        };
         return grid;
     }
 
-    // Columna que no se escribe: se cambia al pulsarla. ancho 0: la de ancho variable.
-    private static DataGridViewTextBoxColumn Columna(string nombre, string cabecera, int ancho)
-    {
-        var columna = new DataGridViewTextBoxColumn
-        {
-            Name = nombre,
-            HeaderText = cabecera,
-            ReadOnly = true,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        };
-        if (ancho > 0)
-        {
-            columna.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            columna.Width = ancho;
-        }
-        return columna;
-    }
+    private bool EsRepetida(DataGridViewRow fila) =>
+        fila.Tag is ControlAguaConToma c && repetidas.Contains(c.Control.Id);
 
-    // La celda del punto guarda su id; el cloro fuera de rango sale en rojo
-    private void Formatear(object? sender, DataGridViewCellFormattingEventArgs e)
-    {
-        if (e.RowIndex < 0 || e.CellStyle == null) return;
-        var fila = grid.Rows[e.RowIndex];
-        string columna = grid.Columns[e.ColumnIndex].Name;
-
-        if (columna == ColToma)
-        {
-            // Un punto que ya no está en la lista (dado de baja) no rompe la tabla
-            e.Value = Toma(fila)?.Nombre ?? "—";
-            e.FormattingApplied = true;
-        }
-        else if (columna == ColCloro && Toma(fila) is AguaToma toma && LeerCloro(fila, out var cloro)
-            && AguaServicio.FueraDeRango(cloro, toma))
-        {
-            e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = Tema.FondoError;
-            e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = Tema.Error;
-        }
-    }
-
-    // Sí / No de los organolépticos como una etiqueta verde o roja, y la ✕ de quitar la fila
+    // Sí / No como etiquetas, "repetición" / "repetida" y el botón de repetir
     private void PintarCelda(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || e.Graphics == null) return;
+        var fila = grid.Rows[e.RowIndex];
+        if (fila.Tag is not ControlAguaConToma toma) return;
         string columna = grid.Columns[e.ColumnIndex].Name;
 
         if (ColumnasSiNo.Contains(columna))
@@ -321,251 +270,181 @@ public class ModuloControlAgua : UserControl
             var (fondo, texto) = Tema.ColorEstadoCasilla(si ? EstadoCasilla.Correcto : EstadoCasilla.NoCorrecto);
             Componentes.PintarEtiqueta(e, si ? "✓  Sí" : "✗  No", fondo, texto);
         }
-        else if (columna == ColQuitar)
+        else if (columna == ColRepeticion)
         {
-            e.PaintBackground(e.CellBounds, false);
-            TextRenderer.DrawText(e.Graphics, "✕", Tema.FuenteNegrita, e.CellBounds, Tema.Suave,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (EsRepetida(fila))
+                Componentes.PintarEtiqueta(e, "repetida", Tema.CabeceraTabla, Tema.Suave);
+            else if (toma.Control.RepiteId != null)
+                Componentes.PintarEtiqueta(e, "↻  repetición", Tema.AcentoSuave, Tema.Acento);
+            else
+            {
+                e.PaintBackground(e.CellBounds, true);
+                e.Handled = true;
+            }
+        }
+        else if (columna == ColRepetir)
+        {
+            e.PaintBackground(e.CellBounds, true);
+            if (!EsRepetida(fila))
+            {
+                var caja = Rectangle.Inflate(e.CellBounds, -10, -8);
+                using (var borde = new Pen(Tema.LineaTabla))
+                    e.Graphics.DrawRectangle(borde, caja);
+                TextRenderer.DrawText(e.Graphics, "↻  Repetir", Tema.FuentePequenaNegrita, caja, Tema.Acento,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
             e.Handled = true;
         }
     }
 
-    // Filas
-
-    // Al pulsar: punto y cloro abren su panel, Sí / No cambia y ✕ quita la fila
-    private void CeldaPulsada(object? sender, DataGridViewCellEventArgs e)
+    // Las repetidas en gris; el cloro fuera del límite del punto, en rojo
+    private void Formatear(object? sender, DataGridViewCellFormattingEventArgs e)
     {
-        if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+        if (e.RowIndex < 0 || e.CellStyle == null) return;
         var fila = grid.Rows[e.RowIndex];
-        string columna = grid.Columns[e.ColumnIndex].Name;
+        if (fila.Tag is not ControlAguaConToma toma) return;
 
-        if (columna == ColToma) ElegirPunto(fila);
-        else if (columna == ColCloro) PedirCloro(fila);
-        else if (ColumnasSiNo.Contains(columna)) CambiarSiNo(fila.Cells[columna]);
-        else if (columna is ColComentario or ColHora) grid.BeginEdit(true);
-        else if (columna == ColQuitar) QuitarFila(fila);
-    }
-
-    // Con teclado: espacio cambia Sí / No; Enter o F2 abren el panel del punto o del cloro
-    private void TeclaPulsada(object? sender, KeyEventArgs e)
-    {
-        if (grid.CurrentCell is not DataGridViewCell celda || celda.RowIndex < 0 || grid.IsCurrentCellInEditMode) return;
-        var fila = grid.Rows[celda.RowIndex];
-        string columna = grid.Columns[celda.ColumnIndex].Name;
-
-        if (e.KeyCode == Keys.Space && ColumnasSiNo.Contains(columna)) CambiarSiNo(celda);
-        else if (e.KeyCode is Keys.Enter or Keys.F2 && columna == ColToma) ElegirPunto(fila);
-        else if (e.KeyCode is Keys.Enter or Keys.F2 && columna == ColCloro) PedirCloro(fila);
-        else return;
-        e.Handled = e.SuppressKeyPress = true;
-    }
-
-    private static void CambiarSiNo(DataGridViewCell celda) => celda.Value = celda.Value is not true;
-
-    // Esquina de abajo a la izquierda de una celda, en la pantalla: ahí se abren los paneles
-    private Point DebajoDe(DataGridViewRow fila, string columna)
-    {
-        var celda = grid.GetCellDisplayRectangle(grid.Columns[columna]!.Index, fila.Index, false);
-        return grid.PointToScreen(new Point(celda.Left, celda.Bottom));
-    }
-
-    // fila null: una nueva. Un punto puede apuntarse varias veces el mismo día.
-    private ElegirOpcion PanelPuntos(DataGridViewRow? fila) =>
-        new("Punto de agua",
-            tomas.Select(t => (t.Id.ToString(), t.Nombre, true)).ToList(),
-            (fila?.Cells[ColToma].Value as int?)?.ToString());
-
-    // La fila nueva empieza con todo "Sí" (y, si es de hoy, con la hora de ahora) y abre el teclado del cloro
-    private void AnadirFila()
-    {
-        grid.EndEdit();
-        var panel = PanelPuntos(null);
-        panel.Abrir(this, btnAnadir.PointToScreen(new Point(0, btnAnadir.Height)), () =>
+        if (EsRepetida(fila))
         {
-            if (panel.Elegida is not string clave) return;
-            string ahora = fecha == DateTime.Today ? AguaServicio.Hora(DateTime.Now.TimeOfDay) : "";
-            int i = grid.Rows.Add(ahora, int.Parse(clave), "", true, true, true, true, "", "");
-            // Con muchas filas, que se siga viendo la nueva y el botón
-            if (btnAnadir.Parent is ScrollableControl zona) zona.ScrollControlIntoView(btnAnadir);
-            grid.CurrentCell = grid.Rows[i].Cells[ColCloro];
-            MarcarCambios();
-            BeginInvoke(() => PedirCloro(grid.Rows[i]));
-        });
-    }
-
-    private void ElegirPunto(DataGridViewRow fila)
-    {
-        var panel = PanelPuntos(fila);
-        panel.Abrir(this, DebajoDe(fila, ColToma), () =>
-        {
-            if (fila.DataGridView != null && panel.Elegida is string clave && !Equals(fila.Cells[ColToma].Value, int.Parse(clave)))
-                fila.Cells[ColToma].Value = int.Parse(clave);
-        });
-    }
-
-    private void PedirCloro(DataGridViewRow fila)
-    {
-        string actual = fila.Cells[ColCloro].Value as string ?? "";
-        var panel = new TecladoNumerico($"Cloro (ppm) · {Toma(fila)?.Nombre}", actual, largoMaximo: 4);
-        panel.Abrir(this, DebajoDe(fila, ColCloro), () =>
-        {
-            if (fila.DataGridView != null && panel.Valor is string valor && valor != actual)
-                fila.Cells[ColCloro].Value = valor;
-        });
-    }
-
-    private void QuitarFila(DataGridViewRow fila)
-    {
-        if (!Mensajes.Confirmar(this, "Quitar fila", $"¿Quitar {Toma(fila)?.Nombre ?? "esta fila"} del control de este día?"))
-            return;
-        grid.Rows.Remove(fila);
-        MarcarCambios();
-    }
-
-    private AguaToma? Toma(DataGridViewRow fila) =>
-        fila.Cells[ColToma].Value is int id ? tomas.FirstOrDefault(t => t.Id == id) : null;
-
-    // false si lo escrito no es un número. Acepta coma o punto.
-    private static bool LeerCloro(DataGridViewRow fila, out decimal? cloro)
-    {
-        cloro = null;
-        string texto = (fila.Cells[ColCloro].Value as string ?? "").Trim().Replace('.', ',');
-        if (texto == "") return true;
-        if (!decimal.TryParse(texto, System.Globalization.NumberStyles.Number, Componentes.Es, out var valor)) return false;
-        cloro = valor;
-        return true;
-    }
-
-    // Las filas como controles. Si un cloro no es un número, el mensaje para enseñar.
-    private (List<ControlAgua> Controles, string? Error) LeerFilas()
-    {
-        var controles = new List<ControlAgua>();
-        foreach (DataGridViewRow fila in grid.Rows)
-        {
-            if (fila.IsNewRow) continue;
-            if (!LeerCloro(fila, out var cloro))
-                return (controles, $"En la fila {fila.Index + 1}, el cloro tiene que ser un número (por ejemplo 0,55).");
-            if (!AguaServicio.LeerHora(fila.Cells[ColHora].Value as string, out var hora))
-                return (controles, $"En la fila {fila.Index + 1}, la hora no es válida. Escríbela así: 9:30.");
-
-            var original = fila.Tag as ControlAgua;
-            controles.Add(new ControlAgua(
-                Id: original?.Id ?? 0,
-                Fecha: fecha,
-                TomaId: fila.Cells[ColToma].Value as int? ?? 0,
-                Cloro: cloro,
-                SaborOk: fila.Cells[ColSabor].Value is true,
-                OlorOk: fila.Cells[ColOlor].Value is true,
-                ColorOk: fila.Cells[ColColor].Value is true,
-                TurbidezOk: fila.Cells[ColTurbidez].Value is true,
-                Comentario: fila.Cells[ColComentario].Value as string,
-                Hora: hora,
-                CreadoPor: original?.CreadoPor,
-                Version: original?.Version));
+            e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = Tema.Suave;
+            if (grid.Columns[e.ColumnIndex].Name == ColCloro) e.CellStyle.Font = Tema.Fuente;
         }
-        return (controles, null);
+        if (grid.Columns[e.ColumnIndex].Name == ColCloro && AguaServicio.FueraDeRango(toma.Control.Cloro, toma.Toma))
+        {
+            e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = Tema.FondoError;
+            e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = Tema.Error;
+        }
     }
 
-    // Cargar y guardar
+    // Datos
 
-    private void Cargar(DateTime dia, bool recargarTomas)
+    private void CambiarMes(DateTime nuevo)
+    {
+        if (nuevo > DateTime.Today || nuevo == mes) return;
+        mes = nuevo;
+        Cargar(recargarTomas: false);
+    }
+
+    private void Cargar(bool recargarTomas)
     {
         try
         {
             if (recargarTomas) tomas = servicio.ObtenerTomas();
-            originales = servicio.ObtenerDia(dia);
+            controles = servicio.ObtenerMes(mes);
         }
         catch (DbException ex)
         {
             Mensajes.ErrorBaseDatos(this, "No se pudo cargar el control de agua de la base de datos.", ex);
-            return;
+            controles = new();
         }
-        fecha = dia.Date;
+        repetidas = controles.Where(c => c.Control.RepiteId != null).Select(c => c.Control.RepiteId!.Value).ToHashSet();
 
-        cargando = true;
-        dtpFecha.MaxDate = DateTime.Today;   // por si GPE lleva abierto desde ayer
-        dtpFecha.Value = fecha;
+        // "Noviembre 2026"
+        string nombre = mes.ToString("MMMM yyyy", Componentes.Es);
+        lblMes.Text = char.ToUpper(nombre[0], Componentes.Es) + nombre[1..];
+        btnSiguiente.Enabled = mes.AddMonths(1) <= DateTime.Today;
+
+        LlenarPuntos();
+        Mostrar();
+    }
+
+    // Los puntos activos y los dados de baja que salgan en el mes; se mantiene el elegido al cambiar de mes
+    private void LlenarPuntos()
+    {
+        int? elegido = (cmbPunto.SelectedItem as OpcionPunto)?.Id;
+
+        var puntos = tomas.Select(t => new OpcionPunto(t.Id, t.Nombre)).ToList();
+        foreach (var toma in controles.Select(c => c.Toma).DistinctBy(t => t.Id))
+            if (!puntos.Any(p => p.Id == toma.Id))
+                puntos.Add(new OpcionPunto(toma.Id, toma.Nombre));
+        if (elegido != null && !puntos.Any(p => p.Id == elegido))
+            elegido = null;
+
+        cmbPunto.BeginUpdate();
+        cmbPunto.Items.Clear();
+        cmbPunto.Items.Add(new OpcionPunto(null, "Todos"));
+        cmbPunto.Items.AddRange(puntos.ToArray());
+        cmbPunto.SelectedItem = cmbPunto.Items.Cast<OpcionPunto>().First(p => p.Id == elegido);
+        cmbPunto.EndUpdate();
+    }
+
+    // La más reciente arriba
+    private void Mostrar()
+    {
+        int? punto = (cmbPunto.SelectedItem as OpcionPunto)?.Id;
+        var visibles = controles
+            .Where(c => punto == null || c.Toma.Id == punto)
+            .OrderByDescending(c => c.Control.Fecha).ThenByDescending(c => c.Control.Hora).ThenByDescending(c => c.Control.Id)
+            .ToList();
+
         grid.Rows.Clear();
-        foreach (var control in originales)
+        foreach (var fila in visibles)
         {
-            int i = grid.Rows.Add(control.Hora is TimeSpan h ? AguaServicio.Hora(h) : "", control.TomaId, control.Cloro?.ToString("0.00", Componentes.Es) ?? "",
-                control.SaborOk, control.OlorOk, control.ColorOk, control.TurbidezOk, control.Comentario ?? "", "");
-            var fila = grid.Rows[i];
-            fila.Tag = control;
-            fila.Cells[ColToma].ToolTipText = $"Apuntado por {control.CreadoPor}";
+            var c = fila.Control;
+            int i = grid.Rows.Add(
+                c.Fecha.ToString("ddd dd/MM", Componentes.Es),
+                c.Hora is TimeSpan h ? AguaServicio.Hora(h) : "",
+                fila.Toma.Nombre,
+                c.Cloro?.ToString("0.00", Componentes.Es) ?? "—",
+                c.SaborOk, c.OlorOk, c.ColorOk, c.TurbidezOk,
+                c.Comentario?.Split('\n')[0] ?? "",
+                "", "");
+            var row = grid.Rows[i];
+            row.Tag = fila;
+            row.Cells[ColToma].ToolTipText = $"Apuntada por {c.CreadoPor}";
+            if (c.Comentario != null) row.Cells[ColComentario].ToolTipText = c.Comentario;
         }
         grid.ClearSelection();
-        Componentes.AjustarAltoTabla(grid);
-        cargando = false;
 
-        hayCambios = false;
-        btnGuardar.Enabled = false;
-        ActualizarResumen();
-    }
-
-    private void CambiarDia(DateTime dia)
-    {
-        if (dia == fecha) return;
-        if (!DescartarCambios())
+        int repetidasVisibles = visibles.Count(c => repetidas.Contains(c.Control.Id));
+        int fuera = visibles.Count(c => !repetidas.Contains(c.Control.Id) && AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma));
+        lblResumen.Text = visibles.Count == 0 ? "" : string.Join("  ·  ", new[]
         {
-            cargando = true;
-            dtpFecha.Value = fecha;
-            cargando = false;
-            return;
-        }
-        Cargar(dia, recargarTomas: false);
-    }
-
-    private void Guardar()
-    {
-        grid.EndEdit();
-        var (controles, error) = LeerFilas();
-        try
-        {
-            if (error != null) throw new ReglaNegocioException(error);
-            servicio.GuardarDia(fecha, controles, originales);
-        }
-        catch (ReglaNegocioException ex)
-        {
-            Mensajes.Aviso(this, "No se puede guardar", ex.Message);
-            return;
-        }
-        catch (DbException ex)
-        {
-            Mensajes.ErrorBaseDatos(this, "No se pudo guardar el control de agua.", ex);
-            return;
-        }
-
-        // Se vuelve a leer para tener los ids y las versiones nuevas
-        Cargar(fecha, recargarTomas: false);
-    }
-
-    private void MarcarCambios()
-    {
-        hayCambios = true;
-        btnGuardar.Enabled = true;
-        ActualizarResumen();
-    }
-
-    private void ActualizarResumen()
-    {
-        string dia = fecha == DateTime.Today ? "hoy" : Componentes.Fecha(fecha);
-        lblDia.Text = $"Control de agua de {dia}";
-
-        int filas = grid.Rows.Cast<DataGridViewRow>().Count(f => !f.IsNewRow);
-        lblEstado.Text = string.Join("  ·  ", new[]
-        {
-            filas == 0 ? "Sin controles" : $"{filas} {(filas == 1 ? "punto revisado" : "puntos revisados")}",
-            hayCambios ? "Cambios sin guardar" : null
+            $"{visibles.Count} {(visibles.Count == 1 ? "toma" : "tomas")}",
+            repetidasVisibles == 0 ? null : $"{repetidasVisibles} {(repetidasVisibles == 1 ? "repetida" : "repetidas")}",
+            fuera == 0 ? null : $"{fuera} fuera del límite"
         }.OfType<string>());
-        lblEstado.ForeColor = hayCambios ? Tema.Aviso : Tema.Suave;
+        lblResumen.ForeColor = fuera > 0 ? Tema.Error : Tema.Suave;
+
+        lblVacio.Text = punto == null ? "No hay tomas de agua apuntadas en este mes." : "Este punto no tiene tomas en este mes.";
+        lblVacio.Visible = visibles.Count == 0;
+        grid.Visible = visibles.Count > 0;
     }
 
-    private bool DescartarCambios() =>
-        !hayCambios || Mensajes.DescartarCambios(this, "Hay cambios sin guardar en el control de agua. ¿Descartarlos?");
+    // Tomas
 
-    private void AvisarAlCerrar(object? sender, FormClosingEventArgs e)
+    // Con un punto elegido en el filtro, la nueva empieza con ese punto
+    private void NuevaToma()
     {
-        if (!e.Cancel && !DescartarCambios()) e.Cancel = true;
+        ControlAgua? nueva = null;
+        if ((cmbPunto.SelectedItem as OpcionPunto)?.Id is int punto && tomas.Any(t => t.Id == punto))
+            nueva = new ControlAgua(0, DateTime.Today, punto, null, true, true, true, true, null,
+                Hora: new TimeSpan(DateTime.Now.Hour, DateTime.Now.Minute, 0));
+        using var ventana = new FormTomaAgua(nueva, tomas);
+        if (ventana.ShowDialog(this) == DialogResult.OK && ventana.Guardada is ControlAgua guardada) IrAlMes(guardada.Fecha);
+    }
+
+    private void Corregir(DataGridViewRow fila)
+    {
+        if (fila.Tag is not ControlAguaConToma toma) return;
+        using var ventana = new FormTomaAgua(toma.Control, tomas, toma.Toma);
+        if (ventana.ShowDialog(this) == DialogResult.OK) Cargar(recargarTomas: false);
+    }
+
+    // Otra toma del mismo punto y el mismo día; si es de hoy, a la hora de ahora
+    private void Repetir(DataGridViewRow fila)
+    {
+        if (fila.Tag is not ControlAguaConToma toma || EsRepetida(fila)) return;
+        TimeSpan? hora = toma.Control.Fecha.Date == DateTime.Today
+            ? new TimeSpan(DateTime.Now.Hour, DateTime.Now.Minute, 0) : null;
+        using var ventana = new FormTomaAgua(AguaServicio.Repeticion(toma.Control, hora), tomas, toma.Toma, toma.Control);
+        if (ventana.ShowDialog(this) == DialogResult.OK) Cargar(recargarTomas: false);
+    }
+
+    // Después de apuntar una toma se enseña su mes (normalmente el actual)
+    private void IrAlMes(DateTime dia)
+    {
+        mes = new DateTime(dia.Year, dia.Month, 1);
+        Cargar(recargarTomas: false);
     }
 }

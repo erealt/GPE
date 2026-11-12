@@ -17,4 +17,5 @@ public record ControlAgua(
     string? Comentario,
     TimeSpan? Hora = null,   // null en los controles pasados del Excel
     string? CreadoPor = null,
-    byte[]? Version = null);
+    byte[]? Version = null,
+    int? RepiteId = null);   // la toma que esta repite porque no convenció

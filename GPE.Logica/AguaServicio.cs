@@ -13,8 +13,6 @@ public class AguaServicio
 
     public List<AguaToma> ObtenerTomas() => repositorio.ObtenerTomas();
 
-    public List<ControlAgua> ObtenerDia(DateTime fecha) => repositorio.ObtenerControles(fecha.Date);
-
     // Todos los controles del mes de ese día
     public List<ControlAguaConToma> ObtenerMes(DateTime mes)
     {
@@ -22,11 +20,11 @@ public class AguaServicio
         return repositorio.ObtenerControles(primero, primero.AddMonths(1).AddDays(-1));
     }
 
-    // "Hoy: sin controles" o "Hoy: 2 controles", para la tarjeta del inicio
+    // "Hoy: sin tomas" o "Hoy: 2 tomas", para la tarjeta del inicio
     public string ResumenHoy()
     {
-        int controles = repositorio.ObtenerControles(DateTime.Today).Count;
-        return controles == 0 ? "Hoy: sin controles" : $"Hoy: {controles} {(controles == 1 ? "control" : "controles")}";
+        int controles = repositorio.ContarControles(DateTime.Today);
+        return controles == 0 ? "Hoy: sin tomas" : $"Hoy: {controles} {(controles == 1 ? "toma" : "tomas")}";
     }
 
     // El cloro se sale del rango de la toma (las que no tienen rango nunca se salen)
@@ -71,7 +69,7 @@ public class AguaServicio
     public static string? Error(ControlAgua control)
     {
         if (control.TomaId == 0)
-            return "Elige el punto de agua de cada fila.";
+            return "Elige el punto de agua.";
         if (control.Cloro < 0)
             return "El cloro no puede ser negativo.";
         if (control.Cloro > CloroMaximo)
@@ -84,33 +82,36 @@ public class AguaServicio
     // Guardado
 
     private const string MensajeModificado =
-        "Otra persona ha guardado controles de este día mientras lo tenías abierto. " +
+        "Otra persona ha cambiado o borrado esta toma mientras la tenías abierta. " +
         "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
-        "Apunta lo que hayas escrito y pulsa \"Recargar\" para ver lo último.";
+        "Apunta lo que hayas escrito y vuelve a abrirla para ver lo último.";
 
-    // Solo escribe las filas nuevas, las cambiadas y las quitadas respecto a originales.
-    public void GuardarDia(DateTime fecha, IEnumerable<ControlAgua> controles, IReadOnlyList<ControlAgua> originales)
+    // Nueva (Id 0) o corregida. Devuelve la toma tal como se ha guardado (con su id).
+    public ControlAgua Guardar(ControlAgua control)
     {
         if (Sesion.UsuarioActual is not Usuario usuario)
             throw new ReglaNegocioException("No hay ningún usuario elegido.");
-        if (fecha.Date > DateTime.Today)
-            throw new ReglaNegocioException("No se pueden apuntar controles de un día que todavía no ha llegado.");
 
-        var lista = controles.Select(c => Normalizar(c with { Fecha = fecha })).ToList();
-        foreach (var control in lista)
-            if (Error(control) is string error)
-                throw new ReglaNegocioException(error);
+        control = Normalizar(control);
+        if (control.Fecha > DateTime.Today)
+            throw new ReglaNegocioException("No se pueden apuntar tomas de un día que todavía no ha llegado.");
+        if (Error(control) is string error)
+            throw new ReglaNegocioException(error);
 
-        var porId = originales.ToDictionary(c => c.Id);
-        var cambiados = lista.Where(c => c.Id == 0 || !porId.TryGetValue(c.Id, out var original) || !Iguales(c, original)).ToList();
-        var borrados = originales.Where(o => !lista.Any(c => c.Id == o.Id)).ToList();
-        if (cambiados.Count == 0 && borrados.Count == 0) return;
-
-        if (!repositorio.GuardarDia(cambiados, borrados, usuario.Id))
+        if (control.Id == 0)
+            return control with { Id = repositorio.Insertar(control, usuario.Id) };
+        if (!repositorio.Actualizar(control))
             throw new ReglaNegocioException(MensajeModificado);
+        return control;
     }
 
-    private static bool Iguales(ControlAgua a, ControlAgua b) =>
-        a.Hora == b.Hora && a.TomaId == b.TomaId && a.Cloro == b.Cloro && a.SaborOk == b.SaborOk && a.OlorOk == b.OlorOk
-        && a.ColorOk == b.ColorOk && a.TurbidezOk == b.TurbidezOk && a.Comentario == b.Comentario;
+    // La toma que repite otra que no convenció: mismo punto y mismo día
+    public static ControlAgua Repeticion(ControlAgua original, TimeSpan? hora) =>
+        new(0, original.Fecha, original.TomaId, null, true, true, true, true, null, Hora: hora, RepiteId: original.Id);
+
+    public void Borrar(ControlAgua control)
+    {
+        if (!repositorio.Borrar(control))
+            throw new ReglaNegocioException(MensajeModificado);
+    }
 }

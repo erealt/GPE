@@ -28,12 +28,14 @@ CREATE TABLE AGUA_CONTROL (
     color_ok BIT NOT NULL CONSTRAINT DF_agua_control_color DEFAULT 1,
     turbidez_ok BIT NOT NULL CONSTRAINT DF_agua_control_turbidez DEFAULT 1,
     comentario NVARCHAR(1000) NULL,
+    repite_id INT NULL,   -- la toma que se repite porque no convenció (se queda guardada)
     creado_por INT NOT NULL,
     creado_en DATETIME2 NOT NULL CONSTRAINT DF_agua_control_creado DEFAULT SYSDATETIME(),
     -- Igual que en RUTINA: al guardar se comprueba que nadie lo haya cambiado desde que se abrió
     version ROWVERSION NOT NULL,
     CONSTRAINT CK_agua_control_cloro CHECK (cloro >= 0 AND cloro < 10),
     CONSTRAINT FK_agua_control_toma FOREIGN KEY (toma_id) REFERENCES AGUA_TOMA(id),
+    CONSTRAINT FK_agua_control_repite FOREIGN KEY (repite_id) REFERENCES AGUA_CONTROL(id),
     CONSTRAINT FK_agua_control_usuario FOREIGN KEY (creado_por) REFERENCES USUARIO(id)
 );
 CREATE INDEX IX_agua_control_fecha ON AGUA_CONTROL (fecha);
