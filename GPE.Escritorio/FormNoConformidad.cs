@@ -546,7 +546,72 @@ public class FormNoConformidad : Form
         btnCancelar.Click += (s, e) => Close();
         CancelButton = btnCancelar;   // Esc cierra (avisando si hay cambios)
 
-        return SoloLectura ? Componentes.Acciones(btnCancelar) : Componentes.Acciones(btnGuardar, btnCancelar);
+        var botones = SoloLectura ? new List<Button> { btnCancelar } : new List<Button> { btnGuardar, btnCancelar };
+        // El informe solo existe para los registros ya guardados (va a la izquierda)
+        if (original != null)
+        {
+            var btnPdf = Tema.BotonSecundario("Descargar PDF", 160);
+            btnPdf.Enabled = cargaCorrecta;
+            btnPdf.Click += (s, e) => DescargarPdf(original.Id);
+            botones.Add(btnPdf);
+        }
+        return Componentes.Acciones(botones.ToArray());
+    }
+
+    // Informe para auditorías: lo guarda donde se elija y lo abre
+    private void DescargarPdf(int id)
+    {
+        if (hayCambios && !Mensajes.Confirmar(this, "Descargar PDF",
+                "El PDF lleva lo que está guardado: los cambios que aún no has guardado no salen.\n\n¿Descargarlo igualmente?"))
+            return;
+
+        byte[] pdf;
+        string nombre;
+        try
+        {
+            (pdf, nombre) = servicio.Informe(id);
+        }
+        catch (ReglaNegocioException ex)
+        {
+            Mensajes.Informacion(this, "No se puede descargar", ex.Message);
+            return;
+        }
+        catch (DbException ex)
+        {
+            Mensajes.ErrorBaseDatos(this, "No se pudo preparar el PDF.", ex);
+            return;
+        }
+
+        using var dialogo = new SaveFileDialog
+        {
+            Title = "Guardar el informe en PDF",
+            Filter = "PDF (*.pdf)|*.pdf",
+            FileName = nombre,
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) is string perfil
+                && Directory.Exists(Path.Combine(perfil, "Downloads")) ? Path.Combine(perfil, "Downloads") : "",
+            OverwritePrompt = true
+        };
+        if (dialogo.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            File.WriteAllBytes(dialogo.FileName, pdf);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Mensajes.Informacion(this, "No se ha guardado",
+                "No se pudo guardar el PDF. Si ya está abierto con ese nombre, ciérralo y vuelve a probar.\n\n" + ex.Message);
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dialogo.FileName) { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // Sin programa para abrir PDF: ya está guardado, no pasa nada
+        }
     }
 
     // Valores

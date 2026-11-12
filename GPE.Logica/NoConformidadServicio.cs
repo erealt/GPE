@@ -45,6 +45,20 @@ public class NoConformidadServicio
 
     public List<string> ObtenerProveedores() => repositorio.ObtenerProveedores();
 
+    // Informe en PDF del registro tal como está guardado, y el nombre de archivo que se propone
+    public (byte[] Pdf, string NombreArchivo) Informe(int id)
+    {
+        var nc = repositorio.ObtenerRegistro(id)
+            ?? throw new ReglaNegocioException("Este registro ya no existe: puede que otro usuario lo haya borrado.");
+        var acciones = repositorio.ObtenerAcciones(id);
+        string? origen = nc.Origen == null ? null
+            : repositorio.ObtenerListas().GetValueOrDefault(ListaCalidad.Origen)?.FirstOrDefault(o => o.Valor == nc.Origen)?.ToString();
+
+        string nombre = NoConformidadPdf.TituloRegistro(nc);
+        foreach (char c in Path.GetInvalidFileNameChars()) nombre = nombre.Replace(c, '-');
+        return (NoConformidadPdf.Crear(nc, acciones, origen), nombre + ".pdf");
+    }
+
     // Numeración
 
     // Secciones de las NC de auditoría, que llevan su propia numeración
