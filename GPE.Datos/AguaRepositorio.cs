@@ -25,16 +25,16 @@ public class AguaRepositorio
         return tomas;
     }
 
-    // Los controles de un día, en el orden en que se apuntaron
+    // Los controles de un día, por hora (los que no la tienen, primero) y en el orden en que se apuntaron
     public List<ControlAgua> ObtenerControles(DateTime fecha)
     {
         const string sql = @"
             SELECT c.id, c.fecha, c.toma_id, c.cloro, c.sabor_ok, c.olor_ok, c.color_ok, c.turbidez_ok,
-                   c.comentario, u.nombre, c.version
+                   c.comentario, u.nombre, c.version, c.hora
             FROM AGUA_CONTROL c
             JOIN USUARIO u ON u.id = c.creado_por
             WHERE c.fecha = @fecha
-            ORDER BY c.id;";
+            ORDER BY c.hora, c.id;";
 
         var controles = new List<ControlAgua>();
 
@@ -54,12 +54,12 @@ public class AguaRepositorio
     {
         const string sql = @"
             SELECT c.id, c.fecha, c.toma_id, c.cloro, c.sabor_ok, c.olor_ok, c.color_ok, c.turbidez_ok,
-                   c.comentario, u.nombre, c.version, t.nombre, t.cloro_min, t.cloro_max
+                   c.comentario, u.nombre, c.version, c.hora, t.nombre, t.cloro_min, t.cloro_max
             FROM AGUA_CONTROL c
             JOIN USUARIO u ON u.id = c.creado_por
             JOIN AGUA_TOMA t ON t.id = c.toma_id
             WHERE c.fecha BETWEEN @desde AND @hasta
-            ORDER BY c.fecha, c.id;";
+            ORDER BY c.fecha, c.hora, c.id;";
 
         var controles = new List<ControlAguaConToma>();
 
@@ -74,14 +74,14 @@ public class AguaRepositorio
             var control = LeerControl(lector);
             controles.Add(new ControlAguaConToma(control, new AguaToma(
                 Id: control.TomaId,
-                Nombre: lector.GetString(11),
-                CloroMin: lector.IsDBNull(12) ? null : lector.GetDecimal(12),
-                CloroMax: lector.IsDBNull(13) ? null : lector.GetDecimal(13))));
+                Nombre: lector.GetString(12),
+                CloroMin: lector.IsDBNull(13) ? null : lector.GetDecimal(13),
+                CloroMax: lector.IsDBNull(14) ? null : lector.GetDecimal(14))));
         }
         return controles;
     }
 
-    // Las 11 primeras columnas de las dos consultas de controles
+    // Las 12 primeras columnas de las dos consultas de controles
     private static ControlAgua LeerControl(SqlDataReader lector) => new(
         Id: lector.GetInt32(0),
         Fecha: lector.GetDateTime(1),
@@ -93,7 +93,8 @@ public class AguaRepositorio
         TurbidezOk: lector.GetBoolean(7),
         Comentario: lector.IsDBNull(8) ? null : lector.GetString(8),
         CreadoPor: lector.GetString(9),
-        Version: (byte[])lector[10]);
+        Version: (byte[])lector[10],
+        Hora: lector.IsDBNull(11) ? null : lector.GetTimeSpan(11));
 
     // Guarda el día en una transacción. false si otro lo ha cambiado mientras tanto (no se guarda nada).
     public bool GuardarDia(IReadOnlyList<ControlAgua> cambiados, IReadOnlyList<ControlAgua> borrados, int usuarioId)
@@ -113,15 +114,16 @@ public class AguaRepositorio
         foreach (var control in cambiados)
         {
             const string sqlInsertar = @"
-                INSERT INTO AGUA_CONTROL (fecha, toma_id, cloro, sabor_ok, olor_ok, color_ok, turbidez_ok, comentario, creado_por)
-                VALUES (@fecha, @toma, @cloro, @sabor, @olor, @color, @turbidez, @comentario, @usuario);";
+                INSERT INTO AGUA_CONTROL (fecha, hora, toma_id, cloro, sabor_ok, olor_ok, color_ok, turbidez_ok, comentario, creado_por)
+                VALUES (@fecha, @hora, @toma, @cloro, @sabor, @olor, @color, @turbidez, @comentario, @usuario);";
             const string sqlActualizar = @"
-                UPDATE AGUA_CONTROL SET toma_id = @toma, cloro = @cloro, sabor_ok = @sabor, olor_ok = @olor,
+                UPDATE AGUA_CONTROL SET hora = @hora, toma_id = @toma, cloro = @cloro, sabor_ok = @sabor, olor_ok = @olor,
                     color_ok = @color, turbidez_ok = @turbidez, comentario = @comentario
                 WHERE id = @id AND version = @version;";
 
             using var comando = new SqlCommand(control.Id == 0 ? sqlInsertar : sqlActualizar, conexion, transaccion);
             comando.Parameters.AddWithValue("@toma", control.TomaId);
+            comando.Parameters.Add("@hora", System.Data.SqlDbType.Time).Value = (object?)control.Hora ?? DBNull.Value;
             var cloro = comando.Parameters.Add("@cloro", System.Data.SqlDbType.Decimal);
             cloro.Precision = 4;
             cloro.Scale = 2;

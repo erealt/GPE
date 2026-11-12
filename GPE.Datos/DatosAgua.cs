@@ -15,5 +15,6 @@ public record ControlAgua(
     bool ColorOk,
     bool TurbidezOk,
     string? Comentario,
+    TimeSpan? Hora = null,   // null en los controles pasados del Excel
     string? CreadoPor = null,
     byte[]? Version = null);

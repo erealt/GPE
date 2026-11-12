@@ -20,6 +20,7 @@ CREATE TABLE AGUA_TOMA (
 CREATE TABLE AGUA_CONTROL (
     id INT IDENTITY(1,1) PRIMARY KEY,
     fecha DATE NOT NULL,
+    hora TIME(0) NULL,   -- NULL en los controles pasados del Excel
     toma_id INT NOT NULL,
     cloro DECIMAL(4,2) NULL,
     sabor_ok BIT NOT NULL CONSTRAINT DF_agua_control_sabor DEFAULT 1,

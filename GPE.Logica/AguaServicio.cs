@@ -33,6 +33,24 @@ public class AguaServicio
     public static bool FueraDeRango(decimal? cloro, AguaToma toma) =>
         cloro is decimal c && (c < toma.CloroMin || c > toma.CloroMax);
 
+    // Lo escrito en la columna Hora: "9:30", "09.30", "0930" o "9". null si no es una hora.
+    public static bool LeerHora(string? texto, out TimeSpan? hora)
+    {
+        hora = null;
+        string t = (texto ?? "").Trim().Replace('.', ':').Replace(',', ':').Replace('h', ':').TrimEnd(':');
+        if (t == "") return true;
+        if (!t.Contains(':') && t.All(char.IsDigit))
+            t = t.Length <= 2 ? t + ":00" : t[..^2] + ":" + t[^2..];
+        var partes = t.Split(':');
+        if (partes.Length != 2 || !int.TryParse(partes[0], out int h) || !int.TryParse(partes[1], out int m)
+            || h is < 0 or > 23 || m is < 0 or > 59)
+            return false;
+        hora = new TimeSpan(h, m, 0);
+        return true;
+    }
+
+    public static string Hora(TimeSpan hora) => hora.ToString(@"hh\:mm");
+
     // "0,55 ppm"
     public static string Ppm(decimal cloro) => cloro.ToString("0.00", Es) + " ppm";
 
@@ -45,6 +63,7 @@ public class AguaServicio
     public static ControlAgua Normalizar(ControlAgua control) => control with
     {
         Fecha = control.Fecha.Date,
+        Hora = control.Hora is TimeSpan h ? new TimeSpan(h.Hours, h.Minutes, 0) : null,   // sin segundos
         Comentario = string.IsNullOrWhiteSpace(control.Comentario) ? null : control.Comentario.Trim()
     };
 
@@ -92,6 +111,6 @@ public class AguaServicio
     }
 
     private static bool Iguales(ControlAgua a, ControlAgua b) =>
-        a.TomaId == b.TomaId && a.Cloro == b.Cloro && a.SaborOk == b.SaborOk && a.OlorOk == b.OlorOk
+        a.Hora == b.Hora && a.TomaId == b.TomaId && a.Cloro == b.Cloro && a.SaborOk == b.SaborOk && a.OlorOk == b.OlorOk
         && a.ColorOk == b.ColorOk && a.TurbidezOk == b.TurbidezOk && a.Comentario == b.Comentario;
 }

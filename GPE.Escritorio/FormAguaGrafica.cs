@@ -192,7 +192,7 @@ public class FormAguaGrafica : Form
                 g.First().Toma.Nombre,
                 punto == null ? GraficaCloro.ColorSerie(i) : Tema.Acento,
                 g.Select(c => new GraficaCloro.Medida(c.Control.Fecha, c.Control.Cloro!.Value,
-                    AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma))).ToList()))
+                    AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma), c.Control.Hora)).ToList()))
             .ToList();
 
         // El límite se dibuja si todos los puntos que salen tienen el mismo
@@ -220,7 +220,7 @@ public class FormAguaGrafica : Form
 // y el límite como una raya roja discontinua.
 public class GraficaCloro : Control
 {
-    public record Medida(DateTime Fecha, decimal Cloro, bool FueraDeRango);
+    public record Medida(DateTime Fecha, decimal Cloro, bool FueraDeRango, TimeSpan? Hora = null);
     public record Serie(string Nombre, Color Color, List<Medida> Medidas);
 
     private DateTime mes = DateTime.Today;
@@ -376,7 +376,8 @@ public class GraficaCloro : Control
                 else
                     g.DrawEllipse(Pens.White, circulo);
 
-                dibujadas.Add((puntos[i], $"{serie.Nombre}\n{medida.Fecha.ToString("ddd dd/MM", Componentes.Es)}: " +
+                dibujadas.Add((puntos[i], $"{serie.Nombre}\n{medida.Fecha.ToString("ddd dd/MM", Componentes.Es)}" +
+                    (medida.Hora is TimeSpan h ? " a las " + AguaServicio.Hora(h) : "") + ": " +
                     AguaServicio.Ppm(medida.Cloro) + (medida.FueraDeRango ? "  (fuera del límite)" : "")));
             }
         }

@@ -18,7 +18,10 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`control_agua.sql`](BaseDatos/control_agua.sql): tablas del control de agua (hoja AGUA del Excel de calidad), con los puntos de agua que se revisan.
    - [`rutina_revisiones.sql`](BaseDatos/rutina_revisiones.sql): solo en bases de datos creadas antes de que la rutina tuviera varias revisiones por día. Se puede ejecutar más de una vez.
    - [`deca_normativa.sql`](BaseDatos/deca_normativa.sql): solo en bases de datos creadas antes de añadir al DeCA el cargador contractual, la matrícula del remolque y los lugares de carga y descarga. Se puede ejecutar más de una vez.
+   - [`agua_varias_por_dia.sql`](BaseDatos/agua_varias_por_dia.sql): solo en bases de datos creadas antes de poder apuntar el mismo punto de agua varias veces el mismo día.
+   - [`agua_hora.sql`](BaseDatos/agua_hora.sql): solo en bases de datos creadas antes de apuntar la hora de cada control de agua. Se puede ejecutar más de una vez.
    - [`importar_no_conformidades.ps1`](BaseDatos/importar_no_conformidades.ps1), una sola vez: pasa los registros del Excel a la base de datos.
+   - [`importar_agua.ps1`](BaseDatos/importar_agua.ps1), una sola vez: pasa los controles de la hoja AGUA (`-UsuarioId` de quien figura como creador; `-Probar` para verlo sin guardar). Pasa a 2025 las filas 154-262, que tienen el año mal, y crea el punto LAVAMANOS LINEA 3.
    - [`nc_fotos.sql`](BaseDatos/nc_fotos.sql): fotos de las incidencias y no conformidades (tabla `NC_FOTO`). Se guardan con la ficha y van adjuntas en el correo de las acciones nuevas. Se puede ejecutar más de una vez.
    - [`acciones_nc_avisos.sql`](BaseDatos/acciones_nc_avisos.sql), después de importar: prioridad de las acciones, correo de cada persona de la lista de responsables y correos a los responsables (al ponerles una acción inmediata o correctora y un resumen cada día con las que tienen sin hacer). Da por avisadas las acciones que ya existan, para que no les lleguen de golpe. Los correos de las personas se ponen a mano en `CALIDAD_LISTA.email`; quien no tenga no recibe nada. Se puede ejecutar más de una vez.
 

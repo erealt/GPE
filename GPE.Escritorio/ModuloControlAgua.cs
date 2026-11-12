@@ -22,7 +22,7 @@ public class ModuloControlAgua : UserControl
     private readonly Button btnGuardar = Tema.BotonPrincipal("Guardar", 150);
     private readonly Button btnAnadir = Tema.BotonSecundario("+  Añadir punto de agua", 220);
 
-    private const string ColToma = "toma", ColCloro = "cloro", ColSabor = "sabor", ColOlor = "olor",
+    private const string ColHora = "hora", ColToma = "toma", ColCloro = "cloro", ColSabor = "sabor", ColOlor = "olor",
         ColColor = "color", ColTurbidez = "turbidez", ColComentario = "comentario", ColQuitar = "quitar";
     private static readonly string[] ColumnasSiNo = { ColSabor, ColOlor, ColColor, ColTurbidez };
 
@@ -57,7 +57,7 @@ public class ModuloControlAgua : UserControl
         layout.Controls.Add(new Label
         {
             Text = "Pulsa \"+ Añadir punto de agua\" y elige el punto. Pulsa una casilla para cambiarla: " +
-                   "el cloro abre un teclado y Sí / No cambia con cada toque. ✕ quita la fila.",
+                   "el cloro abre un teclado, Sí / No cambia con cada toque y la hora (la de ahora en las nuevas de hoy) se escribe. ✕ quita la fila.",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Tema.Suave,
@@ -216,11 +216,24 @@ public class ModuloControlAgua : UserControl
         grid.RowsAdded += (s, e) => Componentes.AjustarAltoTabla(grid);
         grid.RowsRemoved += (s, e) => Componentes.AjustarAltoTabla(grid);
         grid.AllowUserToDeleteRows = true;   // Supr, además de ✕
-        // Solo el comentario se escribe en la celda; lo demás se cambia al pulsarlo (CeldaPulsada)
+        // Solo la hora y el comentario se escriben en la celda; lo demás se cambia al pulsarlo (CeldaPulsada)
         grid.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
         grid.GridColor = Tema.LineaTabla;
         grid.CellBorderStyle = DataGridViewCellBorderStyle.Single;
         grid.MultiSelect = false;
+
+        var hora = new DataGridViewTextBoxColumn
+        {
+            Name = ColHora,
+            HeaderText = "HORA",
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Width = 90,
+            MaxInputLength = 5,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            ToolTipText = "Hora de la toma, por ejemplo 9:30"
+        };
+        hora.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        grid.Columns.Add(hora);
 
         var toma = Columna(ColToma, "PUNTO DE AGUA", 0);
         toma.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
@@ -329,7 +342,7 @@ public class ModuloControlAgua : UserControl
         if (columna == ColToma) ElegirPunto(fila);
         else if (columna == ColCloro) PedirCloro(fila);
         else if (ColumnasSiNo.Contains(columna)) CambiarSiNo(fila.Cells[columna]);
-        else if (columna == ColComentario) grid.BeginEdit(true);
+        else if (columna is ColComentario or ColHora) grid.BeginEdit(true);
         else if (columna == ColQuitar) QuitarFila(fila);
     }
 
@@ -362,7 +375,7 @@ public class ModuloControlAgua : UserControl
             tomas.Select(t => (t.Id.ToString(), t.Nombre, true)).ToList(),
             (fila?.Cells[ColToma].Value as int?)?.ToString());
 
-    // La fila nueva empieza con todo "Sí" y abre el teclado del cloro
+    // La fila nueva empieza con todo "Sí" (y, si es de hoy, con la hora de ahora) y abre el teclado del cloro
     private void AnadirFila()
     {
         grid.EndEdit();
@@ -370,7 +383,8 @@ public class ModuloControlAgua : UserControl
         panel.Abrir(this, btnAnadir.PointToScreen(new Point(0, btnAnadir.Height)), () =>
         {
             if (panel.Elegida is not string clave) return;
-            int i = grid.Rows.Add(int.Parse(clave), "", true, true, true, true, "", "");
+            string ahora = fecha == DateTime.Today ? AguaServicio.Hora(DateTime.Now.TimeOfDay) : "";
+            int i = grid.Rows.Add(ahora, int.Parse(clave), "", true, true, true, true, "", "");
             // Con muchas filas, que se siga viendo la nueva y el botón
             if (btnAnadir.Parent is ScrollableControl zona) zona.ScrollControlIntoView(btnAnadir);
             grid.CurrentCell = grid.Rows[i].Cells[ColCloro];
@@ -431,6 +445,8 @@ public class ModuloControlAgua : UserControl
             if (fila.IsNewRow) continue;
             if (!LeerCloro(fila, out var cloro))
                 return (controles, $"En la fila {fila.Index + 1}, el cloro tiene que ser un número (por ejemplo 0,55).");
+            if (!AguaServicio.LeerHora(fila.Cells[ColHora].Value as string, out var hora))
+                return (controles, $"En la fila {fila.Index + 1}, la hora no es válida. Escríbela así: 9:30.");
 
             var original = fila.Tag as ControlAgua;
             controles.Add(new ControlAgua(
@@ -443,6 +459,7 @@ public class ModuloControlAgua : UserControl
                 ColorOk: fila.Cells[ColColor].Value is true,
                 TurbidezOk: fila.Cells[ColTurbidez].Value is true,
                 Comentario: fila.Cells[ColComentario].Value as string,
+                Hora: hora,
                 CreadoPor: original?.CreadoPor,
                 Version: original?.Version));
         }
@@ -471,7 +488,7 @@ public class ModuloControlAgua : UserControl
         grid.Rows.Clear();
         foreach (var control in originales)
         {
-            int i = grid.Rows.Add(control.TomaId, control.Cloro?.ToString("0.00", Componentes.Es) ?? "",
+            int i = grid.Rows.Add(control.Hora is TimeSpan h ? AguaServicio.Hora(h) : "", control.TomaId, control.Cloro?.ToString("0.00", Componentes.Es) ?? "",
                 control.SaborOk, control.OlorOk, control.ColorOk, control.TurbidezOk, control.Comentario ?? "", "");
             var fila = grid.Rows[i];
             fila.Tag = control;
