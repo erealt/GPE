@@ -105,10 +105,6 @@ public class AguaServicio
         return control;
     }
 
-    // La toma que repite otra que no convenció: mismo punto y mismo día
-    public static ControlAgua Repeticion(ControlAgua original, TimeSpan? hora) =>
-        new(0, original.Fecha, original.TomaId, null, true, true, true, true, null, Hora: hora, RepiteId: original.Id);
-
     public void Borrar(ControlAgua control)
     {
         if (!repositorio.Borrar(control))
