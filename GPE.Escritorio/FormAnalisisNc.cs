@@ -18,6 +18,7 @@ public class FormAnalisisNc : Form
     private readonly Button btnSiguiente;
     private readonly ComboBox cmbContar = new();
     private readonly ComboBox cmbAgrupar = new();
+    private readonly ComboBox cmbSoloValor = new();
     private readonly Label lblResumen = new();
     private readonly Label lblNota = new();
     private readonly GraficaBarras grafica = new();
@@ -27,6 +28,7 @@ public class FormAnalisisNc : Form
 
     private const string VerMes = "Mes", VerAno = "Año";
     private const string SinIndicar = "(sin indicar)";
+    private const string TodosLosValores = "Todos";
     private const int ColTipo = 2, ColEstado = 5;
 
     // Qué registros se cuentan. Las acciones de mejora no son problemas: no se cuentan.
@@ -126,11 +128,12 @@ public class FormAnalisisNc : Form
 
     private Control CrearBarra()
     {
+        // Si no cabe todo en una fila (ventana estrecha), sigue en la de abajo
         var barra = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            WrapContents = false,
+            WrapContents = true,
             BackColor = Color.White,
             Padding = new Padding(15, 8, 15, 8),
             Margin = new Padding(0, 0, 0, 10)
@@ -166,7 +169,23 @@ public class FormAnalisisNc : Form
         cmbAgrupar.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbAgrupar.Items.AddRange(opcionesAgrupar);
         cmbAgrupar.SelectedIndex = 0;
-        cmbAgrupar.SelectedIndexChanged += (s, e) => Mostrar();
+        cmbAgrupar.SelectedIndexChanged += (s, e) =>
+        {
+            // Otro campo: el valor elegido en "Solo de" ya no vale
+            llenandoValores = true;
+            cmbSoloValor.Items.Clear();
+            llenandoValores = false;
+            Mostrar();
+        };
+
+        // "Solo de": los valores del campo de "Agrupar por" (las secciones, los operarios...)
+        cmbSoloValor.Width = 240;
+        cmbSoloValor.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbSoloValor.MaxDropDownItems = 20;
+        cmbSoloValor.SelectedIndexChanged += (s, e) =>
+        {
+            if (!llenandoValores) Mostrar();
+        };
 
         lblResumen.AutoSize = true;
         lblResumen.ForeColor = Tema.Suave;
@@ -182,6 +201,9 @@ public class FormAnalisisNc : Form
         campoContar.Margin = new Padding(24, 0, 0, 0);
         barra.Controls.Add(campoContar);
         barra.Controls.Add(Componentes.CampoFiltro("Agrupar por", cmbAgrupar));
+        var campoSolo = Componentes.CampoFiltro("Solo de", cmbSoloValor);
+        campoSolo.Margin = new Padding(12, 0, 0, 0);
+        barra.Controls.Add(campoSolo);
         barra.Controls.Add(lblResumen);
         return barra;
     }
@@ -314,15 +336,47 @@ public class FormAnalisisNc : Form
     {
         var (desde, hasta) = Rango();
         var tipos = ((OpcionContar)cmbContar.SelectedItem!).Tipos;
+        string? valor = cmbSoloValor.SelectedIndex > 0 ? cmbSoloValor.Text : null;
         return registros
             .Where(r => tipos.Contains(r.TipoRegistro) && r.FechaDetectado >= desde && r.FechaDetectado <= hasta)
+            .Where(r => valor == null || Grupo(r) == valor)
             .ToList();
     }
 
-    private string Grupo(NoConformidad nc)
+    private static string Valor(OpcionAgrupar opcion, NoConformidad nc)
     {
-        string? valor = ((OpcionAgrupar)cmbAgrupar.SelectedItem!).Valor(nc);
+        string? valor = opcion.Valor(nc);
         return string.IsNullOrWhiteSpace(valor) ? SinIndicar : valor.Trim();
+    }
+
+    private string Grupo(NoConformidad nc) => Valor((OpcionAgrupar)cmbAgrupar.SelectedItem!, nc);
+
+    private bool llenandoValores;
+
+    // Los valores del campo de "Agrupar por" que hay en el periodo y lo que se cuenta. El que
+    // estaba elegido se queda aunque este mes no tenga ninguno (sale la gráfica vacía).
+    private void LlenarValores()
+    {
+        string? antes = cmbSoloValor.SelectedIndex > 0 ? cmbSoloValor.Text : null;
+        var (desde, hasta) = Rango();
+        var tipos = ((OpcionContar)cmbContar.SelectedItem!).Tipos;
+        var valores = registros
+            .Where(r => tipos.Contains(r.TipoRegistro) && r.FechaDetectado >= desde && r.FechaDetectado <= hasta)
+            .Select(Grupo)
+            .Concat(antes == null ? [] : [antes])
+            .Distinct()
+            .OrderBy(v => v == SinIndicar).ThenBy(v => v, StringComparer.Create(Componentes.Es, true))
+            .ToList();
+
+        llenandoValores = true;
+        cmbSoloValor.BeginUpdate();
+        cmbSoloValor.Items.Clear();
+        cmbSoloValor.Items.Add(TodosLosValores);
+        cmbSoloValor.Items.AddRange(valores.ToArray());
+        int i = antes == null ? -1 : cmbSoloValor.Items.IndexOf(antes);
+        cmbSoloValor.SelectedIndex = i > 0 ? i : 0;
+        cmbSoloValor.EndUpdate();
+        llenandoValores = false;
     }
 
     private void Mostrar()
@@ -331,6 +385,7 @@ public class FormAnalisisNc : Form
         string nombre = cmbVer.Text == VerAno ? periodo.Year.ToString() : periodo.ToString("MMMM yyyy", Componentes.Es);
         lblPeriodo.Text = char.ToUpper(nombre[0], Componentes.Es) + nombre[1..];
         btnSiguiente.Enabled = (cmbVer.Text == VerAno ? periodo.AddYears(1) : periodo.AddMonths(1)) <= DateTime.Today;
+        LlenarValores();   // dependen del periodo, de lo que se cuenta y del campo
 
         var lista = DelPeriodo();
         // De más a menos; "(sin indicar)" siempre al final, en gris
@@ -339,7 +394,9 @@ public class FormAnalisisNc : Form
             .Select(g => new GraficaBarras.Barra(g.Key, g.Count(), g.Key == SinIndicar))
             .OrderBy(b => b.Apagada).ThenByDescending(b => b.Valor).ThenBy(b => b.Nombre)
             .ToList();
-        grafica.Mostrar(grupos, "No hay problemas registrados en este periodo.");
+        grafica.Mostrar(grupos, cmbSoloValor.SelectedIndex > 0
+            ? $"No hay problemas de \"{cmbSoloValor.Text}\" en este periodo."
+            : "No hay problemas registrados en este periodo.");
         AjustarGrafica();
 
         lblResumen.Text = lista.Count == 0 ? "" : $"{lista.Count} {(lista.Count == 1 ? "registro" : "registros")}";
