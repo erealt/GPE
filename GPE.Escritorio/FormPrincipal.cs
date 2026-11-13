@@ -91,6 +91,11 @@ public class FormPrincipal : Form
                 "Cloro y organolépticos de los puntos de agua (MT-RG09).",
                 ModuloInicio.ResumenAgua,
                 () => new ModuloControlAgua()));
+
+            lista.Add(new Modulo("Proveedores",
+                "Evaluación de proveedores y riesgo de fraude de sus productos (CP-RG05).",
+                ModuloInicio.ResumenProveedores,
+                () => new ModuloProveedores()));
         }
 
         lista.Add(new Modulo("DeCA",

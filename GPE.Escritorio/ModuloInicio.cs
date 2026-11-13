@@ -184,4 +184,16 @@ public class ModuloInicio : UserControl
             return null;
         }
     }
+
+    public static string? ResumenProveedores()
+    {
+        try
+        {
+            return new ProveedorServicio().Resumen();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
 }

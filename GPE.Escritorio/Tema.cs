@@ -75,6 +75,15 @@ public static class Tema
         _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
     };
 
+    // Proveedores: evaluación A/B/C y riesgo BAJO/MEDIO/ALTO, de verde a rojo
+    public static (Color Fondo, Color Texto) ColorNotaProveedor(string nota) => nota switch
+    {
+        "A" or "BAJO" => (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70)),
+        "B" or "MEDIO" => (AvisoFondo, Aviso),
+        "C" or "D" or "ALTO" => (FondoError, Error),
+        _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
+    };
+
     // Fases de la ficha de calidad: la barra marca las hechas en verde
     public static readonly (Color Fondo, Color Texto) FaseHecha = (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70));
 
