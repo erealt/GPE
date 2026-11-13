@@ -80,15 +80,26 @@ public class FormProveedor : Form
             pila.Controls.Add(Componentes.Cabecera($"PROVEEDORES  ·  Nº {original.Numero?.ToString() ?? "—"}", original.Nombre, subtitulo));
         }
 
+        // Pestañas debajo del nombre: los datos del proveedor o la lista de sus productos,
+        // para no tenerlo todo en una página. El resumen de arriba se ve en las dos.
+        var tarjetasDatos = new[]
+        {
+            Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos),
+            Marcada(TarjetaEvaluacion(), EstiloProveedores.RayaEvaluacion),
+            Marcada(TarjetaRiesgo(), EstiloProveedores.RayaRiesgo)
+        };
+        var tarjetaProductos = Marcada(TarjetaProductos(), EstiloProveedores.RayaProductos);
+        pila.Controls.Add(CrearPestanas(tarjetasDatos, tarjetaProductos, scroll));
+
         if (original.Revisar != null)
             pila.Controls.Add(AvisoDatosDistintos(original.Revisar));
 
         PrepararFranja();
         pila.Controls.Add(franja);
-        pila.Controls.Add(Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos));
-        pila.Controls.Add(Marcada(TarjetaEvaluacion(), EstiloProveedores.RayaEvaluacion));
-        pila.Controls.Add(Marcada(TarjetaRiesgo(), EstiloProveedores.RayaRiesgo));
-        pila.Controls.Add(Marcada(TarjetaProductos(), EstiloProveedores.RayaProductos));
+        foreach (var tarjeta in tarjetasDatos)
+            pila.Controls.Add(tarjeta);
+        pila.Controls.Add(tarjetaProductos);
+        tarjetaProductos.Visible = false;
 
         var btnGuardar = Tema.BotonPrincipal(nuevo ? "Guardar proveedor" : "Guardar cambios", 190);
         btnGuardar.Click += (s, e) => Guardar();
@@ -132,6 +143,58 @@ public class FormProveedor : Form
     {
         try { return servicio.SiguienteNumero(); }
         catch (DbException) { return null; }   // se puede escribir a mano
+    }
+
+    private readonly RadioButton pestanaDatos = new() { Text = "Datos del proveedor" };
+    private readonly RadioButton pestanaProductos = new();
+
+    // Mismo aspecto que las pestañas de planta de la rutina de calidad
+    private Control CrearPestanas(Control[] tarjetasDatos, Control tarjetaProductos, Panel scroll)
+    {
+        var pestanas = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 15)
+        };
+        foreach (var boton in new[] { pestanaDatos, pestanaProductos })
+        {
+            boton.Appearance = Appearance.Button;
+            boton.FlatStyle = FlatStyle.Flat;
+            boton.TextAlign = ContentAlignment.MiddleCenter;
+            boton.Size = new Size(240, 44);
+            boton.Margin = new Padding(0, 0, 6, 0);
+            boton.Cursor = Cursors.Hand;
+            boton.CheckedChanged += (s, e) =>
+            {
+                PintarPestana(boton);
+                if (!boton.Checked) return;
+                bool productos = boton == pestanaProductos;
+                foreach (var tarjeta in tarjetasDatos)
+                    tarjeta.Visible = !productos;
+                tarjetaProductos.Visible = productos;
+                scroll.AutoScrollPosition = Point.Empty;
+            };
+            pestanas.Controls.Add(boton);
+        }
+        pestanaDatos.Checked = true;
+        ActualizarPestanaProductos();
+        PintarPestana(pestanaDatos);
+        PintarPestana(pestanaProductos);
+        return pestanas;
+    }
+
+    private void ActualizarPestanaProductos() =>
+        pestanaProductos.Text = original.Id == 0 ? "Productos" : $"Productos ({productos.Count(x => !x.Baja)})";
+
+    private static void PintarPestana(RadioButton boton)
+    {
+        boton.BackColor = boton.Checked ? Tema.Acento : Color.White;
+        boton.ForeColor = boton.Checked ? Color.White : Tema.Texto;
+        boton.Font = Tema.FuenteDeOpcion(boton.Checked);
+        boton.FlatAppearance.BorderColor = boton.Checked ? Tema.Acento : Tema.Borde;
+        boton.FlatAppearance.MouseOverBackColor = boton.Checked ? Tema.Acento : Tema.AcentoSuave;
     }
 
     private static Control Marcada(Control tarjeta, Color color)
@@ -595,6 +658,7 @@ public class FormProveedor : Form
             return;
         }
         lblSubtituloProductos.Text = SubtituloProductos();
+        ActualizarPestanaProductos();
         MostrarProductos();
         ActualizarFranja();
     }
