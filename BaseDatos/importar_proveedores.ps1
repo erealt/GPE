@@ -3,7 +3,8 @@
     Se ejecuta una vez, después de proveedores.sql.
 
     En la hoja cada fila es un proveedor con uno de sus productos, y los datos del proveedor (columnas A-N,
-    HISTORIAL y P. SUBCONTRATADO) se repiten en cada fila. Cuando no son iguales en todas sus filas:
+    HISTORIAL y P. SUBCONTRATADO) se repiten en cada fila. Solo se miran las filas de productos activos (las de
+    productos de baja ya no se actualizan), salvo que todos estén de baja. Cuando no son iguales en esas filas:
     - se guarda el de las filas con la fecha de revisión más reciente (las otras parecen no actualizadas);
       entre ellas, el que más se repite (si empatan, el de la fila más arriba), sin contar las celdas vacías;
     - y se apunta en PROVEEDOR.revisar qué valores había, para que calidad decida en la app cuál es el bueno.
@@ -224,9 +225,14 @@ function Mostrar($valor, $campo) {
 
 $proveedores = New-Object System.Collections.Generic.List[object]
 foreach ($grupo in ($filas | Group-Object { if ($null -ne $_.Numero) { "N$($_.Numero)" } else { "T$($_.Nombre.ToUpperInvariant())" } })) {
-    $lineas = @($grupo.Group)
+    $todasLineas = @($grupo.Group)
     $datos = [ordered]@{}
     $revisar = New-Object System.Collections.Generic.List[string]
+
+    # Las filas de productos de baja ya no se actualizan: solo cuentan las de productos activos
+    # (si todos sus productos están de baja, cuentan todas)
+    $activas = @($todasLineas | Where-Object { -not $_.Producto.Baja })
+    $lineas = if ($activas.Count -gt 0) { $activas } else { $todasLineas }
 
     # Las filas que no se actualizaron se quedaron con una fecha de revisión antigua: mandan las de la más reciente
     $ultima = $lineas | ForEach-Object { $_.Proveedor.FechaRevision } | Where-Object { $_ } | Sort-Object -Descending | Select-Object -First 1
@@ -249,10 +255,10 @@ foreach ($grupo in ($filas | Group-Object { if ($null -ne $_.Numero) { "N$($_.Nu
     }
 
     $proveedores.Add([pscustomobject]@{
-        Numero = $lineas[0].Numero
+        Numero = $todasLineas[0].Numero
         Datos = $datos
         Revisar = if ($revisar.Count -gt 0) { $revisar -join "`n" } else { $null }
-        Filas = $lineas
+        Filas = $todasLineas
     })
 }
 

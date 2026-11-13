@@ -20,7 +20,6 @@ public class ModuloProveedores : UserControl
     private const string Todos = "Todos";
     private const string SinNota = "Sin nota";
     private const string EstadoActivos = "Activos";
-    private const string EstadoRevisar = "⚠ Datos distintos";
     private const string EstadoBaja = "De baja";
 
     private readonly ProveedorServicio servicio = new();
@@ -118,8 +117,8 @@ public class ModuloProveedores : UserControl
         cmbEvaluacion.Items.AddRange(new object[] { "Todas", "A", "B", "C", SinNota });
         cmbEvaluacion.SelectedIndex = 0;
 
-        cmbEstado.Width = 190;
-        cmbEstado.Items.AddRange(new object[] { EstadoActivos, EstadoRevisar, EstadoBaja, Todos });
+        cmbEstado.Width = 130;
+        cmbEstado.Items.AddRange(new object[] { EstadoActivos, EstadoBaja, Todos });
         cmbEstado.SelectedItem = EstadoActivos;   // lo del día a día son los que siguen activos
 
         panel.Controls.Add(Componentes.CampoFiltro("Buscar", txtBuscar));
@@ -369,7 +368,6 @@ public class ModuloProveedores : UserControl
                 && estado switch
                 {
                     EstadoActivos => !p.Proveedor.Baja,
-                    EstadoRevisar => p.Proveedor.Revisar != null,
                     EstadoBaja => p.Proveedor.Baja,
                     _ => true
                 })

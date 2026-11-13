@@ -12,7 +12,12 @@ public class FormProveedor : Form
     private const int ColumnaRiesgo = 5;
 
     private readonly ProveedorConProductos datos;
+    private const string EstadoActivos = "Activos";
+    private const string EstadoBaja = "De baja";
+    private const string EstadoTodos = "Todos";
+
     private readonly DataGridView gridProductos = new();
+    private readonly ComboBox cmbEstadoProductos = new();
 
     public FormProveedor(ProveedorConProductos proveedor)
     {
@@ -139,8 +144,15 @@ public class FormProveedor : Form
             ? "Este proveedor no tiene productos."
             : $"{activos} {(activos == 1 ? "activo" : "activos")}" + (deBaja > 0 ? $" y {deBaja} de baja" : "")
               + ". El muestreo y el riesgo de fraude son de cada producto.";
-        var tarjeta = Componentes.Tarjeta("Productos", subtitulo);
-        if (datos.Productos.Count == 0) return tarjeta;
+        if (datos.Productos.Count == 0) return Componentes.Tarjeta("Productos", subtitulo);
+
+        // Como el filtro del Excel: al abrir se ven solo los productos activos
+        cmbEstadoProductos.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbEstadoProductos.Width = 140;
+        cmbEstadoProductos.Items.AddRange(new object[] { EstadoActivos, EstadoBaja, EstadoTodos });
+        cmbEstadoProductos.SelectedItem = activos > 0 ? EstadoActivos : EstadoTodos;
+        cmbEstadoProductos.SelectedIndexChanged += (s, e) => MostrarProductos();
+        var tarjeta = Componentes.Tarjeta("Productos", subtitulo, cmbEstadoProductos);
 
         Componentes.EstiloTabla(gridProductos, altoFila: 44);
         gridProductos.Dock = DockStyle.Top;
@@ -167,13 +179,22 @@ public class FormProveedor : Form
         }
         gridProductos.Columns[1].FillWeight = 600;
 
-        // Primero los activos; los de baja al final
-        foreach (var x in datos.Productos.OrderBy(x => x.Baja))
-            gridProductos.Rows.Add(CrearFila(x));
-
-        Componentes.AjustarAltoTabla(gridProductos);
+        MostrarProductos();
         tarjeta.Controls.Add(gridProductos);
         return tarjeta;
+    }
+
+    private void MostrarProductos()
+    {
+        string estado = cmbEstadoProductos.SelectedItem as string ?? EstadoTodos;
+        gridProductos.Rows.Clear();
+        // Con "Todos", primero los activos y los de baja al final
+        foreach (var x in datos.Productos.OrderBy(x => x.Baja))
+            if (estado == EstadoTodos || x.Baja == (estado == EstadoBaja))
+                gridProductos.Rows.Add(CrearFila(x));
+
+        Componentes.AjustarAltoTabla(gridProductos);
+        gridProductos.ClearSelection();
     }
 
     private DataGridViewRow CrearFila(ProductoProveedor x)
