@@ -10,14 +10,11 @@ public class ProveedorServicio
 
     public List<ProveedorConProductos> ObtenerProveedores() => repositorio.ObtenerProveedores();
 
-    // "103 proveedores · 22 por revisar", para la tarjeta del inicio
+    // "73 proveedores activos", para la tarjeta del inicio
     public string Resumen()
     {
-        var lista = repositorio.ObtenerProveedores();
-        int activos = lista.Count(p => !p.Proveedor.Baja);
-        int revisar = lista.Count(p => !p.Proveedor.Baja && p.Proveedor.Revisar != null);
-        return $"{activos} {(activos == 1 ? "proveedor" : "proveedores")}"
-            + (revisar > 0 ? $"  ·  ⚠ {revisar} por revisar" : "");
+        int activos = repositorio.ObtenerProveedores().Count(p => !p.Proveedor.Baja);
+        return $"{activos} {(activos == 1 ? "proveedor activo" : "proveedores activos")}";
     }
 
     // Tabla de la hoja LISTA: el valor de la fila más alta cuyo "valor inferior" no pasa de la suma

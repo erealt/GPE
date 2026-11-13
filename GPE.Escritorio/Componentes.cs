@@ -137,8 +137,8 @@ public static class Componentes
         return resumen;
     }
 
-    // Tarjeta blanca con título, subtítulo y, si se pasa, un botón a la derecha del título.
-    public static TableLayoutPanel Tarjeta(string titulo, string subtitulo,
+    // Tarjeta blanca con título, subtítulo (si se pasa) y, si se pasa, un botón a la derecha del título.
+    public static TableLayoutPanel Tarjeta(string titulo, string? subtitulo = null,
         Control? accion = null, Label? etiquetaSubtitulo = null)
     {
         var tarjeta = new TableLayoutPanel
@@ -161,7 +161,7 @@ public static class Componentes
             ForeColor = Tema.Texto
         };
         var lblSubtitulo = etiquetaSubtitulo ?? new Label();
-        lblSubtitulo.Text = subtitulo;
+        lblSubtitulo.Text = subtitulo ?? "";
         lblSubtitulo.AutoSize = true;
         lblSubtitulo.ForeColor = Tema.Suave;
         lblSubtitulo.Font = Tema.FuentePequena;
@@ -170,7 +170,11 @@ public static class Componentes
         if (accion == null)
         {
             tarjeta.Controls.Add(lblTitulo);
-            tarjeta.Controls.Add(lblSubtitulo);
+            // Sin subtítulo, el título se separa del contenido con su propio margen
+            if (subtitulo == null && etiquetaSubtitulo == null)
+                lblTitulo.Margin = new Padding(0, 0, 0, 15);
+            else
+                tarjeta.Controls.Add(lblSubtitulo);
             return tarjeta;
         }
 

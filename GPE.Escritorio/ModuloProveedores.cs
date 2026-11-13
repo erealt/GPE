@@ -7,17 +7,20 @@ namespace GPE.Escritorio;
 // Lista de proveedores de la evaluación de proveedores y fraude (Excel CP-RG05, hoja PRODUCTOS).
 public class ModuloProveedores : UserControl
 {
+    // Columnas: los datos del proveedor de la hoja (A-J), sin fecha de revisión ni certificados
     private const int ColumnaNumero = 0;
-    private const int ColumnaEvaluacion = 3;
-    private const int ColumnaProductos = 4;
-    private const int ColumnaRiesgo = 5;
-    private const int ColumnaRevisado = 6;
-    private const int ColumnaRevisar = 7;
+    private const int ColumnaNombre = 1;
+    private const int ColumnaAlta = 2;
+    private const int ColumnaEstado = 3;
+    private const int ColumnaImpacto = 5;
+    private const int ColumnaEstatus = 6;
+    private const int ColumnaReclamaciones = 7;
+    private const int ColumnaEvaluacion = 8;
 
     private const string Todos = "Todos";
     private const string SinNota = "Sin nota";
     private const string EstadoActivos = "Activos";
-    private const string EstadoRevisar = "Por revisar";
+    private const string EstadoRevisar = "⚠ Datos distintos";
     private const string EstadoBaja = "De baja";
 
     private readonly ProveedorServicio servicio = new();
@@ -27,7 +30,6 @@ public class ModuloProveedores : UserControl
     private readonly TextBox txtBuscar = new();
     private readonly ComboBox cmbTipo = new();
     private readonly ComboBox cmbEvaluacion = new();
-    private readonly ComboBox cmbRiesgo = new();
     private readonly ComboBox cmbEstado = new();
     private readonly Button btnLimpiar = Tema.BotonSecundario("Limpiar filtros", 140);
     private readonly Label lblContador = new();
@@ -104,7 +106,7 @@ public class ModuloProveedores : UserControl
         txtBuscar.Width = 240;
         txtBuscar.PlaceholderText = "Nombre, Nº, código o producto...";
 
-        foreach (var combo in new[] { cmbTipo, cmbEvaluacion, cmbRiesgo, cmbEstado })
+        foreach (var combo in new[] { cmbTipo, cmbEvaluacion, cmbEstado })
             combo.DropDownStyle = ComboBoxStyle.DropDownList;
 
         cmbTipo.Width = 160;
@@ -116,24 +118,18 @@ public class ModuloProveedores : UserControl
         cmbEvaluacion.Items.AddRange(new object[] { "Todas", "A", "B", "C", SinNota });
         cmbEvaluacion.SelectedIndex = 0;
 
-        cmbRiesgo.Width = 130;
-        cmbRiesgo.Items.Add(Todos);
-        cmbRiesgo.Items.AddRange(ProveedorServicio.Riesgos.Reverse().ToArray());
-        cmbRiesgo.SelectedIndex = 0;
-
-        cmbEstado.Width = 130;
+        cmbEstado.Width = 190;
         cmbEstado.Items.AddRange(new object[] { EstadoActivos, EstadoRevisar, EstadoBaja, Todos });
         cmbEstado.SelectedItem = EstadoActivos;   // lo del día a día son los que siguen activos
 
         panel.Controls.Add(Componentes.CampoFiltro("Buscar", txtBuscar));
         panel.Controls.Add(Componentes.CampoFiltro("Tipo", cmbTipo));
         panel.Controls.Add(Componentes.CampoFiltro("Evaluación", cmbEvaluacion));
-        panel.Controls.Add(Componentes.CampoFiltro("Riesgo de fraude", cmbRiesgo));
         panel.Controls.Add(Componentes.CampoFiltro("Estado", cmbEstado));
 
         // Los filtros se aplican al momento, sin botón de "Filtrar"
         txtBuscar.TextChanged += (s, e) => AplicarFiltros();
-        foreach (var combo in new[] { cmbTipo, cmbEvaluacion, cmbRiesgo, cmbEstado })
+        foreach (var combo in new[] { cmbTipo, cmbEvaluacion, cmbEstado })
             combo.SelectedIndexChanged += (s, e) => AplicarFiltros();
 
         return panel;
@@ -193,6 +189,19 @@ public class ModuloProveedores : UserControl
         grid.CellPainting += PintarEtiquetas;
         grid.SortCompare += CompararParaOrdenar;
 
+        // Doble clic o Enter: ficha del proveedor con sus productos
+        grid.CellDoubleClick += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && grid.Rows[e.RowIndex].Tag is ProveedorConProductos p)
+                AbrirFicha(p);
+        };
+        grid.KeyDown += (s, e) =>
+        {
+            if (e.KeyCode != Keys.Enter || grid.CurrentRow?.Tag is not ProveedorConProductos p) return;
+            e.Handled = true;   // si no, Enter baja a la fila siguiente
+            AbrirFicha(p);
+        };
+
         grid.ColumnHeadersHeight = 45;
         grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
         grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
@@ -202,8 +211,8 @@ public class ModuloProveedores : UserControl
         // solo el nombre, que es corto, queda un hueco grande hasta el tipo)
         (string Nombre, int Ancho)[] columnas =
         {
-            ("Nº", 70), ("NOMBRE", 380), ("TIPO", 175), ("EVALUACIÓN", 120), ("PRODUCTOS", 110),
-            ("RIESGO FRAUDE", 165), ("REVISADO", 105), ("REVISAR", 120)
+            ("Nº", 70), ("NOMBRE", 380), ("FECHA ALTA", 130), ("ESTADO", 105), ("TIPO", 175),
+            ("IMPACTO", 95), ("ESTATUS", 95), ("RECLAMACIONES", 140), ("EVALUACIÓN", 120)
         };
         foreach (var (nombre, ancho) in columnas)
         {
@@ -213,7 +222,7 @@ public class ModuloProveedores : UserControl
             grid.Columns[i].FillWeight = ancho;
         }
         // Al nombre le toca algo más del sitio que sobra: hay nombres largos (INCOLTEC - INNOVATION COLOUER...)
-        grid.Columns[1].FillWeight = 700;
+        grid.Columns[ColumnaNombre].FillWeight = 700;
 
         grid.Columns[ColumnaNumero].DefaultCellStyle.ForeColor = Tema.Acento;
         grid.Columns[ColumnaNumero].DefaultCellStyle.Font = Tema.FuenteNegrita;
@@ -221,52 +230,51 @@ public class ModuloProveedores : UserControl
         return grid;
     }
 
-    // Evaluación, riesgo y "Revisar" se dibujan como etiquetas de color
+    // Estado y evaluación se dibujan como etiquetas de color
     private void PintarEtiquetas(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || e.Graphics == null) return;
         if (grid.Rows[e.RowIndex].Tag is not ProveedorConProductos p) return;
 
-        string? texto = e.ColumnIndex switch
+        if (e.ColumnIndex == ColumnaEstado)
         {
-            ColumnaEvaluacion => ProveedorServicio.Evaluacion(p.Proveedor),
-            ColumnaRiesgo => ProveedorServicio.RiesgoFraudeMasAlto(p),
-            ColumnaRevisar => p.Proveedor.Revisar != null ? "⚠ Revisar" : null,
-            _ => null
-        };
-        if (texto == null) return;
-
-        var (fondo, color) = e.ColumnIndex == ColumnaRevisar
-            ? (Tema.AvisoFondo, Tema.Aviso)
-            : Tema.ColorNotaProveedor(texto);
-        Componentes.PintarEtiqueta(e, texto, fondo, color);
+            var (fondo, color) = p.Proveedor.Baja
+                ? Tema.ColorNotaProveedor("")   // gris
+                : Tema.ColorNotaProveedor("A"); // verde
+            Componentes.PintarEtiqueta(e, p.Proveedor.Baja ? "Baja" : "Activo", fondo, color);
+        }
+        else if (e.ColumnIndex == ColumnaEvaluacion && ProveedorServicio.Evaluacion(p.Proveedor) is string nota)
+        {
+            var (fondo, color) = Tema.ColorNotaProveedor(nota);
+            Componentes.PintarEtiqueta(e, nota, fondo, color);
+        }
     }
 
-    // Nº, productos, riesgo y fecha se ordenan por el dato de verdad, no por cómo se ve
+    // Nº, fecha y notas se ordenan por el dato de verdad, no por cómo se ve; los vacíos al final
     private void CompararParaOrdenar(object? sender, DataGridViewSortCompareEventArgs e)
     {
         if (grid.Rows[e.RowIndex1].Tag is not ProveedorConProductos a || grid.Rows[e.RowIndex2].Tag is not ProveedorConProductos b)
             return;
 
-        static int Vacios<T>(T? x, T? y, Func<T, T, int> comparar) where T : struct =>
-            x == null ? (y == null ? 0 : 1) : y == null ? -1 : comparar(x.Value, y.Value);
+        static int Vacios<T>(T? x, T? y) where T : struct, IComparable<T> =>
+            x == null ? (y == null ? 0 : 1) : y == null ? -1 : x.Value.CompareTo(y.Value);
 
+        var pa = a.Proveedor;
+        var pb = b.Proveedor;
         int? resultado = e.Column.Index switch
         {
-            ColumnaNumero => Vacios(a.Proveedor.Numero, b.Proveedor.Numero, (x, y) => x.CompareTo(y)),
-            ColumnaProductos => Activos(a).CompareTo(Activos(b)),
-            ColumnaRiesgo => Array.IndexOf(ProveedorServicio.Riesgos, ProveedorServicio.RiesgoFraudeMasAlto(a))
-                .CompareTo(Array.IndexOf(ProveedorServicio.Riesgos, ProveedorServicio.RiesgoFraudeMasAlto(b))),
-            ColumnaRevisado => Vacios(a.Proveedor.FechaRevision, b.Proveedor.FechaRevision, (x, y) => x.CompareTo(y)),
+            ColumnaNumero => Vacios(pa.Numero, pb.Numero),
+            ColumnaAlta => Vacios(pa.FechaAlta, pb.FechaAlta),
+            ColumnaImpacto => Vacios(pa.Impacto, pb.Impacto),
+            ColumnaEstatus => Vacios(pa.Estatus, pb.Estatus),
+            ColumnaReclamaciones => Vacios(pa.Reclamaciones, pb.Reclamaciones),
             _ => null
         };
         if (resultado == null) return;
 
-        e.SortResult = resultado.Value != 0 ? resultado.Value : string.Compare(a.Proveedor.Nombre, b.Proveedor.Nombre, StringComparison.CurrentCultureIgnoreCase);
+        e.SortResult = resultado.Value != 0 ? resultado.Value : string.Compare(pa.Nombre, pb.Nombre, StringComparison.CurrentCultureIgnoreCase);
         e.Handled = true;
     }
-
-    private static int Activos(ProveedorConProductos p) => p.Productos.Count(x => !x.Baja);
 
     // Datos y filtros
 
@@ -294,35 +302,30 @@ public class ModuloProveedores : UserControl
     {
         var fila = new DataGridViewRow { Tag = p };
         var prov = p.Proveedor;
-        int activos = Activos(p);
-        int deBaja = p.Productos.Count - activos;
+        static string Nota(byte? n) => n?.ToString() ?? "—";
 
+        // Los que en el Excel tenían datos distintos según la fila llevan ⚠ delante del nombre
         fila.CreateCells(grid,
             prov.Numero?.ToString() ?? "—",
-            prov.Nombre,
+            (prov.Revisar != null ? "⚠  " : "") + prov.Nombre,
+            prov.FechaAlta?.ToString("dd/MM/yy") ?? "—",
+            prov.Baja ? "Baja" : "Activo",
             prov.Tipo ?? "—",
-            ProveedorServicio.Evaluacion(prov) ?? "—",
-            activos.ToString(),
-            ProveedorServicio.RiesgoFraudeMasAlto(p) ?? "—",
-            prov.FechaRevision?.ToString("dd/MM/yy") ?? "—",
-            "");
+            Nota(prov.Impacto),
+            Nota(prov.Estatus),
+            Nota(prov.Reclamaciones),
+            ProveedorServicio.Evaluacion(prov) ?? "—");
 
         if (prov.Baja)
-        {
             fila.DefaultCellStyle.ForeColor = Tema.Suave;
-            fila.Cells[1].Value = prov.Nombre + "  (baja)";
-        }
 
         string? evaluacion = ProveedorServicio.Evaluacion(prov);
         fila.Cells[ColumnaEvaluacion].ToolTipText = evaluacion == null
             ? "Falta el impacto, el estatus o las reclamaciones"
-            : $"Impacto {prov.Impacto?.ToString() ?? "—"} + estatus {prov.Estatus?.ToString() ?? "—"} + reclamaciones {prov.Reclamaciones?.ToString() ?? "—"}"
+            : $"Impacto + estatus + reclamaciones = {(prov.Impacto ?? 0) + (prov.Estatus ?? 0) + (prov.Reclamaciones ?? 0)}"
               + $"\n{ProveedorServicio.QueSupone(evaluacion)}";
-        if (deBaja > 0)
-            fila.Cells[ColumnaProductos].ToolTipText = $"Y {deBaja} de baja";
-        fila.Cells[ColumnaRiesgo].ToolTipText = "El más alto de sus productos";
         if (prov.Revisar != null)
-            fila.Cells[ColumnaRevisar].ToolTipText = "En el Excel había datos distintos según la fila:\n" + prov.Revisar;
+            fila.Cells[ColumnaNombre].ToolTipText = "En el Excel había datos distintos según la fila:\n" + prov.Revisar;
 
         return fila;
     }
@@ -349,7 +352,6 @@ public class ModuloProveedores : UserControl
         string texto = txtBuscar.Text.Trim();
         string? tipo = cmbTipo.SelectedIndex > 0 ? cmbTipo.Text : null;
         string? evaluacion = cmbEvaluacion.SelectedIndex > 0 ? cmbEvaluacion.Text : null;
-        string? riesgo = cmbRiesgo.SelectedIndex > 0 ? cmbRiesgo.Text : null;
         string estado = cmbEstado.Text;
 
         // Sin mirar mayúsculas ni tildes: "azúcar" encuentra "AZUCAR BLANQUILLA"
@@ -364,7 +366,6 @@ public class ModuloProveedores : UserControl
                 && (evaluacion == null
                     || (evaluacion == SinNota ? ProveedorServicio.Evaluacion(p.Proveedor) == null
                                               : ProveedorServicio.Evaluacion(p.Proveedor) == evaluacion))
-                && (riesgo == null || ProveedorServicio.RiesgoFraudeMasAlto(p) == riesgo)
                 && estado switch
                 {
                     EstadoActivos => !p.Proveedor.Baja,
@@ -375,6 +376,13 @@ public class ModuloProveedores : UserControl
             .ToList();
     }
 
+    // De momento la ficha solo es de consulta: no hace falta recargar la lista al cerrarla
+    private void AbrirFicha(ProveedorConProductos p)
+    {
+        using var ficha = new FormProveedor(p);
+        ficha.ShowDialog(this);
+    }
+
     private void LimpiarFiltros()
     {
         // Cada control que se limpia lanzaría AplicarFiltros: se rehace la tabla una sola vez al final
@@ -382,7 +390,6 @@ public class ModuloProveedores : UserControl
         txtBuscar.Clear();
         cmbTipo.SelectedIndex = 0;
         cmbEvaluacion.SelectedIndex = 0;
-        cmbRiesgo.SelectedIndex = 0;
         cmbEstado.SelectedItem = EstadoActivos;
         limpiando = false;
         AplicarFiltros();
@@ -390,11 +397,9 @@ public class ModuloProveedores : UserControl
 
     private void ActualizarContador(List<ProveedorConProductos> visibles)
     {
-        int productos = visibles.Sum(Activos);
         int revisar = visibles.Count(p => p.Proveedor.Revisar != null);
         lblContador.Text = $"{visibles.Count} {(visibles.Count == 1 ? "proveedor" : "proveedores")}"
-            + $"  ·  {productos} {(productos == 1 ? "producto" : "productos")}"
-            + (revisar > 0 ? $"  ·  {revisar} por revisar" : "");
+            + (revisar > 0 ? $"  ·  ⚠ {revisar} con datos distintos en el Excel" : "");
 
         lblVacio.Text = registros.Count == 0
             ? "Todavía no hay proveedores. Se pasan del Excel con BaseDatos\\importar_proveedores.ps1."
