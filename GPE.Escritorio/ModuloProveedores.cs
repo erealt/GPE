@@ -70,7 +70,29 @@ public class ModuloProveedores : UserControl
         return contenido;
     }
 
-    private static Control CrearCabecera()
+    private Control CrearCabecera()
+    {
+        var cabecera = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1
+        };
+        cabecera.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        cabecera.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+
+        var btnNuevo = Tema.BotonPrincipal("+  Nuevo proveedor", 210);
+        btnNuevo.Height = 46;
+        btnNuevo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnNuevo.Margin = new Padding(0, 10, 0, 0);
+        btnNuevo.Click += (s, e) => AbrirFicha(null);
+
+        cabecera.Controls.Add(CrearTitulos(), 0, 0);
+        cabecera.Controls.Add(btnNuevo, 1, 0);
+        return cabecera;
+    }
+
+    private static Control CrearTitulos()
     {
         var titulos = new Panel { Dock = DockStyle.Fill };
         var lblSubtitulo = new Label
@@ -376,10 +398,12 @@ public class ModuloProveedores : UserControl
     }
 
     // De momento la ficha solo es de consulta: no hace falta recargar la lista al cerrarla
-    private void AbrirFicha(ProveedorConProductos p)
+    // p == null: proveedor nuevo. Si se guarda, se vuelve a leer la lista.
+    private void AbrirFicha(ProveedorConProductos? p)
     {
         using var ficha = new FormProveedor(p);
-        ficha.ShowDialog(this);
+        if (ficha.ShowDialog(this) == DialogResult.OK)
+            CargarDatos();
     }
 
     private void LimpiarFiltros()
@@ -401,7 +425,7 @@ public class ModuloProveedores : UserControl
             + (revisar > 0 ? $"  ·  ⚠ {revisar} con datos distintos en el Excel" : "");
 
         lblVacio.Text = registros.Count == 0
-            ? "Todavía no hay proveedores. Se pasan del Excel con BaseDatos\\importar_proveedores.ps1."
+            ? "Todavía no hay proveedores. Pulsa «+ Nuevo proveedor» para añadir el primero."
             : "No hay proveedores que coincidan con los filtros.";
         lblVacio.Visible = visibles.Count == 0;
         grid.Visible = visibles.Count > 0;

@@ -1,5 +1,11 @@
 namespace GPE.Datos;
 
+// Columna TIPO PRODUCTO (los valores que hay en el Excel CP-RG05)
+public static class TipoProductoProveedor
+{
+    public static readonly string[] Todos = { "MMPP", "M. C. DIRECTO", "M. C. INDIRECTO", "PRODUCTO FINAL" };
+}
+
 // Columna TIPO del proveedor (hoja LISTA del Excel CP-RG05, tabla TIPO PROVEEDOR)
 public static class TipoProveedor
 {
@@ -26,7 +32,7 @@ public record Proveedor(
     byte? Historial,
     byte? Subcontratado,
     string? Revisar,   // datos que en el Excel eran distintos según la fila
-    byte[] Version);
+    byte[]? Version);  // null = proveedor nuevo, sin guardar
 
 // Columnas O-AY de la hoja PRODUCTOS, sin las calculadas
 public record ProductoProveedor(
@@ -59,7 +65,7 @@ public record ProductoProveedor(
     byte? DMedidas,
     string? MedidasPreventivas,
     string? Observaciones,
-    byte[] Version);
+    byte[]? Version);  // null = producto nuevo, sin guardar
 
 // Un proveedor con todos sus productos (también los de baja)
 public record ProveedorConProductos(Proveedor Proveedor, List<ProductoProveedor> Productos);

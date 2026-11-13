@@ -17,6 +17,145 @@ public class ProveedorServicio
         return $"{activos} {(activos == 1 ? "proveedor activo" : "proveedores activos")}";
     }
 
+    public int SiguienteNumero() => repositorio.SiguienteNumero();
+
+    // Guardado
+
+    private const string MensajeModificado =
+        "Otra persona ha cambiado este proveedor mientras lo tenías abierto. " +
+        "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
+        "Apunta lo que hayas escrito y vuelve a abrirlo para ver lo último.";
+
+    // Textos sin espacios de más; vacío = null
+    public static Proveedor Normalizar(Proveedor p)
+    {
+        static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+        return p with
+        {
+            Nombre = p.Nombre?.Trim() ?? "",
+            Tipo = Limpio(p.Tipo),
+            Certificados = Limpio(p.Certificados),
+            EnsayoTrazabilidad = Limpio(p.EnsayoTrazabilidad),
+            Auditoria = Limpio(p.Auditoria),
+            Rfa = Limpio(p.Rfa)
+        };
+    }
+
+    // Errores de cada campo (por el nombre de la propiedad), para marcarlos en la pantalla
+    public List<(string Campo, string Mensaje)> Errores(Proveedor p)
+    {
+        var errores = new List<(string, string)>();
+        if (p.Nombre == "")
+            errores.Add((nameof(Proveedor.Nombre), "Escribe el nombre del proveedor."));
+        else if (p.Nombre.Length > 200)
+            errores.Add((nameof(Proveedor.Nombre), "El nombre no puede pasar de 200 letras."));
+
+        if (p.Numero is int numero && repositorio.NumeroOcupado(numero, p.Id))
+            errores.Add((nameof(Proveedor.Numero), $"Ya hay otro proveedor con el Nº {numero}."));
+
+        foreach (var (campo, texto) in new[]
+        {
+            (nameof(Proveedor.Certificados), p.Certificados), (nameof(Proveedor.EnsayoTrazabilidad), p.EnsayoTrazabilidad),
+            (nameof(Proveedor.Auditoria), p.Auditoria), (nameof(Proveedor.Rfa), p.Rfa)
+        })
+            if (texto?.Length > 500)
+                errores.Add((campo, "No puede pasar de 500 letras."));
+        return errores;
+    }
+
+    // Nuevo (Id 0) o con cambios. Devuelve su id.
+    public int Guardar(Proveedor p)
+    {
+        if (Sesion.UsuarioActual is not Usuario usuario)
+            throw new ReglaNegocioException("No hay ningún usuario elegido.");
+
+        p = Normalizar(p);
+        if (Errores(p) is { Count: > 0 } errores)
+            throw new ReglaNegocioException(errores[0].Mensaje);
+
+        if (p.Id == 0)
+            return repositorio.Insertar(p, usuario.Id);
+
+        if (!repositorio.Actualizar(p))
+            throw new ReglaNegocioException(MensajeModificado);
+        return p.Id;
+    }
+
+    // Productos
+
+    public List<ProductoProveedor> ObtenerProductos(int proveedorId) => repositorio.ObtenerProductos(proveedorId);
+
+    private const string MensajeProductoModificado =
+        "Otra persona ha cambiado este producto mientras lo tenías abierto. " +
+        "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
+        "Apunta lo que hayas escrito y vuelve a abrirlo para ver lo último.";
+
+    // Largo máximo de cada texto del producto (columnas de PROVEEDOR_PRODUCTO)
+    public static readonly (string Campo, int Largo)[] LargosProducto =
+    {
+        (nameof(ProductoProveedor.Codigo), 30), (nameof(ProductoProveedor.Descripcion), 300),
+        (nameof(ProductoProveedor.Alergenos), 300), (nameof(ProductoProveedor.PosiblesAlergenos), 300),
+        (nameof(ProductoProveedor.FichaTecnica), 50), (nameof(ProductoProveedor.AnalisisQuimicos), 500),
+        (nameof(ProductoProveedor.AnalisisMicro), 500), (nameof(ProductoProveedor.AnalisisAlergenos), 500),
+        (nameof(ProductoProveedor.EurochocAlcance), 500), (nameof(ProductoProveedor.EurochocResultado), 1000),
+        (nameof(ProductoProveedor.Parametro), 1000), (nameof(ProductoProveedor.MedidasPreventivas), 1000)
+    };
+
+    public static ProductoProveedor Normalizar(ProductoProveedor x)
+    {
+        static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+        return x with
+        {
+            Codigo = Limpio(x.Codigo),
+            Descripcion = Limpio(x.Descripcion),
+            TipoProducto = Limpio(x.TipoProducto),
+            Alergenos = Limpio(x.Alergenos),
+            PosiblesAlergenos = Limpio(x.PosiblesAlergenos),
+            FichaTecnica = Limpio(x.FichaTecnica),
+            AnalisisQuimicos = Limpio(x.AnalisisQuimicos),
+            AnalisisMicro = Limpio(x.AnalisisMicro),
+            AnalisisAlergenos = Limpio(x.AnalisisAlergenos),
+            EurochocAlcance = Limpio(x.EurochocAlcance),
+            EurochocResultado = Limpio(x.EurochocResultado),
+            Parametro = Limpio(x.Parametro),
+            MedidasPreventivas = Limpio(x.MedidasPreventivas),
+            Observaciones = Limpio(x.Observaciones)
+        };
+    }
+
+    public static List<(string Campo, string Mensaje)> ErroresProducto(ProductoProveedor x)
+    {
+        var errores = new List<(string, string)>();
+        if (x.Descripcion == null)
+            errores.Add((nameof(ProductoProveedor.Descripcion), "Escribe la descripción del producto."));
+
+        var propiedades = typeof(ProductoProveedor);
+        foreach (var (campo, largo) in LargosProducto)
+            if (propiedades.GetProperty(campo)!.GetValue(x) is string texto && texto.Length > largo)
+                errores.Add((campo, $"No puede pasar de {largo} letras."));
+        return errores;
+    }
+
+    // Nuevo (Id 0) o con cambios. Devuelve su id.
+    public int GuardarProducto(ProductoProveedor x)
+    {
+        if (Sesion.UsuarioActual is not Usuario usuario)
+            throw new ReglaNegocioException("No hay ningún usuario elegido.");
+        if (x.ProveedorId == 0)
+            throw new ReglaNegocioException("Guarda primero el proveedor.");
+
+        x = Normalizar(x);
+        if (ErroresProducto(x) is { Count: > 0 } errores)
+            throw new ReglaNegocioException(errores[0].Mensaje);
+
+        if (x.Id == 0)
+            return repositorio.InsertarProducto(x, usuario.Id);
+
+        if (!repositorio.ActualizarProducto(x))
+            throw new ReglaNegocioException(MensajeProductoModificado);
+        return x.Id;
+    }
+
     // Tabla de la hoja LISTA: el valor de la fila más alta cuyo "valor inferior" no pasa de la suma
     private static string? Buscar(int suma, params (int Desde, string Valor)[] tabla)
     {
