@@ -41,10 +41,11 @@ public class FormProveedor : Form
         if (p.Revisar != null)
             pila.Controls.Add(AvisoDatosDistintos(p.Revisar));
 
-        pila.Controls.Add(TarjetaDatos(p));
-        pila.Controls.Add(TarjetaEvaluacion(p));
-        pila.Controls.Add(TarjetaRiesgo(p));
-        pila.Controls.Add(TarjetaProductos());
+        pila.Controls.Add(FranjaResumen());
+        pila.Controls.Add(Marcada(TarjetaDatos(p), EstiloProveedores.RayaDatos));
+        pila.Controls.Add(Marcada(TarjetaEvaluacion(p), EstiloProveedores.RayaEvaluacion));
+        pila.Controls.Add(Marcada(TarjetaRiesgo(p), EstiloProveedores.RayaRiesgo));
+        pila.Controls.Add(Marcada(TarjetaProductos(), EstiloProveedores.RayaProductos));
 
         var btnCerrar = Tema.BotonSecundario("Cerrar", 140);
         btnCerrar.Click += (s, e) => Close();
@@ -57,6 +58,84 @@ public class FormProveedor : Form
             gridProductos.ClearSelection();
             scroll.AutoScrollPosition = Point.Empty;
         };
+    }
+
+    private static Control Marcada(Control tarjeta, Color color)
+    {
+        EstiloProveedores.MarcarTarjeta(tarjeta, color);
+        return tarjeta;
+    }
+
+    // Cuatro recuadros arriba con lo más importante, para verlo sin leer las tarjetas
+    private Control FranjaResumen()
+    {
+        var p = datos.Proveedor;
+        string? evaluacion = ProveedorServicio.Evaluacion(p);
+        string? riesgo = ProveedorServicio.RiesgoFraudeMasAlto(datos);
+        int activos = datos.Productos.Count(x => !x.Baja);
+        int deBaja = datos.Productos.Count - activos;
+
+        var franja = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, 20)
+        };
+        for (int i = 0; i < 4; i++)
+            franja.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        franja.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        var (fondoEval, colorEval) = Tema.ColorNotaProveedor(evaluacion ?? "");
+        var (fondoRiesgo, colorRiesgo) = Tema.ColorNotaProveedor(riesgo ?? "");
+        franja.Controls.Add(Recuadro("Evaluación", evaluacion ?? "—",
+            evaluacion == null ? "Faltan datos para calcularla" : $"Impacto + estatus + reclamaciones = {(p.Impacto ?? 0) + (p.Estatus ?? 0) + (p.Reclamaciones ?? 0)}",
+            fondoEval, colorEval, ultimo: false), 0, 0);
+        franja.Controls.Add(Recuadro("Riesgo de fraude más alto", riesgo ?? "—",
+            "De sus productos activos", fondoRiesgo, colorRiesgo, ultimo: false), 1, 0);
+        franja.Controls.Add(Recuadro("Productos activos", activos.ToString(),
+            deBaja > 0 ? $"y {deBaja} de baja" : "Ninguno de baja", Color.White, Tema.Texto, ultimo: false), 2, 0);
+        franja.Controls.Add(Recuadro("Reclamaciones", Nota(p.Reclamaciones),
+            "Nota de 0 a 2", Color.White, Tema.Texto, ultimo: true), 3, 0);
+        return franja;
+    }
+
+    private static Control Recuadro(string etiqueta, string valor, string nota, Color fondo, Color color, bool ultimo)
+    {
+        var recuadro = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = fondo,
+            Padding = new Padding(20, 15, 20, 15),
+            Margin = new Padding(0, 0, ultimo ? 0 : 15, 0)
+        };
+        recuadro.Controls.Add(new Label
+        {
+            Text = etiqueta.ToUpper(Componentes.Es),
+            AutoSize = true,
+            ForeColor = fondo == Color.White ? Tema.Suave : color,
+            Font = Tema.FuenteEtiqueta
+        });
+        recuadro.Controls.Add(new Label
+        {
+            Text = valor,
+            AutoSize = true,
+            ForeColor = color,
+            Font = EstiloProveedores.FuenteCifra,
+            Margin = new Padding(0, 6, 0, 2)
+        });
+        recuadro.Controls.Add(new Label
+        {
+            Text = nota,
+            AutoSize = true,
+            ForeColor = fondo == Color.White ? Tema.Suave : color,
+            Font = Tema.FuenteNota
+        });
+        return recuadro;
     }
 
     // Datos que en el Excel eran distintos según la fila, y cuál se guardó
@@ -160,10 +239,10 @@ public class FormProveedor : Form
         gridProductos.MultiSelect = false;
         gridProductos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         gridProductos.ShowCellToolTips = true;
-        gridProductos.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
         gridProductos.DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
         gridProductos.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
         gridProductos.CellPainting += PintarEtiquetas;
+        EstiloProveedores.TablaMarcada(gridProductos);
 
         (string Nombre, int Ancho)[] columnas =
         {
@@ -265,6 +344,7 @@ public class FormProveedor : Form
             Text = string.IsNullOrWhiteSpace(valor) ? "—" : valor,
             AutoSize = true,
             ForeColor = Tema.Texto,
+            Font = Tema.FuenteNegrita,
             MaximumSize = new Size(280, 0),
             Margin = new Padding(0, 4, 0, 0)
         });

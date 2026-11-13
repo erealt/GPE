@@ -148,7 +148,8 @@ public class ModuloProveedores : UserControl
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         lblContador.Dock = DockStyle.Fill;
-        lblContador.ForeColor = Tema.Suave;
+        lblContador.ForeColor = Tema.Texto;
+        lblContador.Font = Tema.FuenteNegrita;
         lblContador.TextAlign = ContentAlignment.MiddleLeft;
 
         btnLimpiar.Height = 34;
@@ -203,8 +204,8 @@ public class ModuloProveedores : UserControl
 
         grid.ColumnHeadersHeight = 45;
         grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
-        grid.DefaultCellStyle.SelectionBackColor = Tema.AcentoSuave;
         grid.DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
+        EstiloProveedores.TablaMarcada(grid);
 
         // Cada columna tiene su ancho mínimo; si sobra sitio, se reparte entre todas (si se lo queda
         // solo el nombre, que es corto, queda un hueco grande hasta el tipo)
