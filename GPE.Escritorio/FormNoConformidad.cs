@@ -433,6 +433,18 @@ public class FormNoConformidad : Form
         barraFases.Dock = DockStyle.Fill;
 
         franja.Controls.Add(barraFases);
+        // El informe, arriba para no tener que bajar hasta el final (solo en los ya guardados)
+        if (original != null)
+        {
+            var btnPdf = Tema.BotonSecundario("Descargar PDF", 160);
+            btnPdf.Height = 40;
+            btnPdf.Enabled = cargaCorrecta;
+            btnPdf.Click += (s, e) => DescargarPdf(original.Id);
+            var hueco = new Panel { Dock = DockStyle.Right, Width = btnPdf.Width + 20, Padding = new Padding(20, 0, 0, 12) };
+            btnPdf.Dock = DockStyle.Fill;
+            hueco.Controls.Add(btnPdf);
+            franja.Controls.Add(hueco);
+        }
         franja.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Tema.Linea });
         return franja;
     }
@@ -546,16 +558,8 @@ public class FormNoConformidad : Form
         btnCancelar.Click += (s, e) => Close();
         CancelButton = btnCancelar;   // Esc cierra (avisando si hay cambios)
 
-        var botones = SoloLectura ? new List<Button> { btnCancelar } : new List<Button> { btnGuardar, btnCancelar };
-        // El informe solo existe para los registros ya guardados (va a la izquierda)
-        if (original != null)
-        {
-            var btnPdf = Tema.BotonSecundario("Descargar PDF", 160);
-            btnPdf.Enabled = cargaCorrecta;
-            btnPdf.Click += (s, e) => DescargarPdf(original.Id);
-            botones.Add(btnPdf);
-        }
-        return Componentes.Acciones(botones.ToArray());
+        var botones = SoloLectura ? new[] { btnCancelar } : new[] { btnGuardar, btnCancelar };
+        return Componentes.Acciones(botones);
     }
 
     // Informe para auditorías: lo guarda donde se elija y lo abre
