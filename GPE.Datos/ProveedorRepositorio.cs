@@ -96,6 +96,18 @@ public class ProveedorRepositorio
         return productos;
     }
 
+    // Todos los proveedores, solo id, nombre y si está de baja, por orden alfabético
+    public List<ProveedorDeLista> ObtenerLista()
+    {
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand("SELECT id, nombre, baja FROM PROVEEDOR ORDER BY nombre;", conexion);
+        using var lector = comando.ExecuteReader();
+        var lista = new List<ProveedorDeLista>();
+        while (lector.Read())
+            lista.Add(new ProveedorDeLista(lector.GetInt32(0), lector.GetString(1), lector.GetBoolean(2)));
+        return lista;
+    }
+
     // Cuántos proveedores no están de baja (para el inicio)
     public int ContarActivos()
     {

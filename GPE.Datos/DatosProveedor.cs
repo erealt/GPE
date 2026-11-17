@@ -67,5 +67,11 @@ public record ProductoProveedor(
     string? Observaciones,
     byte[]? Version);  // null = producto nuevo, sin guardar
 
+// Un proveedor para elegirlo en un desplegable (en la ficha de la NC)
+public record ProveedorDeLista(int Id, string Nombre, bool Baja)
+{
+    public override string ToString() => Baja ? $"{Nombre} (de baja)" : Nombre;
+}
+
 // Un proveedor con todos sus productos (también los de baja)
 public record ProveedorConProductos(Proveedor Proveedor, List<ProductoProveedor> Productos);
