@@ -36,7 +36,7 @@ public class FormProveedor : Form
 
     private readonly Label lblEvaluacion = new();
     private readonly Label lblQueSupone = new();
-    private readonly TableLayoutPanel franja = new();
+    private readonly ResumenProveedor resumen = new();   // los cuatro recuadros de arriba
 
     private readonly RadioButton pestanaDatos = new() { Text = "Datos del proveedor" };
     private readonly RadioButton pestanaProductos = new();
@@ -55,7 +55,7 @@ public class FormProveedor : Form
         productos.Cambiados += (s, e) =>
         {
             ActualizarPestanaProductos();
-            ActualizarFranja();
+            resumen.Actualizar(actual, productos.Productos);
         };
 
         Text = nuevo ? "Nuevo proveedor" : $"Proveedor {original.Numero} - {original.Nombre}";
@@ -91,8 +91,7 @@ public class FormProveedor : Form
         if (original.Revisar != null)
             pila.Controls.Add(AvisoDatosDistintos(original.Revisar));
 
-        PrepararFranja();
-        pila.Controls.Add(franja);
+        pila.Controls.Add(resumen);
         foreach (var tarjeta in tarjetasDatos)
             pila.Controls.Add(tarjeta);
         pila.Controls.Add(tarjetaProductos);
@@ -298,7 +297,7 @@ public class FormProveedor : Form
             ? "Falta el impacto, el estatus o las reclamaciones"
             : ProveedorServicio.QueSupone(evaluacion);
 
-        ActualizarFranja();
+        resumen.Actualizar(actual, productos.Productos);
         productos.Repintar();
     }
 
@@ -372,86 +371,6 @@ public class FormProveedor : Form
 
         if (!Mensajes.DescartarCambios(this, "Hay cambios sin guardar. ¿Salir sin guardarlos?"))
             e.Cancel = true;
-    }
-
-    // Cuatro recuadros arriba con lo más importante, para verlo sin leer las tarjetas
-
-    private void PrepararFranja()
-    {
-        franja.Dock = DockStyle.Fill;
-        franja.AutoSize = true;
-        franja.ColumnCount = 4;
-        franja.RowCount = 1;
-        franja.Margin = new Padding(0, 0, 0, 20);
-        for (int i = 0; i < 4; i++)
-            franja.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        franja.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-    }
-
-    private void ActualizarFranja()
-    {
-        var p = actual;
-        var lista = productos.Productos;
-        string? evaluacion = ProveedorServicio.Evaluacion(p);
-        string? riesgo = ProveedorServicio.RiesgoFraudeMasAlto(new ProveedorConProductos(p, lista));
-        int activos = lista.Count(x => !x.Baja);
-        int deBaja = lista.Count - activos;
-
-        var (fondoEval, colorEval) = Tema.ColorNotaProveedor(evaluacion ?? "");
-        var (fondoRiesgo, colorRiesgo) = Tema.ColorNotaProveedor(riesgo ?? "");
-
-        franja.SuspendLayout();
-        foreach (Control c in franja.Controls.Cast<Control>().ToList())
-            c.Dispose();
-        franja.Controls.Clear();
-        franja.Controls.Add(Recuadro("Evaluación", evaluacion ?? CamposProveedor.SinNota,
-            evaluacion == null ? "Faltan datos para calcularla" : $"Impacto + estatus + reclamaciones = {(p.Impacto ?? 0) + (p.Estatus ?? 0) + (p.Reclamaciones ?? 0)}",
-            fondoEval, colorEval, ultimo: false), 0, 0);
-        franja.Controls.Add(Recuadro("Riesgo de fraude más alto", riesgo ?? CamposProveedor.SinNota,
-            lista.Count == 0 ? "Todavía no tiene productos" : "De sus productos activos",
-            fondoRiesgo, colorRiesgo, ultimo: false), 1, 0);
-        franja.Controls.Add(Recuadro("Productos activos", activos.ToString(),
-            deBaja > 0 ? $"y {deBaja} de baja" : "Ninguno de baja", Color.White, Tema.Texto, ultimo: false), 2, 0);
-        franja.Controls.Add(Recuadro("Reclamaciones", p.Reclamaciones?.ToString() ?? CamposProveedor.SinNota,
-            "Nota de 0 a 2", Color.White, Tema.Texto, ultimo: true), 3, 0);
-        franja.ResumeLayout();
-    }
-
-    private static Control Recuadro(string etiqueta, string valor, string nota, Color fondo, Color color, bool ultimo)
-    {
-        var recuadro = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            BackColor = fondo,
-            Padding = new Padding(20, 15, 20, 15),
-            Margin = new Padding(0, 0, ultimo ? 0 : 15, 0)
-        };
-        recuadro.Controls.Add(new Label
-        {
-            Text = etiqueta.ToUpper(Componentes.Es),
-            AutoSize = true,
-            ForeColor = fondo == Color.White ? Tema.Suave : color,
-            Font = Tema.FuenteEtiqueta
-        });
-        recuadro.Controls.Add(new Label
-        {
-            Text = valor,
-            AutoSize = true,
-            ForeColor = color,
-            Font = EstiloProveedores.FuenteCifra,
-            Margin = new Padding(0, 6, 0, 2)
-        });
-        recuadro.Controls.Add(new Label
-        {
-            Text = nota,
-            AutoSize = true,
-            ForeColor = fondo == Color.White ? Tema.Suave : color,
-            Font = Tema.FuenteNota
-        });
-        return recuadro;
     }
 
     // Datos que en el Excel eran distintos según la fila, y cuál se guardó

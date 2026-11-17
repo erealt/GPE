@@ -13,7 +13,7 @@ public class ProveedorServicio
     // "73 proveedores activos", para la tarjeta del inicio
     public string Resumen()
     {
-        int activos = repositorio.ObtenerProveedores().Count(p => !p.Proveedor.Baja);
+        int activos = repositorio.ContarActivos();
         return $"{activos} {(activos == 1 ? "proveedor activo" : "proveedores activos")}";
     }
 
