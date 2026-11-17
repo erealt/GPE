@@ -4,7 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Ventanita de una toma de agua: nueva, corregir una apuntada (y borrarla) o repetir una que no convenció.
+// Ventanita de una toma de agua: nueva o corregir una apuntada (y borrarla).
 public class FormTomaAgua : Form
 {
     private readonly AguaServicio servicio = new();
@@ -25,14 +25,13 @@ public class FormTomaAgua : Form
     public ControlAgua? Guardada { get; private set; }
 
     // tomas: los puntos activos. punto: el de la toma, por si ya está dado de baja.
-    // repetida: la toma que se repite (solo al repetir), para enseñar de cuál es.
-    public FormTomaAgua(ControlAgua? control, List<AguaToma> tomas, AguaToma? punto = null, ControlAgua? repetida = null)
+    public FormTomaAgua(ControlAgua? control, List<AguaToma> tomas, AguaToma? punto = null)
     {
         bool nueva = control == null || control.Id == 0;
         this.control = control ?? new ControlAgua(0, DateTime.Today, 0, null, true, true, true, true, null,
             Hora: Hora(DateTime.Now.TimeOfDay));
 
-        Text = repetida != null ? "Repetir toma de agua" : nueva ? "Nueva toma de agua" : "Corregir toma de agua";
+        Text = nueva ? "Nueva toma de agua" : "Corregir toma de agua";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -43,18 +42,6 @@ public class FormTomaAgua : Form
         Font = Tema.Fuente;
 
         var layout = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, Padding = new Padding(30, 20, 30, 10) };
-
-        if (repetida != null)
-            layout.Controls.Add(new Label
-            {
-                Text = $"Repite la toma de las {(repetida.Hora is TimeSpan h ? AguaServicio.Hora(h) : "—")} " +
-                       $"({(repetida.Cloro is decimal c ? AguaServicio.Ppm(c) : "sin cloro")}), que no convenció. " +
-                       "Esa se queda guardada como repetida.",
-                AutoSize = true,
-                MaximumSize = new Size(460, 0),
-                ForeColor = Tema.Acento,
-                Margin = new Padding(0, 0, 0, 15)
-            });
 
         // Fecha y hora en una fila
         dtpFecha.Format = DateTimePickerFormat.Short;
@@ -79,13 +66,6 @@ public class FormTomaAgua : Form
         cmbPunto.Items.AddRange(puntos.ToArray());
         cmbPunto.SelectedItem = puntos.FirstOrDefault(t => t.Id == this.control.TomaId);
         layout.Controls.Add(campos.Campo("Punto de agua", cmbPunto));
-
-        // Al repetir es el mismo punto y el mismo día
-        if (repetida != null)
-        {
-            dtpFecha.Enabled = false;
-            cmbPunto.Enabled = false;
-        }
 
         txtCloro.Width = 120;
         txtCloro.MaxLength = 4;

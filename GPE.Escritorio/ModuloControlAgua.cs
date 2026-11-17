@@ -6,14 +6,13 @@ namespace GPE.Escritorio;
 
 // Control de agua (hoja AGUA, MT-RG09): las tomas de un mes, la más reciente arriba.
 // No se hacen todos los días: cada toma se apunta como una fila nueva con "+ Nueva toma" y se guarda con "Guardar"; las guardadas se corrigen en su ventana.
-// Si una no convence se repite: la nueva queda como "repetición" y la otra como "repetida".
+// Si una no convence se apunta otra del mismo punto; las dos se quedan.
 public class ModuloControlAgua : UserControl
 {
     private readonly AguaServicio servicio = new();
     private List<AguaToma> tomas = new();
     private DateTime mes = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private List<ControlAguaConToma> controles = new();
-    private HashSet<int> repetidas = new();   // ids de las tomas que alguna otra repite
     private readonly List<Pendiente> nuevas = new();   // filas nuevas, aún sin guardar
 
     private readonly Label lblMes = new();
@@ -27,7 +26,7 @@ public class ModuloControlAgua : UserControl
 
     private const string ColFecha = "fecha", ColHora = "hora", ColToma = "toma", ColCloro = "cloro", ColSabor = "sabor",
         ColOlor = "olor", ColColor = "color", ColTurbidez = "turbidez", ColComentario = "comentario",
-        ColRepeticion = "repeticion", ColRepetir = "repetir";
+        ColEstado = "estado", ColQuitar = "quitar";
     private static readonly string[] ColumnasSiNo = { ColSabor, ColOlor, ColColor, ColTurbidez };
 
     // Opción del filtro de punto: null = todos
@@ -67,8 +66,7 @@ public class ModuloControlAgua : UserControl
         layout.Controls.Add(new Label
         {
             Text = "Pulsa \"+ Nueva toma\" (debajo de la tabla), elige el punto y apunta el cloro; Sí / No cambia con cada toque. " +
-                   "Pulsa \"Guardar\" para guardarlas. Doble clic en una guardada para corregirla o borrarla. " +
-                   "\"Repetir\" apunta otra del mismo punto si el resultado no convence.",
+                   "Pulsa \"Guardar\" para guardarlas. Doble clic en una guardada para corregirla o borrarla.",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Tema.Suave,
@@ -236,7 +234,7 @@ public class ModuloControlAgua : UserControl
         {
             (ColFecha, "FECHA", 115), (ColHora, "HORA", 75), (ColToma, "PUNTO DE AGUA", 0), (ColCloro, "CLORO (ppm)", 110),
             (ColSabor, "SABOR OK", 95), (ColOlor, "OLOR OK", 95), (ColColor, "COLOR OK", 95), (ColTurbidez, "TURBIDEZ OK", 105),
-            (ColComentario, "COMENTARIO", 0), (ColRepeticion, "", 130), (ColRepetir, "", 125)
+            (ColComentario, "COMENTARIO", 0), (ColEstado, "", 130), (ColQuitar, "", 125)
         };
         foreach (var (nombre, cabecera, ancho) in columnas)
         {
@@ -258,7 +256,6 @@ public class ModuloControlAgua : UserControl
         grid.Columns[ColHora]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
         grid.Columns[ColCloro]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
         grid.Columns[ColCloro]!.DefaultCellStyle.Font = Tema.FuenteNegrita;
-        grid.Columns[ColRepetir]!.ToolTipText = "Apuntar otra toma de este punto porque esta no convence";
 
         grid.CellPainting += PintarCelda;
         grid.CellFormatting += Formatear;
@@ -269,7 +266,6 @@ public class ModuloControlAgua : UserControl
             var fila = grid.Rows[e.RowIndex];
             string columna = grid.Columns[e.ColumnIndex].Name;
             if (fila.Tag is Pendiente) BeginInvoke(() => PulsarNueva(fila, columna));
-            else if (fila.Tag is ControlAguaConToma toma && columna == ColRepetir) BeginInvoke(() => Repetir(toma));
         };
         grid.CellValueChanged += (s, e) =>
         {
@@ -278,8 +274,7 @@ public class ModuloControlAgua : UserControl
         // Las guardadas se corrigen o se borran en la ventana
         grid.CellDoubleClick += (s, e) =>
         {
-            if (e.RowIndex >= 0 && (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].Name != ColRepetir))
-                Corregir(grid.Rows[e.RowIndex]);
+            if (e.RowIndex >= 0) Corregir(grid.Rows[e.RowIndex]);
         };
         grid.KeyDown += (s, e) =>
         {
@@ -290,48 +285,20 @@ public class ModuloControlAgua : UserControl
         return grid;
     }
 
-    private bool EsRepetida(DataGridViewRow fila) =>
-        fila.Tag is ControlAguaConToma c && repetidas.Contains(c.Control.Id);
-
-    // Sí / No como etiquetas, "repetición" / "repetida" y el botón de repetir
+    // Sí / No como etiquetas; en las filas sin guardar, "sin guardar" y "✕ Quitar"
     private void PintarCelda(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || e.Graphics == null) return;
         var fila = grid.Rows[e.RowIndex];
         string columna = grid.Columns[e.ColumnIndex].Name;
-        if (fila.Tag is Pendiente nueva)
-        {
-            PintarNueva(e, columna, nueva);
-            return;
-        }
-        if (fila.Tag is not ControlAguaConToma toma) return;
+        bool nueva = fila.Tag is Pendiente;
+        if (!nueva && fila.Tag is not ControlAguaConToma) return;
 
         if (ColumnasSiNo.Contains(columna))
             PintarSiNo(e);
-        else if (columna == ColRepeticion)
-        {
-            if (EsRepetida(fila))
-                Componentes.PintarEtiqueta(e, "repetida", Tema.CabeceraTabla, Tema.Suave);
-            else if (toma.Control.RepiteId != null)
-                Componentes.PintarEtiqueta(e, "↻  repetición", Tema.AcentoSuave, Tema.Acento);
-            else
-            {
-                e.PaintBackground(e.CellBounds, true);
-                e.Handled = true;
-            }
-        }
-        else if (columna == ColRepetir)
-            PintarBoton(e, EsRepetida(fila) ? null : "↻  Repetir", Tema.Acento);
-    }
-
-    // Fila sin guardar: Sí / No, "sin guardar" o "repetición" y "✕ Quitar"
-    private static void PintarNueva(DataGridViewCellPaintingEventArgs e, string columna, Pendiente p)
-    {
-        if (ColumnasSiNo.Contains(columna))
-            PintarSiNo(e);
-        else if (columna == ColRepeticion)
-            Componentes.PintarEtiqueta(e, p.RepiteId != null ? "↻  repetición" : "sin guardar", Tema.AcentoSuave, Tema.Acento);
-        else if (columna == ColRepetir)
+        else if (nueva && columna == ColEstado)
+            Componentes.PintarEtiqueta(e, "sin guardar", Tema.AcentoSuave, Tema.Acento);
+        else if (nueva && columna == ColQuitar)
             PintarBoton(e, "✕  Quitar", Tema.Error);
     }
 
@@ -342,33 +309,24 @@ public class ModuloControlAgua : UserControl
         Componentes.PintarEtiqueta(e, si ? "✓  Sí" : "✗  No", fondo, texto);
     }
 
-    // Un botón dibujado en la celda (sin texto, la celda vacía)
-    private static void PintarBoton(DataGridViewCellPaintingEventArgs e, string? texto, Color color)
+    // Un botón dibujado en la celda
+    private static void PintarBoton(DataGridViewCellPaintingEventArgs e, string texto, Color color)
     {
         e.PaintBackground(e.CellBounds, true);
-        if (texto != null)
-        {
-            var caja = Rectangle.Inflate(e.CellBounds, -10, -8);
-            using (var borde = new Pen(Tema.LineaTabla))
-                e.Graphics!.DrawRectangle(borde, caja);
-            TextRenderer.DrawText(e.Graphics, texto, Tema.FuentePequenaNegrita, caja, color,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-        }
+        var caja = Rectangle.Inflate(e.CellBounds, -10, -8);
+        using (var borde = new Pen(Tema.LineaTabla))
+            e.Graphics!.DrawRectangle(borde, caja);
+        TextRenderer.DrawText(e.Graphics, texto, Tema.FuentePequenaNegrita, caja, color,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         e.Handled = true;
     }
 
-    // Las repetidas en gris; el cloro fuera del límite del punto, en rojo
+    // El cloro fuera del límite del punto, en rojo
     private void Formatear(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.CellStyle == null) return;
-        var fila = grid.Rows[e.RowIndex];
-        if (fila.Tag is not ControlAguaConToma toma) return;
+        if (grid.Rows[e.RowIndex].Tag is not ControlAguaConToma toma) return;
 
-        if (EsRepetida(fila))
-        {
-            e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = Tema.Suave;
-            if (grid.Columns[e.ColumnIndex].Name == ColCloro) e.CellStyle.Font = Tema.Fuente;
-        }
         if (grid.Columns[e.ColumnIndex].Name == ColCloro && AguaServicio.FueraDeRango(toma.Control.Cloro, toma.Toma))
         {
             e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = Tema.FondoError;
@@ -397,7 +355,6 @@ public class ModuloControlAgua : UserControl
             Mensajes.ErrorBaseDatos(this, "No se pudo cargar el control de agua de la base de datos.", ex);
             controles = new();
         }
-        repetidas = controles.Where(c => c.Control.RepiteId != null).Select(c => c.Control.RepiteId!.Value).ToHashSet();
 
         // "Noviembre 2026"
         string nombre = mes.ToString("MMMM yyyy", Componentes.Es);
@@ -460,12 +417,10 @@ public class ModuloControlAgua : UserControl
         foreach (var p in nuevas) AnadirNueva(p);
         grid.ClearSelection();
 
-        int repetidasVisibles = visibles.Count(c => repetidas.Contains(c.Control.Id));
-        int fuera = visibles.Count(c => !repetidas.Contains(c.Control.Id) && AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma));
+        int fuera = visibles.Count(c => AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma));
         lblResumen.Text = string.Join("  ·  ", new[]
         {
             visibles.Count == 0 ? null : $"{visibles.Count} {(visibles.Count == 1 ? "toma" : "tomas")}",
-            repetidasVisibles == 0 ? null : $"{repetidasVisibles} {(repetidasVisibles == 1 ? "repetida" : "repetidas")}",
             fuera == 0 ? null : $"{fuera} fuera del límite",
             nuevas.Count == 0 ? null : $"{nuevas.Count} sin guardar"
         }.OfType<string>());
@@ -488,7 +443,6 @@ public class ModuloControlAgua : UserControl
         public string Cloro = "";
         public bool Sabor = true, Olor = true, Color = true, Turbidez = true;
         public string Comentario = "";
-        public int? RepiteId;   // la toma que repite (no se puede cambiar de punto)
     }
 
     private void AnadirNueva(Pendiente p)
@@ -547,20 +501,6 @@ public class ModuloControlAgua : UserControl
         });
     }
 
-    // Otra toma del mismo punto y el mismo día; si es de hoy, a la hora de ahora
-    private void Repetir(ControlAguaConToma toma)
-    {
-        if (repetidas.Contains(toma.Control.Id)) return;
-        if (nuevas.Any(n => n.RepiteId == toma.Control.Id)) return;   // ya se está repitiendo
-        AnadirYPedirCloro(new Pendiente
-        {
-            Fecha = toma.Control.Fecha.Date,
-            TomaId = toma.Toma.Id,
-            Hora = toma.Control.Fecha.Date == DateTime.Today ? AhoraTexto() : "",
-            RepiteId = toma.Control.Id
-        });
-    }
-
     // Con muchas filas, que se siga viendo la nueva; y se abre el teclado del cloro
     private void AnadirYPedirCloro(Pendiente p)
     {
@@ -581,7 +521,7 @@ public class ModuloControlAgua : UserControl
     private void PulsarNueva(DataGridViewRow fila, string columna)
     {
         if (fila.Tag is not Pendiente p || fila.DataGridView == null) return;
-        if (columna == ColToma && p.RepiteId == null) ElegirPunto(fila, p);
+        if (columna == ColToma) ElegirPunto(fila, p);
         else if (columna == ColCloro) PedirCloro(fila);
         else if (ColumnasSiNo.Contains(columna)) fila.Cells[columna].Value = fila.Cells[columna].Value is not true;
         else if (columna is ColHora or ColComentario)
@@ -589,7 +529,7 @@ public class ModuloControlAgua : UserControl
             grid.CurrentCell = fila.Cells[columna];
             grid.BeginEdit(true);
         }
-        else if (columna == ColRepetir) QuitarNueva(p);
+        else if (columna == ColQuitar) QuitarNueva(p);
     }
 
     private void ElegirPunto(DataGridViewRow fila, Pendiente p)
@@ -646,7 +586,7 @@ public class ModuloControlAgua : UserControl
                 cloro = valor;
             }
             listas.Add((p, new ControlAgua(0, p.Fecha, p.TomaId, cloro, p.Sabor, p.Olor, p.Color, p.Turbidez, p.Comentario,
-                Hora: hora, RepiteId: p.RepiteId)));
+                Hora: hora)));
         }
 
         foreach (var (fila, control) in listas)
@@ -684,15 +624,11 @@ public class ModuloControlAgua : UserControl
         if (!e.Cancel && !DescartarNuevas()) e.Cancel = true;
     }
 
-    // Corregir o borrar una toma ya guardada, en la ventana. Si se borra una que repite una fila nueva, la nueva pasa a repetir la anterior.
+    // Corregir o borrar una toma ya guardada, en la ventana
     private void Corregir(DataGridViewRow fila)
     {
         if (fila.Tag is not ControlAguaConToma toma) return;
         using var ventana = new FormTomaAgua(toma.Control, tomas, toma.Toma);
-        if (ventana.ShowDialog(this) != DialogResult.OK) return;
-        Cargar(recargarTomas: false);
-        if (controles.Any(c => c.Control.Id == toma.Control.Id)) return;   // no se ha borrado
-        foreach (var p in nuevas.Where(p => p.RepiteId == toma.Control.Id))
-            p.RepiteId = toma.Control.RepiteId;
+        if (ventana.ShowDialog(this) == DialogResult.OK) Cargar(recargarTomas: false);
     }
 }
