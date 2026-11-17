@@ -19,8 +19,6 @@ public class ModuloProveedores : UserControl
 
     private const string Todos = "Todos";
     private const string SinNota = "Sin nota";
-    private const string EstadoActivos = "Activos";
-    private const string EstadoBaja = "De baja";
 
     private readonly ProveedorServicio servicio = new();
     private List<ProveedorConProductos> registros = new();
@@ -140,8 +138,8 @@ public class ModuloProveedores : UserControl
         cmbEvaluacion.SelectedIndex = 0;
 
         cmbEstado.Width = 130;
-        cmbEstado.Items.AddRange(new object[] { EstadoActivos, EstadoBaja, Todos });
-        cmbEstado.SelectedItem = EstadoActivos;   // lo del día a día son los que siguen activos
+        cmbEstado.Items.AddRange(new object[] { CamposProveedor.FiltroActivos, CamposProveedor.FiltroBaja, CamposProveedor.FiltroTodos });
+        cmbEstado.SelectedItem = CamposProveedor.FiltroActivos;   // lo del día a día son los que siguen activos
 
         panel.Controls.Add(Componentes.CampoFiltro("Buscar", txtBuscar));
         panel.Controls.Add(Componentes.CampoFiltro("Tipo", cmbTipo));
@@ -263,7 +261,7 @@ public class ModuloProveedores : UserControl
             var (fondo, color) = p.Proveedor.Baja
                 ? Tema.ColorNotaProveedor("")   // gris
                 : Tema.ColorNotaProveedor("A"); // verde
-            Componentes.PintarEtiqueta(e, p.Proveedor.Baja ? "Baja" : "Activo", fondo, color);
+            Componentes.PintarEtiqueta(e, p.Proveedor.Baja ? CamposProveedor.Baja : CamposProveedor.Activo, fondo, color);
         }
         else if (e.ColumnIndex == ColumnaEvaluacion && ProveedorServicio.Evaluacion(p.Proveedor) is string nota)
         {
@@ -331,7 +329,7 @@ public class ModuloProveedores : UserControl
             prov.Numero?.ToString() ?? "—",
             (prov.Revisar != null ? "⚠  " : "") + prov.Nombre,
             prov.FechaAlta?.ToString("dd/MM/yy") ?? "—",
-            prov.Baja ? "Baja" : "Activo",
+            prov.Baja ? CamposProveedor.Baja : CamposProveedor.Activo,
             prov.Tipo ?? "—",
             Nota(prov.Impacto),
             Nota(prov.Estatus),
@@ -390,20 +388,29 @@ public class ModuloProveedores : UserControl
                                               : ProveedorServicio.Evaluacion(p.Proveedor) == evaluacion))
                 && estado switch
                 {
-                    EstadoActivos => !p.Proveedor.Baja,
-                    EstadoBaja => p.Proveedor.Baja,
+                    CamposProveedor.FiltroActivos => !p.Proveedor.Baja,
+                    CamposProveedor.FiltroBaja => p.Proveedor.Baja,
                     _ => true
                 })
             .ToList();
     }
 
-    // De momento la ficha solo es de consulta: no hace falta recargar la lista al cerrarla
-    // p == null: proveedor nuevo. Si se guarda, se vuelve a leer la lista.
-    private void AbrirFicha(ProveedorConProductos? p)
+    // p == null: proveedor nuevo. Al cerrar se vuelve a leer la lista: los productos se guardan al momento,
+    // aunque luego se cierre la ficha sin guardar el proveedor.
+    private void AbrirFicha(ProveedorConProductos? p, bool abrirProductos = false)
     {
-        using var ficha = new FormProveedor(p);
-        if (ficha.ShowDialog(this) == DialogResult.OK)
-            CargarDatos();
+        bool guardado;
+        int id;
+        using (var ficha = new FormProveedor(p, abrirProductos))
+        {
+            guardado = ficha.ShowDialog(this) == DialogResult.OK;
+            id = ficha.IdGuardado;
+        }
+        CargarDatos();
+
+        // Recién creado: se abre otra vez en la pestaña Productos, para añadirle los suyos sin buscarlo
+        if (p == null && guardado && registros.FirstOrDefault(r => r.Proveedor.Id == id) is { } nuevo)
+            AbrirFicha(nuevo, abrirProductos: true);
     }
 
     private void LimpiarFiltros()
@@ -413,7 +420,7 @@ public class ModuloProveedores : UserControl
         txtBuscar.Clear();
         cmbTipo.SelectedIndex = 0;
         cmbEvaluacion.SelectedIndex = 0;
-        cmbEstado.SelectedItem = EstadoActivos;
+        cmbEstado.SelectedItem = CamposProveedor.FiltroActivos;
         limpiando = false;
         AplicarFiltros();
     }

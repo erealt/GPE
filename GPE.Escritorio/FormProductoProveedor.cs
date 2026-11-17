@@ -8,10 +8,6 @@ namespace GPE.Escritorio;
 // con las notas del producto y las del proveedor (las que hay escritas en su ficha).
 public class FormProductoProveedor : Form
 {
-    private const string Activo = "Activo";
-    private const string DeBaja = "De baja";
-    private const string SinNota = FormProveedor.SinNota;
-
     private readonly ProveedorServicio servicio = new();
     private readonly CamposFormulario campos = new();
     private readonly Proveedor proveedor;
@@ -20,10 +16,10 @@ public class FormProductoProveedor : Form
 
     private readonly TextBox txtCodigo = new();
     private readonly TextBox txtDescripcion = new();
-    private readonly ComboBox cmbEstado = new();
-    private readonly ComboBox cmbTipo = new();
-    private readonly DateTimePicker dtpAlta = new();
-    private readonly DateTimePicker dtpRevision = new();
+    private readonly ComboBox cmbEstado = CamposProveedor.ComboEstado();
+    private readonly ComboBox cmbTipo;
+    private readonly DateTimePicker dtpAlta = CamposProveedor.Fecha();
+    private readonly DateTimePicker dtpRevision = CamposProveedor.Fecha();
     private readonly TextBox txtAlergenos = new();
     private readonly TextBox txtPosibles = new();
 
@@ -31,28 +27,33 @@ public class FormProductoProveedor : Form
     private readonly TextBox txtQuimicos = new();
     private readonly TextBox txtMicro = new();
     private readonly TextBox txtAnalisisAlergenos = new();
-    private readonly DateTimePicker dtpEurochoc = new();
+    private readonly DateTimePicker dtpEurochoc = CamposProveedor.Fecha();
     private readonly TextBox txtEurochocAlcance = new();
-    private readonly TextBox txtEurochocResultado = Multilinea();
+    private readonly TextBox txtEurochocResultado = CamposProveedor.Multilinea();
 
     private readonly ComboBox cmbImpacto;
-    private readonly ComboBox cmbControl = FormProveedor.ComboNota(1, 3);
-    private readonly ComboBox cmbReclamaciones = FormProveedor.ComboNota(0, 2);
-    private readonly TextBox txtParametro = Multilinea();
+    private readonly ComboBox cmbControl = CamposProveedor.ComboNota(1, 3);
+    private readonly ComboBox cmbReclamaciones = CamposProveedor.ComboNota(0, 2);
+    private readonly TextBox txtParametro = CamposProveedor.Multilinea();
     private readonly Label lblMuestreo = new();
+    private readonly Label lblFaltaMuestreo = new();
     private readonly Label lblAlcance = new();
 
-    private readonly ComboBox cmbPHistorial = FormProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbPMotivacion = FormProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbPFacilidad = FormProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbDOrigen = FormProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbDCadena = FormProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbDMedidas = FormProveedor.ComboNota(0, 3);
-    private readonly TextBox txtMedidas = Multilinea();
+    private readonly ComboBox cmbPHistorial = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbPMotivacion = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbPFacilidad = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbDOrigen = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbDCadena = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbDMedidas = CamposProveedor.ComboNota(0, 3);
+    private readonly TextBox txtMedidas = CamposProveedor.Multilinea();
+    private readonly Label lblOxD = new();
+    private readonly Label lblVulnerabilidad = new();
+    private readonly Label lblPuntuacion = new();
     private readonly Label lblRiesgo = new();
+    private readonly Label lblFaltaRiesgo = new();
     private readonly Label lblActuacion = new();
 
-    private readonly TextBox txtObservaciones = Multilinea();
+    private readonly TextBox txtObservaciones = CamposProveedor.Multilinea();
 
     public int IdGuardado { get; private set; }
 
@@ -64,7 +65,8 @@ public class FormProductoProveedor : Form
         original = producto ?? new ProductoProveedor(0, proveedor.Id, null, null, null, DateTime.Today, false, null, null,
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
             null, null, null);
-        cmbImpacto = FormProveedor.ComboNota(1, 3, $"Igual que el proveedor ({proveedor.Impacto?.ToString() ?? "—"})");
+        cmbImpacto = CamposProveedor.ComboNota(1, 3, $"Igual que el proveedor ({proveedor.Impacto?.ToString() ?? CamposProveedor.SinNota})");
+        cmbTipo = CamposProveedor.ComboTipo(TipoProductoProveedor.Todos, original.TipoProducto);
 
         Text = nuevo ? $"Nuevo producto - {proveedor.Nombre}" : $"Producto {original.Codigo} - {original.Descripcion}";
         StartPosition = FormStartPosition.CenterParent;
@@ -76,16 +78,16 @@ public class FormProductoProveedor : Form
         KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) Close(); };
 
         var (scroll, pila) = Componentes.Pagina();
-        string ruta = $"PROVEEDORES  ·  Nº {proveedor.Numero?.ToString() ?? "—"}  ·  {proveedor.Nombre}";
+        string ruta = $"PROVEEDORES  ·  Nº {proveedor.Numero?.ToString() ?? CamposProveedor.SinNota}  ·  {proveedor.Nombre}";
         pila.Controls.Add(nuevo
             ? Componentes.Cabecera(ruta, "Nuevo producto", "Rellena sus datos y guárdalo.")
             : Componentes.Cabecera(ruta, original.Descripcion ?? original.Codigo ?? "Producto",
-                string.Join("  ·  ", new[] { original.Codigo, original.TipoProducto, original.Baja ? "De baja" : "Activo" }.OfType<string>())));
+                string.Join("  ·  ", new[] { original.Codigo, original.TipoProducto, original.Baja ? CamposProveedor.DeBaja : CamposProveedor.Activo }.OfType<string>())));
 
-        pila.Controls.Add(Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos));
-        pila.Controls.Add(Marcada(TarjetaDocumentacion(), EstiloProveedores.RayaProductos));
-        pila.Controls.Add(Marcada(TarjetaMuestreo(), EstiloProveedores.RayaEvaluacion));
-        pila.Controls.Add(Marcada(TarjetaFraude(), EstiloProveedores.RayaRiesgo));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaDocumentacion(), EstiloProveedores.RayaProductos));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaMuestreo(), EstiloProveedores.RayaEvaluacion));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaFraude(), EstiloProveedores.RayaRiesgo));
         var observaciones = Componentes.Tarjeta("Observaciones");
         txtObservaciones.Dock = DockStyle.Top;
         txtObservaciones.Height = 80;
@@ -103,16 +105,11 @@ public class FormProductoProveedor : Form
         Poner(original);
         ActualizarNotas();
 
-        foreach (var control in FormProveedor.Entradas(this))
+        CamposProveedor.AlCambiar(this, () =>
         {
-            EventHandler cambio = (s, e) => { hayCambios = true; ActualizarNotas(); };
-            switch (control)
-            {
-                case ComboBox combo: combo.SelectedIndexChanged += cambio; break;
-                case DateTimePicker fecha: fecha.ValueChanged += cambio; break;
-                default: control.TextChanged += cambio; break;
-            }
-        }
+            hayCambios = true;
+            ActualizarNotas();
+        });
         FormClosing += AvisarCambiosSinGuardar;
 
         Shown += (s, e) =>
@@ -122,50 +119,21 @@ public class FormProductoProveedor : Form
         };
     }
 
-    private static Control Marcada(Control tarjeta, Color color)
-    {
-        EstiloProveedores.MarcarTarjeta(tarjeta, color);
-        return tarjeta;
-    }
-
-    private static TextBox Multilinea() => new() { Multiline = true, Height = 60, ScrollBars = ScrollBars.Vertical };
-
-    private static Control Ancho(TableLayoutPanel rejilla, Control campo, int columnas)
-    {
-        rejilla.Controls.Add(campo);
-        rejilla.SetColumnSpan(campo, columnas);
-        return campo;
-    }
-
     // Tarjetas
 
     private Control TarjetaDatos()
     {
         var tarjeta = Componentes.Tarjeta("Datos del producto");
         var rejilla = Componentes.Rejilla(4);
-
-        cmbEstado.Items.AddRange(new object[] { Activo, DeBaja });
-        cmbTipo.Items.Add(SinNota);
-        cmbTipo.Items.AddRange(TipoProductoProveedor.Todos);
-        if (original.TipoProducto != null && !cmbTipo.Items.Contains(original.TipoProducto))
-            cmbTipo.Items.Add(original.TipoProducto);
-        foreach (var combo in new[] { cmbEstado, cmbTipo })
-            combo.DropDownStyle = ComboBoxStyle.DropDownList;
-        foreach (var fecha in new[] { dtpAlta, dtpRevision, dtpEurochoc })
-        {
-            fecha.Format = DateTimePickerFormat.Short;
-            fecha.ShowCheckBox = true;   // sin marcar = sin fecha
-        }
-
         rejilla.Controls.Add(campos.Campo("Código", txtCodigo));
-        Ancho(rejilla, campos.Campo("Descripción", txtDescripcion), 2);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Descripción", txtDescripcion), 2);
         rejilla.Controls.Add(campos.Campo("Estado", cmbEstado));
         rejilla.Controls.Add(campos.Campo("Tipo producto", cmbTipo));
         rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
         rejilla.Controls.Add(campos.Campo("Fecha revisión", dtpRevision));
-        rejilla.Controls.Add(new Panel { Size = Size.Empty, Margin = Padding.Empty });   // salta al principio de la fila
-        Ancho(rejilla, campos.Campo("Alérgenos", txtAlergenos), 2);
-        Ancho(rejilla, campos.Campo("Posibles alérgenos", txtPosibles), 2);
+        rejilla.Controls.Add(CamposProveedor.Hueco());
+        CamposProveedor.Ancho(rejilla, campos.Campo("Alérgenos", txtAlergenos), 2);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Posibles alérgenos", txtPosibles), 2);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
@@ -180,8 +148,8 @@ public class FormProductoProveedor : Form
         rejilla.Controls.Add(campos.Campo("Análisis micro / Ensayo migración", txtMicro));
         rejilla.Controls.Add(campos.Campo("Análisis alérgenos / Formaldehído", txtAnalisisAlergenos));
         rejilla.Controls.Add(campos.Campo("Fecha análisis Eurochoc", dtpEurochoc));
-        Ancho(rejilla, campos.Campo("Alcance Eurochoc", txtEurochocAlcance), 3);
-        Ancho(rejilla, campos.Campo("Resultado Eurochoc", txtEurochocResultado), 4);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Alcance Eurochoc", txtEurochocAlcance), 3);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Resultado Eurochoc", txtEurochocResultado), 4);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
@@ -194,8 +162,10 @@ public class FormProductoProveedor : Form
         rejilla.Controls.Add(campos.Campo("Impacto del producto", cmbImpacto));
         rejilla.Controls.Add(campos.Campo("Control recepción", cmbControl));
         rejilla.Controls.Add(campos.Campo("Reclamaciones", cmbReclamaciones));
-        rejilla.Controls.Add(Resultado("Muestreo", lblMuestreo, lblAlcance));
-        Ancho(rejilla, campos.Campo("Parámetro", txtParametro), 4);
+        // Las columnas calculadas del Excel, con su nombre. No se escriben: salen de las notas.
+        rejilla.Controls.Add(CamposProveedor.DatoNota("Frecuencia muestreo", lblMuestreo, lblFaltaMuestreo));
+        CamposProveedor.Ancho(rejilla, CamposProveedor.DatoTexto("Alcance muestreo", lblAlcance, 900), 4);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Parámetro", txtParametro), 4);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
@@ -203,39 +173,23 @@ public class FormProductoProveedor : Form
     private Control TarjetaFraude()
     {
         var tarjeta = Componentes.Tarjeta("Vulnerabilidad al fraude",
-            "La ocurrencia (P.) más alta por la detección (D.) más alta, por el riesgo del proveedor: 1-6 BAJO, 7-12 MEDIO y 13-27 ALTO.");
+            "O × D: la ocurrencia (P.) más alta por la detección (D.) más alta. "
+            + "Puntuación: O × D por el riesgo del proveedor; 1-6 BAJO, 7-12 MEDIO y 13-27 ALTO.");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("P. historial", cmbPHistorial));
         rejilla.Controls.Add(campos.Campo("P. motivación económica", cmbPMotivacion));
         rejilla.Controls.Add(campos.Campo("P. facilidad", cmbPFacilidad));
-        var resultado = Resultado("Riesgo de fraude", lblRiesgo, lblActuacion);
-        rejilla.Controls.Add(resultado);
-        rejilla.SetRowSpan(resultado, 2);
+        rejilla.Controls.Add(CamposProveedor.DatoTexto("O × D", lblOxD));
         rejilla.Controls.Add(campos.Campo("D. origen", cmbDOrigen));
         rejilla.Controls.Add(campos.Campo("D. cadena suministro", cmbDCadena));
         rejilla.Controls.Add(campos.Campo("D. medidas control", cmbDMedidas));
-        Ancho(rejilla, campos.Campo("Medidas preventivas", txtMedidas), 4);
+        rejilla.Controls.Add(CamposProveedor.DatoNota("Riesgo (vulnerabilidad)", lblVulnerabilidad));
+        rejilla.Controls.Add(CamposProveedor.DatoTexto("Puntuación", lblPuntuacion));
+        rejilla.Controls.Add(CamposProveedor.DatoNota("Riesgo fraude", lblRiesgo, lblFaltaRiesgo));
+        CamposProveedor.Ancho(rejilla, CamposProveedor.DatoTexto("Actuación control", lblActuacion, 600), 2);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Medidas preventivas", txtMedidas), 4);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
-    }
-
-    // Nota calculada (etiqueta de color) con una explicación debajo
-    private static Control Resultado(string etiqueta, Label nota, Label explicacion)
-    {
-        var dato = FormProveedor.PanelDato(etiqueta);
-        nota.AutoSize = false;
-        nota.Size = new Size(80, 28);
-        nota.TextAlign = ContentAlignment.MiddleCenter;
-        nota.Font = Tema.FuenteNegrita;
-        nota.Margin = new Padding(0, 4, 0, 0);
-        explicacion.AutoSize = true;
-        explicacion.ForeColor = Tema.Suave;
-        explicacion.Font = Tema.FuenteNota;
-        explicacion.MaximumSize = new Size(280, 0);
-        explicacion.Margin = new Padding(0, 4, 0, 0);
-        dato.Controls.Add(nota);
-        dato.Controls.Add(explicacion);
-        return dato;
     }
 
     // Leer y poner
@@ -244,29 +198,29 @@ public class FormProductoProveedor : Form
     {
         txtCodigo.Text = x.Codigo ?? "";
         txtDescripcion.Text = x.Descripcion ?? "";
-        cmbEstado.SelectedItem = x.Baja ? DeBaja : Activo;
-        cmbTipo.SelectedItem = x.TipoProducto ?? SinNota;
-        FormProveedor.PonerFecha(dtpAlta, x.FechaAlta);
-        FormProveedor.PonerFecha(dtpRevision, x.FechaRevision);
+        CamposProveedor.PonerEstado(cmbEstado, x.Baja);
+        CamposProveedor.PonerTipo(cmbTipo, x.TipoProducto);
+        CamposProveedor.PonerFecha(dtpAlta, x.FechaAlta);
+        CamposProveedor.PonerFecha(dtpRevision, x.FechaRevision);
         txtAlergenos.Text = x.Alergenos ?? "";
         txtPosibles.Text = x.PosiblesAlergenos ?? "";
         txtFicha.Text = x.FichaTecnica ?? "";
         txtQuimicos.Text = x.AnalisisQuimicos ?? "";
         txtMicro.Text = x.AnalisisMicro ?? "";
         txtAnalisisAlergenos.Text = x.AnalisisAlergenos ?? "";
-        FormProveedor.PonerFecha(dtpEurochoc, x.EurochocFecha);
+        CamposProveedor.PonerFecha(dtpEurochoc, x.EurochocFecha);
         txtEurochocAlcance.Text = x.EurochocAlcance ?? "";
         txtEurochocResultado.Text = x.EurochocResultado ?? "";
-        FormProveedor.PonerNota(cmbImpacto, x.Impacto);
-        FormProveedor.PonerNota(cmbControl, x.ControlRecepcion);
-        FormProveedor.PonerNota(cmbReclamaciones, x.Reclamaciones);
+        CamposProveedor.PonerNota(cmbImpacto, x.Impacto);
+        CamposProveedor.PonerNota(cmbControl, x.ControlRecepcion);
+        CamposProveedor.PonerNota(cmbReclamaciones, x.Reclamaciones);
         txtParametro.Text = x.Parametro ?? "";
-        FormProveedor.PonerNota(cmbPHistorial, x.PHistorial);
-        FormProveedor.PonerNota(cmbPMotivacion, x.PMotivacion);
-        FormProveedor.PonerNota(cmbPFacilidad, x.PFacilidad);
-        FormProveedor.PonerNota(cmbDOrigen, x.DOrigen);
-        FormProveedor.PonerNota(cmbDCadena, x.DCadena);
-        FormProveedor.PonerNota(cmbDMedidas, x.DMedidas);
+        CamposProveedor.PonerNota(cmbPHistorial, x.PHistorial);
+        CamposProveedor.PonerNota(cmbPMotivacion, x.PMotivacion);
+        CamposProveedor.PonerNota(cmbPFacilidad, x.PFacilidad);
+        CamposProveedor.PonerNota(cmbDOrigen, x.DOrigen);
+        CamposProveedor.PonerNota(cmbDCadena, x.DCadena);
+        CamposProveedor.PonerNota(cmbDMedidas, x.DMedidas);
         txtMedidas.Text = x.MedidasPreventivas ?? "";
         txtObservaciones.Text = x.Observaciones ?? "";
     }
@@ -275,59 +229,53 @@ public class FormProductoProveedor : Form
     {
         Codigo = txtCodigo.Text,
         Descripcion = txtDescripcion.Text,
-        Baja = cmbEstado.SelectedItem as string == DeBaja,
-        TipoProducto = cmbTipo.SelectedItem as string is string tipo && tipo != SinNota ? tipo : null,
-        FechaAlta = FormProveedor.LeerFecha(dtpAlta),
-        FechaRevision = FormProveedor.LeerFecha(dtpRevision),
+        Baja = CamposProveedor.LeerBaja(cmbEstado),
+        TipoProducto = CamposProveedor.LeerTipo(cmbTipo),
+        FechaAlta = CamposProveedor.LeerFecha(dtpAlta),
+        FechaRevision = CamposProveedor.LeerFecha(dtpRevision),
         Alergenos = txtAlergenos.Text,
         PosiblesAlergenos = txtPosibles.Text,
         FichaTecnica = txtFicha.Text,
         AnalisisQuimicos = txtQuimicos.Text,
         AnalisisMicro = txtMicro.Text,
         AnalisisAlergenos = txtAnalisisAlergenos.Text,
-        EurochocFecha = FormProveedor.LeerFecha(dtpEurochoc),
+        EurochocFecha = CamposProveedor.LeerFecha(dtpEurochoc),
         EurochocAlcance = txtEurochocAlcance.Text,
         EurochocResultado = txtEurochocResultado.Text,
-        Impacto = FormProveedor.LeerNota(cmbImpacto),
-        ControlRecepcion = FormProveedor.LeerNota(cmbControl),
-        Reclamaciones = FormProveedor.LeerNota(cmbReclamaciones),
+        Impacto = CamposProveedor.LeerNota(cmbImpacto),
+        ControlRecepcion = CamposProveedor.LeerNota(cmbControl),
+        Reclamaciones = CamposProveedor.LeerNota(cmbReclamaciones),
         Parametro = txtParametro.Text,
-        PHistorial = FormProveedor.LeerNota(cmbPHistorial),
-        PMotivacion = FormProveedor.LeerNota(cmbPMotivacion),
-        PFacilidad = FormProveedor.LeerNota(cmbPFacilidad),
-        DOrigen = FormProveedor.LeerNota(cmbDOrigen),
-        DCadena = FormProveedor.LeerNota(cmbDCadena),
-        DMedidas = FormProveedor.LeerNota(cmbDMedidas),
+        PHistorial = CamposProveedor.LeerNota(cmbPHistorial),
+        PMotivacion = CamposProveedor.LeerNota(cmbPMotivacion),
+        PFacilidad = CamposProveedor.LeerNota(cmbPFacilidad),
+        DOrigen = CamposProveedor.LeerNota(cmbDOrigen),
+        DCadena = CamposProveedor.LeerNota(cmbDCadena),
+        DMedidas = CamposProveedor.LeerNota(cmbDMedidas),
         MedidasPreventivas = txtMedidas.Text,
         Observaciones = txtObservaciones.Text
     };
 
-    // Muestreo y riesgo con lo que hay escrito
+    // Datos calculados con lo que hay escrito
     private void ActualizarNotas()
     {
         var x = Leer();
 
         string? muestreo = ProveedorServicio.FrecuenciaMuestreo(proveedor, x);
-        Pintar(lblMuestreo, muestreo);
-        lblAlcance.Text = muestreo == null
-            ? "Falta el impacto, el estatus del proveedor o el control en recepción"
-            : ProveedorServicio.AlcanceMuestreo(muestreo);
+        CamposProveedor.PintarNota(lblMuestreo, muestreo);
+        lblFaltaMuestreo.Text = muestreo == null ? "Falta el impacto, el estatus del proveedor o el control en recepción" : "";
+        lblFaltaMuestreo.Visible = muestreo == null;
+        lblAlcance.Text = ProveedorServicio.AlcanceMuestreo(muestreo) ?? CamposProveedor.SinNota;
+
+        lblOxD.Text = ProveedorServicio.OcurrenciaPorDeteccion(x).ToString();
+        CamposProveedor.PintarNota(lblVulnerabilidad, ProveedorServicio.RiesgoVulnerabilidad(x));
+        lblPuntuacion.Text = ProveedorServicio.Puntuacion(proveedor, x).ToString();
 
         string? riesgo = ProveedorServicio.RiesgoFraude(proveedor, x);
-        Pintar(lblRiesgo, riesgo);
-        lblActuacion.Text = riesgo == null
-            ? "Faltan las notas de ocurrencia y detección, o el riesgo del proveedor"
-            : $"O × D = {ProveedorServicio.OcurrenciaPorDeteccion(x)} (vulnerabilidad {ProveedorServicio.RiesgoVulnerabilidad(x)}), "
-              + $"puntuación {ProveedorServicio.Puntuacion(proveedor, x)}. {ProveedorServicio.Actuacion(riesgo)}";
-    }
-
-
-    private static void Pintar(Label etiqueta, string? nota)
-    {
-        var (fondo, color) = Tema.ColorNotaProveedor(nota ?? "");
-        etiqueta.Text = nota ?? "—";
-        etiqueta.BackColor = fondo;
-        etiqueta.ForeColor = color;
+        CamposProveedor.PintarNota(lblRiesgo, riesgo);
+        lblFaltaRiesgo.Text = riesgo == null ? "Faltan las notas de ocurrencia y detección, o el riesgo del proveedor" : "";
+        lblFaltaRiesgo.Visible = riesgo == null;
+        lblActuacion.Text = ProveedorServicio.Actuacion(riesgo) ?? CamposProveedor.SinNota;
     }
 
     // Guardado
