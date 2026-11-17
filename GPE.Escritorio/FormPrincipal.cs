@@ -98,10 +98,11 @@ public class FormPrincipal : Form
                 () => new ModuloProveedores()));
         }
 
-        lista.Add(new Modulo("DeCA",
-            "Documento de control del transporte, con su PDF y su código QR.",
-            ModuloInicio.ResumenDeca,
-            () => new ModuloDeca()));
+        if (Sesion.VeDeca)
+            lista.Add(new Modulo("DeCA",
+                "Documento de control del transporte, con su PDF y su código QR.",
+                ModuloInicio.ResumenDeca,
+                () => new ModuloDeca()));
 
         return lista;
     }

@@ -175,7 +175,7 @@ public class FormProductoProveedor : Form
         var tarjeta = Componentes.Tarjeta("Documentación y análisis",
             "Se puede escribir una fecha, un año o una explicación.");
         var rejilla = Componentes.Rejilla(4);
-        rejilla.Controls.Add(campos.Campo("Ficha técnica", txtFicha));
+        rejilla.Controls.Add(campos.Campo("Año ficha técnica", txtFicha));
         rejilla.Controls.Add(campos.Campo("Análisis químicos / Decl. conformidad", txtQuimicos));
         rejilla.Controls.Add(campos.Campo("Análisis micro / Ensayo migración", txtMicro));
         rejilla.Controls.Add(campos.Campo("Análisis alérgenos / Formaldehído", txtAnalisisAlergenos));
@@ -311,8 +311,7 @@ public class FormProductoProveedor : Form
         Pintar(lblMuestreo, muestreo);
         lblAlcance.Text = muestreo == null
             ? "Falta el impacto, el estatus del proveedor o el control en recepción"
-            : $"{N(ProveedorServicio.ImpactoProducto(proveedor, x))} + {N(proveedor.Estatus)} + {N(x.ControlRecepcion)} + {N(x.Reclamaciones)}. "
-              + ProveedorServicio.AlcanceMuestreo(muestreo);
+            : ProveedorServicio.AlcanceMuestreo(muestreo);
 
         string? riesgo = ProveedorServicio.RiesgoFraude(proveedor, x);
         Pintar(lblRiesgo, riesgo);
@@ -322,7 +321,6 @@ public class FormProductoProveedor : Form
               + $"puntuación {ProveedorServicio.Puntuacion(proveedor, x)}. {ProveedorServicio.Actuacion(riesgo)}";
     }
 
-    private static string N(byte? nota) => nota?.ToString() ?? "0";
 
     private static void Pintar(Label etiqueta, string? nota)
     {
