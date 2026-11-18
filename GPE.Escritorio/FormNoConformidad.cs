@@ -53,8 +53,14 @@ public class FormNoConformidad : Form
     private readonly ComboBox cmbOperario = new();
 
     // Análisis y acción correctora
+    private readonly TextBox[] txtPreguntas = NuevasCajas();
+    private readonly TextBox[] txtRespuestas = NuevasCajas();
+    private readonly ComboBox cmbCausaRaiz = new();
     private readonly ComboBox cmbCapitulo = new();
     private readonly TextBox txtAnalisis = new();
+    // Textos libres de antes de los 5 porqués: solo se ven en los registros que los tienen
+    private Control campoCausaAnterior = null!;
+    private Control campoAnalisisAnterior = null!;
     private readonly TextBox txtCoste = new();
     private readonly TextBox txtHoras = new();
 
@@ -126,8 +132,9 @@ public class FormNoConformidad : Form
         hayCambios = borrador != null;
 
         // La barra de fases se pone al día con lo que decide cada fase
-        foreach (var texto in new[] { txtProblema, txtCausa, txtAnalisis })
+        foreach (var texto in new[] { txtProblema, txtCausa, txtAnalisis }.Concat(txtPreguntas).Concat(txtRespuestas))
             texto.TextChanged += (s, e) => ActualizarFases();
+        cmbCausaRaiz.SelectedIndexChanged += (s, e) => ActualizarFases();
         dtpFin.ValueChanged += (s, e) => ActualizarFases();
         tablaInmediatas.Cambiado += (s, e) => ActualizarFases();
         tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
@@ -268,8 +275,13 @@ public class FormNoConformidad : Form
         Sugerencias(txtCliente, clientes);
 
         Multilinea(txtProblema, 90, "Qué se ha detectado: producto, lote, cliente...");
-        Multilinea(txtCausa, 70, "Por qué ha pasado");
-        Multilinea(txtAnalisis, 70, "Causa de fondo, para que no se repita");
+        Multilinea(txtCausa, 70, "");
+        Multilinea(txtAnalisis, 70, "");
+        for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+        {
+            Multilinea(txtPreguntas[i], 46, i == 0 ? "¿Por qué ha pasado...?" : "¿Por qué...?");
+            Multilinea(txtRespuestas[i], 46, "Porque...");
+        }
 
         txtCoste.PlaceholderText = "Ej. 180,50";
         txtHoras.PlaceholderText = "Ej. 1,5";
@@ -351,12 +363,30 @@ public class FormNoConformidad : Form
                 combo.Items.Add(opcion);
 
         Elegir(combo, valor);
+        AjustarAnchoLista(combo);
+    }
 
-        // Que se lean enteras las opciones largas (capítulos de la norma...)
+    // Que se lean enteras las opciones largas (capítulos de la norma...)
+    private static void AjustarAnchoLista(ComboBox combo)
+    {
         int ancho = combo.Items.Cast<object>()
             .Max(o => TextRenderer.MeasureText(o.ToString(), combo.Font).Width) + 25;
         combo.DropDownWidth = Math.Max(combo.Width, Math.Min(ancho, 700));
     }
+
+    // Grupos de la hoja CAUSA RAIZ (lista fija, no de CALIDAD_LISTA)
+    private void LlenarCausasRaiz(string? causa)
+    {
+        cmbCausaRaiz.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbCausaRaiz.Items.Clear();
+        cmbCausaRaiz.Items.Add(SinIndicar);
+        foreach (string grupo in CausasRaiz.Todas)
+            cmbCausaRaiz.Items.Add(new OpcionLista(grupo, null));
+        Elegir(cmbCausaRaiz, causa);
+    }
+
+    private static TextBox[] NuevasCajas() =>
+        Enumerable.Range(0, NoConformidad.NumeroPorQues).Select(_ => new TextBox { MaxLength = 1000 }).ToArray();
 
     private static void Elegir(ComboBox combo, string? valor)
     {
@@ -464,6 +494,18 @@ public class FormNoConformidad : Form
         barraFases.Dock = DockStyle.Fill;
 
         franja.Controls.Add(barraFases);
+        // El informe, arriba para no tener que bajar hasta el final (solo en los ya guardados)
+        if (original != null)
+        {
+            var btnPdf = Tema.BotonSecundario("Descargar PDF", 160);
+            btnPdf.Height = 40;
+            btnPdf.Enabled = cargaCorrecta;
+            btnPdf.Click += (s, e) => DescargarPdf(original.Id);
+            var hueco = new Panel { Dock = DockStyle.Right, Width = btnPdf.Width + 20, Padding = new Padding(20, 0, 0, 12) };
+            btnPdf.Dock = DockStyle.Fill;
+            hueco.Controls.Add(btnPdf);
+            franja.Controls.Add(hueco);
+        }
         franja.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Tema.Linea });
         return franja;
     }
@@ -506,19 +548,70 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaAnalisis()
     {
-        var tarjeta = TarjetaFase(3, "Análisis de la causa", "Por qué ha pasado");
+        var tarjeta = TarjetaFase(3, "Análisis de la causa",
+            "Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega");
 
         var rejilla = Componentes.Rejilla(2);
-        var causa = campos.Campo("Descripción de la causa", txtCausa);
-        var analisis = campos.Campo("Análisis de la causa raíz", txtAnalisis);
-        rejilla.Controls.Add(causa, 0, 0);
-        rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 0, 1);
-        rejilla.Controls.Add(analisis, 0, 2);
-        rejilla.SetColumnSpan(causa, 2);
-        rejilla.SetColumnSpan(analisis, 2);
+        var porQues = campos.Campo("5 porqués", CrearPorQues());
+        rejilla.Controls.Add(porQues, 0, 0);
+        rejilla.SetColumnSpan(porQues, 2);
+        rejilla.Controls.Add(campos.Campo("Causa raíz", cmbCausaRaiz), 0, 1);
+        rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 1, 1);
+
+        campoCausaAnterior = campos.Campo("Descripción de la causa (texto de antes de los 5 porqués)", txtCausa);
+        campoAnalisisAnterior = campos.Campo("Análisis de la causa raíz (texto de antes de los 5 porqués)", txtAnalisis);
+        rejilla.Controls.Add(campoCausaAnterior, 0, 3);
+        rejilla.Controls.Add(campoAnalisisAnterior, 0, 4);
+        rejilla.SetColumnSpan(campoCausaAnterior, 2);
+        rejilla.SetColumnSpan(campoAnalisisAnterior, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
+    }
+
+    // Cinco filas: número, "¿Por qué?" y "Porque"
+    private Control CrearPorQues()
+    {
+        var tabla = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 3,
+            Margin = new Padding(0)
+        };
+        tabla.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
+        tabla.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tabla.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+        Label Cabecera(string texto) => new()
+        {
+            Text = texto,
+            AutoSize = true,
+            ForeColor = Tema.Suave,
+            Font = Tema.FuentePequena,
+            Margin = new Padding(0, 0, 0, 4)
+        };
+        tabla.Controls.Add(new Label { AutoSize = true, Margin = new Padding(0) }, 0, 0);
+        tabla.Controls.Add(Cabecera("¿Por qué?"), 1, 0);
+        tabla.Controls.Add(Cabecera("Porque"), 2, 0);
+
+        for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+        {
+            tabla.Controls.Add(new Label
+            {
+                Text = $"{i + 1}.",
+                AutoSize = true,
+                Font = Tema.FuentePequenaNegrita,
+                Margin = new Padding(0, 6, 0, 0)
+            }, 0, i + 1);
+            txtPreguntas[i].Dock = DockStyle.Fill;
+            txtRespuestas[i].Dock = DockStyle.Fill;
+            txtPreguntas[i].Margin = new Padding(0, 0, 8, 8);
+            txtRespuestas[i].Margin = new Padding(0, 0, 0, 8);
+            tabla.Controls.Add(txtPreguntas[i], 1, i + 1);
+            tabla.Controls.Add(txtRespuestas[i], 2, i + 1);
+        }
+        return tabla;
     }
 
     private Control CrearTarjetaIncidencia()
@@ -577,16 +670,8 @@ public class FormNoConformidad : Form
         btnCancelar.Click += (s, e) => Close();
         CancelButton = btnCancelar;   // Esc cierra (avisando si hay cambios)
 
-        var botones = SoloLectura ? new List<Button> { btnCancelar } : new List<Button> { btnGuardar, btnCancelar };
-        // El informe solo existe para los registros ya guardados (va a la izquierda)
-        if (original != null)
-        {
-            var btnPdf = Tema.BotonSecundario("Descargar PDF", 160);
-            btnPdf.Enabled = cargaCorrecta;
-            btnPdf.Click += (s, e) => DescargarPdf(original.Id);
-            botones.Add(btnPdf);
-        }
-        return Componentes.Acciones(botones.ToArray());
+        var botones = SoloLectura ? new[] { btnCancelar } : new[] { btnGuardar, btnCancelar };
+        return Componentes.Acciones(botones);
     }
 
     // Informe para auditorías: lo guarda donde se elija y lo abre
@@ -671,6 +756,15 @@ public class FormNoConformidad : Form
         PonerFecha(dtpPrevista, nc?.FechaPrevista);
         PonerFecha(dtpFin, nc?.FechaFin);
         txtAnalisis.Text = nc?.AnalisisCausaRaiz ?? "";
+        campoCausaAnterior.Visible = !string.IsNullOrWhiteSpace(nc?.DescripcionCausa);
+        campoAnalisisAnterior.Visible = !string.IsNullOrWhiteSpace(nc?.AnalisisCausaRaiz);
+        for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+        {
+            var porQue = nc?.PorQues?.ElementAtOrDefault(i);
+            txtPreguntas[i].Text = porQue?.Pregunta ?? "";
+            txtRespuestas[i].Text = porQue?.Respuesta ?? "";
+        }
+        LlenarCausasRaiz(nc?.CausaRaiz);
         txtCoste.Text = nc?.CosteEconomico?.ToString("0.##", Componentes.Es) ?? "";
         txtHoras.Text = nc?.HorasManoObra?.ToString("0.##", Componentes.Es) ?? "";
 
@@ -693,6 +787,10 @@ public class FormNoConformidad : Form
     }
 
     private static DateTime? LeerFecha(DateTimePicker control) => control.Checked ? control.Value.Date : null;
+
+    private List<PorQue> LeerPorQues() =>
+        Enumerable.Range(0, NoConformidad.NumeroPorQues)
+            .Select(i => new PorQue(txtPreguntas[i].Text, txtRespuestas[i].Text)).ToList();
 
     private string TipoElegido =>
         botonesTipo.FirstOrDefault(b => b.Value.Checked).Key ?? TipoRegistro.Incidencia;
@@ -717,6 +815,8 @@ public class FormNoConformidad : Form
             Problema = txtProblema.Text,
             DescripcionCausa = txtCausa.Text,
             AnalisisCausaRaiz = txtAnalisis.Text,
+            PorQues = LeerPorQues(),
+            CausaRaiz = Valor(cmbCausaRaiz),
             FechaFin = LeerFecha(dtpFin)
         };
         fases = NoConformidadServicio.Fases(actual, tablaInmediatas.Borrador().Concat(tablaCorrectoras.Borrador()));
@@ -880,6 +980,8 @@ public class FormNoConformidad : Form
             AnalisisCausaRaiz: txtAnalisis.Text,
             CosteEconomico: coste,
             HorasManoObra: horas,
+            PorQues: LeerPorQues(),
+            CausaRaiz: Valor(cmbCausaRaiz),
             Version: original?.Version);
     }
 

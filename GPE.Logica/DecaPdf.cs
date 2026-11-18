@@ -18,6 +18,14 @@ public static class DecaPdf
     private const double TamanoQr = 95;
     private const double AltoFilaPalet = 18;
 
+    // Empresa que emite el DeCA, arriba a la izquierda
+    private const string EmpresaNombre = "EUROCHOC, S.L.";
+    private static readonly string[] EmpresaDatos =
+    [
+        "P.I. EL MUGRÓN. C/ ENCOFRADORES, PARC. 1",
+        "02640 ALMANSA (ALBACETE)   Tfno: 967 311 563"
+    ];
+
     private static readonly XColor ColorTexto = XColor.FromArgb(20, 35, 30);
     private static readonly XColor ColorSuave = XColor.FromArgb(110, 120, 115);
     private static readonly XColor ColorLinea = XColor.FromArgb(200, 205, 200);
@@ -58,18 +66,23 @@ public static class DecaPdf
         double ancho = pagina.Ancho;
         var d = deca.Datos;
 
-        // ---- Cabecera: número y fecha a la izquierda, QR a la derecha ----
+        // ---- Cabecera: empresa, número y fecha a la izquierda, QR a la derecha ----
         double y = Margen;
+        g.DrawString(EmpresaNombre, Seccion, new XSolidBrush(ColorTexto), Margen, y + 8);
+        for (int i = 0; i < EmpresaDatos.Length; i++)
+            g.DrawString(EmpresaDatos[i], Pie, new XSolidBrush(ColorSuave), Margen, y + 20 + i * 10);
+
+        double yTitulo = y + 52;
         g.DrawString("DOCUMENTO DE CONTROL DEL TRANSPORTE", Etiqueta, new XSolidBrush(ColorSuave),
-            Margen, y + 8);
-        g.DrawString(deca.Numero, Titulo, new XSolidBrush(ColorTexto), Margen, y + 32);
+            Margen, yTitulo + 8);
+        g.DrawString(deca.Numero, Titulo, new XSolidBrush(ColorTexto), Margen, yTitulo + 32);
         g.DrawString("Fecha de carga: " + d.FechaCarga.ToString("dd/MM/yyyy", Es), Negrita,
-            new XSolidBrush(ColorTexto), Margen, y + 52);
+            new XSolidBrush(ColorTexto), Margen, yTitulo + 52);
 
         double xQr = Margen + ancho - TamanoQr;
         DibujarQr(g, urlQr, xQr, y, TamanoQr);
 
-        y += TamanoQr + 20;
+        y = Math.Max(y + TamanoQr, yTitulo + 52) + 20;
 
         // ---- Remitente y destinatario, uno al lado del otro ----
         double medio = (ancho - 15) / 2;

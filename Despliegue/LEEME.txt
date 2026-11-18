@@ -1,0 +1,100 @@
+﻿INSTALAR LA WEB DEL DeCA EN EL SERVIDOR
+=======================================
+
+Esta carpeta lleva todo lo necesario:
+  Web\                   la web del DeCA
+  Avisos\                el programa que cada día borra los PDF de más de un año
+  BaseDatos\             los scripts de la base de datos
+  instalar-servidor.ps1  hace la instalación
+  LEEME.txt              esta guía
+
+
+ANTES DE EMPEZAR
+----------------
+- Entrar al servidor con un usuario administrador (por Escritorio remoto desde uno de los
+  ordenadores de administrador).
+- Tener a mano el usuario y la contraseña de aplicación de WordPress (las mismas que en el
+  ordenador de desarrollo: GPE_WP_USUARIO y GPE_WP_CLAVE).
+- El servidor necesita Internet para subir los PDF a eurochoc.es.
+
+
+PASO 1. Copiar esta carpeta al servidor
+---------------------------------------
+Por ejemplo a C:\Instalacion-DeCA (USB, carpeta compartida o copiar y pegar por Escritorio remoto).
+
+
+PASO 2. Base de datos
+---------------------
+Solo si la base de datos GPE no existe todavía o no tiene lo último del DeCA.
+En SQL Server Management Studio, en la base de datos GPE:
+  - Base nueva: ejecutar los scripts de BaseDatos en el orden del README (apartado 1),
+    empezando por crear_tablas.sql.
+  - Base que ya existe: ejecutar deca_normativa.sql (se puede ejecutar más de una vez).
+Comprobar que existe el usuario con id 1 en la tabla USUARIO: los DeCA hechos desde la web
+se guardan a su nombre.
+
+
+PASO 3. Ejecutar el script
+--------------------------
+1. Abrir PowerShell como administrador (botón Inicio, escribir PowerShell, clic derecho,
+   Ejecutar como administrador).
+2. Escribir (cambiando la carpeta si se copió en otro sitio):
+
+     cd C:\Instalacion-DeCA
+     powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1
+
+3. Va diciendo lo que hace. Pregunta el usuario y la contraseña de aplicación de WordPress
+   (la contraseña no se ve al escribirla; se puede pegar con clic derecho).
+
+La primera vez se parará en el paso 2 diciendo que falta el Hosting Bundle de .NET 10:
+  a. Descargarlo de https://dotnet.microsoft.com/download/dotnet/10.0
+     (columna "ASP.NET Core Runtime", enlace "Hosting Bundle" de Windows).
+  b. Instalarlo (doble clic, Siguiente).
+  c. Cerrar PowerShell, abrir otro como administrador y volver a ejecutar el script.
+
+Si la base de datos NO está en este servidor, el script se ejecuta así (Carlos sabe los datos):
+
+     powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -Conexion "Server=NOMBRE-DEL-SERVIDOR-SQL;Database=GPE;User Id=USUARIO;Password=CLAVE;TrustServerCertificate=True;"
+
+
+PASO 4. Comprobar
+-----------------
+Al terminar, el script dice la dirección de la web, por ejemplo http://SERVIDOR01/
+Desde OTRO ordenador de la fábrica:
+  1. Abrir esa dirección: tiene que salir la lista de DeCA.
+  2. Crear un DeCA de prueba y guardarlo.
+  3. Pulsar "Generar PDF y QR" y luego "Ver PDF".
+  4. Escanear el QR con el móvil: tiene que abrir el PDF.
+  5. Borrar el DeCA de prueba de la base de datos si no se quiere guardar.
+
+
+SI ALGO FALLA
+-------------
+- "HTTP Error 500.19" o "500.30": falta el Hosting Bundle o se instaló antes que IIS.
+  Volver a instalar el Hosting Bundle (opción Reparar) y ejecutar: iisreset
+- "No se pudo cargar" o error de base de datos: falta el permiso de la web en SQL Server.
+  El script lo intenta dar; si no puede, muestra el texto para ejecutarlo en Management Studio.
+- Desde otro ordenador no se abre pero en el servidor sí: el cortafuegos. El script abre el
+  puerto para redes de dominio y privadas; si la red del servidor es "Pública", avisar a Carlos.
+- Falla al subir el PDF: revisar el usuario y la contraseña de WordPress (volver a ejecutar
+  el script y escribirlas de nuevo).
+
+
+ACTUALIZAR LA WEB MÁS ADELANTE
+------------------------------
+En el ordenador de desarrollo, preparar un paquete nuevo:
+
+     powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1
+
+Copiarlo al servidor y volver a ejecutar instalar-servidor.ps1. Mantiene las variables
+(pulsar Intro cuando pregunte por WordPress) y no borra los PDF guardados.
+
+
+QUÉ DEJA INSTALADO
+------------------
+- La web en C:\GPE\Web, sitio "GPE DeCA" de IIS (puerto 80).
+- Las copias de los PDF en C:\GPE\DeCA.
+- GPE.Avisos en C:\GPE\Avisos y la tarea programada "GPE - Borrado DeCA", cada día a las 3:00.
+  Su registro: C:\Windows\System32\config\systemprofile\AppData\Local\GPE\avisos.log
+- Variables del servidor: GPE_DECA_CARPETA, GPE_WP_USUARIO, GPE_WP_CLAVE (y GPE_CONEXION si
+  se usó -Conexion).

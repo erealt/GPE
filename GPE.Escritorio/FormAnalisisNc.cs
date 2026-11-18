@@ -4,7 +4,7 @@ using System.Data.Common;
 
 namespace GPE.Escritorio;
 
-// Análisis de las no conformidades: cuántas hay de cada sección, MC/PCC/BPM, tipo, operario u origen
+// Análisis de las no conformidades: cuántas hay de cada sección, MC/PCC/BPM, tipo, operario, origen o causa raíz
 // en un mes o un año. Al pulsar una barra salen debajo las de ese grupo; con doble clic se abre la ficha.
 public class FormAnalisisNc : Form
 {
@@ -66,7 +66,9 @@ public class FormAnalisisNc : Form
             new("MC/PCC/BPM", nc => nc.McPccBpm, TipoRegistro.Incidencia),
             new("Tipo", nc => nc.Tipo, TipoRegistro.NoConformidad),
             new("Operario", nc => nc.Operario, TipoRegistro.Incidencia),
-            new("Origen", nc => nc.Origen == null ? null : nombresOrigen.GetValueOrDefault(nc.Origen, nc.Origen), null)
+            new("Origen", nc => nc.Origen == null ? null : nombresOrigen.GetValueOrDefault(nc.Origen, nc.Origen), null),
+            // Personal, Equipos... Los registros de antes de los 5 porqués salen como "(sin indicar)"
+            new("Causa raíz", nc => nc.CausaRaiz, null)
         };
 
         Text = "Análisis de no conformidades";

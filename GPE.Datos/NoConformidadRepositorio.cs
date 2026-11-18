@@ -15,9 +15,17 @@ public class NoConformidadRepositorio
                    n.fecha_prevista, n.fecha_fin, n.cliente, COALESCE(p.nombre, n.proveedor) AS proveedor,
                    n.mc_pcc_bpm, n.parametro, n.operario,
                    n.capitulo_norma, n.analisis_causa_raiz,
-                   n.coste_economico, n.horas_mano_obra, n.version, n.proveedor_id
+                   n.coste_economico, n.horas_mano_obra,
+                   n.porque_pregunta_1, n.porque_respuesta_1, n.porque_pregunta_2, n.porque_respuesta_2,
+                   n.porque_pregunta_3, n.porque_respuesta_3, n.porque_pregunta_4, n.porque_respuesta_4,
+                   n.porque_pregunta_5, n.porque_respuesta_5,
+                   n.causa_raiz, n.version, n.proveedor_id
             FROM NO_CONFORMIDAD n
             LEFT JOIN PROVEEDOR p ON p.id = n.proveedor_id";
+
+    // Columnas de los 5 porqués, en orden: pregunta_1, respuesta_1, pregunta_2...
+    private static readonly string[] ColumnasPorQue = Enumerable.Range(1, NoConformidad.NumeroPorQues)
+        .SelectMany(n => new[] { $"porque_pregunta_{n}", $"porque_respuesta_{n}" }).ToArray();
 
     public List<NoConformidad> ObtenerRegistros() =>
         LeerRegistros(SqlRegistros + " ORDER BY n.fecha_detectado DESC, n.id DESC;", null);
@@ -68,8 +76,11 @@ public class NoConformidadRepositorio
                 AnalisisCausaRaiz: Texto(18),
                 CosteEconomico: Numero(19),
                 HorasManoObra: Numero(20),
-                Version: (byte[])lector[21],
-                ProveedorId: lector.IsDBNull(22) ? null : lector.GetInt32(22)));
+                PorQues: Enumerable.Range(0, NoConformidad.NumeroPorQues)
+                    .Select(i => new PorQue(Texto(21 + 2 * i), Texto(22 + 2 * i))).ToList(),
+                CausaRaiz: Texto(31),
+                Version: (byte[])lector[32],
+                ProveedorId: lector.IsDBNull(33) ? null : lector.GetInt32(33)));
         }
 
         return lista;
@@ -201,7 +212,11 @@ public class NoConformidadRepositorio
                  fecha_prevista, fecha_fin, cliente, proveedor, proveedor_id,
                  mc_pcc_bpm, parametro, operario,
                  capitulo_norma, analisis_causa_raiz,
-                 coste_economico, horas_mano_obra, creado_por)
+                 coste_economico, horas_mano_obra,
+                 porque_pregunta_1, porque_respuesta_1, porque_pregunta_2, porque_respuesta_2,
+                 porque_pregunta_3, porque_respuesta_3, porque_pregunta_4, porque_respuesta_4,
+                 porque_pregunta_5, porque_respuesta_5,
+                 causa_raiz, creado_por)
             VALUES
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
                  @problema, @descripcion_causa, @responsable,
@@ -209,7 +224,11 @@ public class NoConformidadRepositorio
                  CASE WHEN @proveedor_id IS NULL THEN @proveedor END, @proveedor_id,
                  @mc_pcc_bpm, @parametro, @operario,
                  @capitulo_norma, @analisis_causa_raiz,
-                 @coste_economico, @horas_mano_obra, @usuario);
+                 @coste_economico, @horas_mano_obra,
+                 @porque_pregunta_1, @porque_respuesta_1, @porque_pregunta_2, @porque_respuesta_2,
+                 @porque_pregunta_3, @porque_respuesta_3, @porque_pregunta_4, @porque_respuesta_4,
+                 @porque_pregunta_5, @porque_respuesta_5,
+                 @causa_raiz, @usuario);
 
             -- Como en DEVOLUCION: con trigger no se puede usar OUTPUT INSERTED.id
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
@@ -251,7 +270,13 @@ public class NoConformidadRepositorio
                 proveedor = CASE WHEN @proveedor_id IS NULL THEN @proveedor ELSE proveedor END,
                 mc_pcc_bpm = @mc_pcc_bpm, parametro = @parametro, operario = @operario,
                 capitulo_norma = @capitulo_norma, analisis_causa_raiz = @analisis_causa_raiz,
-                coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra
+                coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra,
+                porque_pregunta_1 = @porque_pregunta_1, porque_respuesta_1 = @porque_respuesta_1,
+                porque_pregunta_2 = @porque_pregunta_2, porque_respuesta_2 = @porque_respuesta_2,
+                porque_pregunta_3 = @porque_pregunta_3, porque_respuesta_3 = @porque_respuesta_3,
+                porque_pregunta_4 = @porque_pregunta_4, porque_respuesta_4 = @porque_respuesta_4,
+                porque_pregunta_5 = @porque_pregunta_5, porque_respuesta_5 = @porque_respuesta_5,
+                causa_raiz = @causa_raiz
             WHERE id = @id AND version = @version;";
 
         using var conexion = Conexion.Abrir();
@@ -418,6 +443,13 @@ public class NoConformidadRepositorio
         Valor("@analisis_causa_raiz", nc.AnalisisCausaRaiz);
         Valor("@coste_economico", nc.CosteEconomico);
         Valor("@horas_mano_obra", nc.HorasManoObra);
+        for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+        {
+            var porQue = nc.PorQues?.ElementAtOrDefault(i);
+            Valor("@" + ColumnasPorQue[2 * i], porQue?.Pregunta);
+            Valor("@" + ColumnasPorQue[2 * i + 1], porQue?.Respuesta);
+        }
+        Valor("@causa_raiz", nc.CausaRaiz);
     }
 
     // Bloqueos (quién tiene abierta cada ficha)

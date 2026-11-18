@@ -40,7 +40,15 @@ public record OpcionLista(string Valor, string? Descripcion)
 // Número = Prefijo + siguiente de la serie ("" → 1, 2...; "AC-2026-" → AC-2026-1, AC-2026-2...)
 public record SerieNumero(string TipoRegistro, string Prefijo);
 
+// Uno de los 5 porqués del análisis de la causa: la pregunta y su respuesta
+public record PorQue(string? Pregunta, string? Respuesta)
+{
+    public bool Vacio => string.IsNullOrWhiteSpace(Pregunta) && string.IsNullOrWhiteSpace(Respuesta);
+}
+
 // Fila de la hoja INCIDENCIAS (Id = 0: nuevo). Tipo es solo de NC; McPccBpm, Parametro y Operario, de incidencias.
+// DescripcionCausa y AnalisisCausaRaiz: textos libres de antes de los 5 porqués; ya no se piden.
+// PorQues: siempre 5 (null = todos vacíos). CausaRaiz: uno de los grupos de CausasRaiz.
 // Version: la ROWVERSION leída, para no pisar lo que otro haya guardado.
 // ProveedorId: el proveedor de la lista de proveedores. Con él, Proveedor es su nombre en la lista; sin él,
 // Proveedor es el nombre escrito a mano en las NC antiguas (o null).
@@ -66,8 +74,13 @@ public record NoConformidad(
     string? AnalisisCausaRaiz,
     decimal? CosteEconomico,
     decimal? HorasManoObra,
+    IReadOnlyList<PorQue>? PorQues = null,
+    string? CausaRaiz = null,
     byte[]? Version = null,
-    int? ProveedorId = null);
+    int? ProveedorId = null)
+{
+    public const int NumeroPorQues = 5;
+}
 
 // Quién tiene abierta una ficha (NC_BLOQUEO). MismoUsuario: el usuario actual, en otro GPE.
 public record BloqueoNc(string Usuario, string Equipo, DateTime Desde, bool MismoUsuario);

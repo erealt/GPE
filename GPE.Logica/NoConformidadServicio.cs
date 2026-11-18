@@ -151,7 +151,8 @@ public class NoConformidadServicio
         {
             new(FaseCalidad.Registro, !string.IsNullOrWhiteSpace(nc.Problema)),
             new(FaseCalidad.AccionInmediata, lista.Any(a => a.Clase == ClaseAccion.Inmediata), esMejora),
-            new(FaseCalidad.Analisis, !string.IsNullOrWhiteSpace(nc.DescripcionCausa)
+            new(FaseCalidad.Analisis, (nc.PorQues?.Any(p => !p.Vacio) ?? false) || nc.CausaRaiz != null
+                || !string.IsNullOrWhiteSpace(nc.DescripcionCausa)
                 || !string.IsNullOrWhiteSpace(nc.AnalisisCausaRaiz), esIncidencia || esMejora),
             new(esMejora ? FaseCalidad.Acciones : FaseCalidad.Correccion,
                 correctoras.Count > 0 && correctoras.All(a => a.Hecha), esIncidencia),
@@ -184,7 +185,14 @@ public class NoConformidadServicio
             Parametro = esIncidencia ? Limpio(nc.Parametro) : null,
             Operario = esIncidencia ? Limpio(nc.Operario) : null,
             CapituloNorma = Limpio(nc.CapituloNorma),
-            AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz)
+            AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz),
+            // Siempre los 5, para que al guardar se borren los que se hayan vaciado
+            PorQues = Enumerable.Range(0, NoConformidad.NumeroPorQues)
+                .Select(i => nc.PorQues?.ElementAtOrDefault(i) is PorQue p
+                    ? new PorQue(Limpio(p.Pregunta), Limpio(p.Respuesta))
+                    : new PorQue(null, null))
+                .ToList(),
+            CausaRaiz = Limpio(nc.CausaRaiz)
         };
     }
 

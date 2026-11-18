@@ -40,7 +40,7 @@ public class AguaRepositorio
     {
         const string sql = @"
             SELECT c.id, c.fecha, c.toma_id, c.cloro, c.sabor_ok, c.olor_ok, c.color_ok, c.turbidez_ok,
-                   c.comentario, u.nombre, c.version, c.hora, c.repite_id, t.nombre, t.cloro_min, t.cloro_max
+                   c.comentario, u.nombre, c.version, c.hora, t.nombre, t.cloro_min, t.cloro_max
             FROM AGUA_CONTROL c
             JOIN USUARIO u ON u.id = c.creado_por
             JOIN AGUA_TOMA t ON t.id = c.toma_id
@@ -69,13 +69,12 @@ public class AguaRepositorio
                 Comentario: lector.IsDBNull(8) ? null : lector.GetString(8),
                 CreadoPor: lector.GetString(9),
                 Version: (byte[])lector[10],
-                Hora: lector.IsDBNull(11) ? null : lector.GetTimeSpan(11),
-                RepiteId: lector.IsDBNull(12) ? null : lector.GetInt32(12));
+                Hora: lector.IsDBNull(11) ? null : lector.GetTimeSpan(11));
             controles.Add(new ControlAguaConToma(control, new AguaToma(
                 Id: control.TomaId,
-                Nombre: lector.GetString(13),
-                CloroMin: lector.IsDBNull(14) ? null : lector.GetDecimal(14),
-                CloroMax: lector.IsDBNull(15) ? null : lector.GetDecimal(15))));
+                Nombre: lector.GetString(12),
+                CloroMin: lector.IsDBNull(13) ? null : lector.GetDecimal(13),
+                CloroMax: lector.IsDBNull(14) ? null : lector.GetDecimal(14))));
         }
         return controles;
     }
@@ -84,14 +83,13 @@ public class AguaRepositorio
     public int Insertar(ControlAgua control, int usuarioId)
     {
         const string sql = @"
-            INSERT INTO AGUA_CONTROL (fecha, hora, toma_id, cloro, sabor_ok, olor_ok, color_ok, turbidez_ok, comentario, repite_id, creado_por)
-            VALUES (@fecha, @hora, @toma, @cloro, @sabor, @olor, @color, @turbidez, @comentario, @repite, @usuario);
+            INSERT INTO AGUA_CONTROL (fecha, hora, toma_id, cloro, sabor_ok, olor_ok, color_ok, turbidez_ok, comentario, creado_por)
+            VALUES (@fecha, @hora, @toma, @cloro, @sabor, @olor, @color, @turbidez, @comentario, @usuario);
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
         using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
         Parametros(comando, control);
-        comando.Parameters.AddWithValue("@repite", (object?)control.RepiteId ?? DBNull.Value);
         comando.Parameters.AddWithValue("@usuario", usuarioId);
         return (int)comando.ExecuteScalar();
     }
@@ -112,29 +110,14 @@ public class AguaRepositorio
         return comando.ExecuteNonQuery() > 0;
     }
 
-    // Si alguna toma repetía esta, pasa a repetir la que repetía esta (o ninguna).
-    // false si otro la ha cambiado o borrado desde que se leyó (no se borra nada).
+    // false si otro la ha cambiado o borrado desde que se leyó (no se borra nada)
     public bool Borrar(ControlAgua control)
     {
         using var conexion = Conexion.Abrir();
-        using var transaccion = conexion.BeginTransaction();
-
-        using (var enlazar = new SqlCommand(
-            "UPDATE AGUA_CONTROL SET repite_id = @repite WHERE repite_id = @id;", conexion, transaccion))
-        {
-            enlazar.Parameters.AddWithValue("@id", control.Id);
-            enlazar.Parameters.AddWithValue("@repite", (object?)control.RepiteId ?? DBNull.Value);
-            enlazar.ExecuteNonQuery();
-        }
-
-        using var borrar = new SqlCommand(
-            "DELETE FROM AGUA_CONTROL WHERE id = @id AND version = @version;", conexion, transaccion);
+        using var borrar = new SqlCommand("DELETE FROM AGUA_CONTROL WHERE id = @id AND version = @version;", conexion);
         borrar.Parameters.AddWithValue("@id", control.Id);
         borrar.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)control.Version ?? DBNull.Value;
-        if (borrar.ExecuteNonQuery() == 0) return false;   // se deshace también el UPDATE
-
-        transaccion.Commit();
-        return true;
+        return borrar.ExecuteNonQuery() > 0;
     }
 
     private static void Parametros(SqlCommand comando, ControlAgua control)

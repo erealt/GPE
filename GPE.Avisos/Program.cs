@@ -3,6 +3,7 @@ using GPE.Logica;
 // Tarea diaria sin abrir GPE (tarea programada, ver README): envía los avisos pendientes y los
 // resúmenes diarios, y borra los PDF del DeCA de más de un año.
 // Log en %LOCALAPPDATA%\GPE\avisos.log; si algo falla sale con código 1 para que la tarea reintente.
+// Con --solo-deca solo borra los PDF (en el servidor de la web del DeCA, donde no hay correo configurado).
 
 string carpetaLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GPE");
 Directory.CreateDirectory(carpetaLog);
@@ -17,7 +18,9 @@ void Log(string texto)
 
 // Cada parte va por separado: si falla el correo, los PDF antiguos se borran igual, y al revés
 bool todoBien = true;
+bool soloDeca = args.Contains("--solo-deca");
 
+if (!soloDeca)
 try
 {
     AvisoServicio.EnviarPendientes();
