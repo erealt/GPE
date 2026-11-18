@@ -67,6 +67,17 @@ public record ProductoProveedor(
     string? Observaciones,
     byte[]? Version);  // null = producto nuevo, sin guardar
 
+// Un certificado del proveedor (BRC, IFS, ISO 9001...) con su fecha de caducidad
+public record CertificadoProveedor(
+    int Id,
+    int ProveedorId,
+    string Nombre,
+    DateTime Caduca,
+    byte[]? Version);  // null = certificado nuevo, sin guardar
+
+// Un certificado que caduca pronto o ya ha caducado, con su proveedor (para el aviso al abrir GPE)
+public record CertificadoPorCaducar(CertificadoProveedor Certificado, int? NumeroProveedor, string NombreProveedor);
+
 // Un proveedor para elegirlo en un desplegable (en la ficha de la NC)
 public record ProveedorDeLista(int Id, string Nombre, bool Baja)
 {

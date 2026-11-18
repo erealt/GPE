@@ -1,5 +1,7 @@
-using GPE.Datos;
+using System.Data.Common;
 using System.Drawing.Drawing2D;
+using GPE.Datos;
+using GPE.Logica;
 
 namespace GPE.Escritorio;
 
@@ -46,6 +48,47 @@ public class FormPrincipal : Form
         Mostrar(modulos[0]);
 
         if (devoluciones != null) PrepararAvisoPendientes(devoluciones);
+        if (Sesion.VeCalidad) PrepararAvisoCertificados();
+    }
+
+    // Certificados de proveedores caducados o que caducan en 30 días: se avisa al abrir GPE a quien ve Calidad.
+    // Si hay otra ventana abierta (el aviso de devoluciones, por ejemplo), se espera a volver a la principal.
+    private bool avisoCertificadosPendiente;
+
+    private void PrepararAvisoCertificados()
+    {
+        avisoCertificadosPendiente = true;
+        Shown += (s, e) => MostrarAvisoCertificados();
+        Activated += (s, e) => { if (avisoCertificadosPendiente) BeginInvoke(MostrarAvisoCertificados); };
+    }
+
+    private void MostrarAvisoCertificados()
+    {
+        if (!avisoCertificadosPendiente || Application.OpenForms.Count > 1) return;
+        avisoCertificadosPendiente = false;
+
+        List<CertificadoPorCaducar> certificados;
+        try
+        {
+            certificados = new ProveedorServicio().ObtenerCertificadosPorCaducar();
+        }
+        catch (DbException)
+        {
+            return;
+        }
+        if (certificados.Count == 0) return;
+
+        int? elegido;
+        using (var aviso = new FormAvisoCertificados(certificados))
+        {
+            aviso.ShowDialog(this);
+            elegido = aviso.ProveedorElegido;
+        }
+        if (elegido == null) return;
+
+        var moduloProveedores = modulos.First(m => m.Nombre == "Proveedores");
+        Mostrar(moduloProveedores);
+        ((ModuloProveedores)moduloProveedores.Contenido!).AbrirProveedor(elegido.Value);
     }
 
     // Devoluciones se crea al arrancar para que el aviso de pendientes funcione sin entrar en el módulo

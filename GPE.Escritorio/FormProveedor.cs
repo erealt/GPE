@@ -14,6 +14,7 @@ public class FormProveedor : Form
     private readonly CamposFormulario campos = new();
     private readonly Proveedor original;
     private readonly ProductosProveedor productos;
+    private readonly CertificadosProveedor certificados;
     private Proveedor actual;   // lo que hay escrito ahora, para las notas
     private bool hayCambios;
 
@@ -57,6 +58,7 @@ public class FormProveedor : Form
         actual = original;
         cmbTipo = CamposProveedor.ComboTipo(TipoProveedor.Todos, original.Tipo);
         productos = new ProductosProveedor(original.Id, proveedor?.Productos ?? new(), () => actual);
+        certificados = new CertificadosProveedor(original);
         productos.Cambiados += (s, e) =>
         {
             ActualizarPestanaProductos();
@@ -87,6 +89,7 @@ public class FormProveedor : Form
         var tarjetasDatos = new Control[]
         {
             CamposProveedor.Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos),
+            CamposProveedor.Marcada(certificados.Tarjeta, EstiloProveedores.RayaDatos),
             CamposProveedor.Marcada(TarjetaEvaluacion(), EstiloProveedores.RayaEvaluacion),
             CamposProveedor.Marcada(TarjetaRiesgo(), EstiloProveedores.RayaRiesgo)
         };
@@ -127,6 +130,7 @@ public class FormProveedor : Form
         Shown += (s, e) =>
         {
             productos.QuitarSeleccion();
+            certificados.QuitarSeleccion();
             scroll.AutoScrollPosition = Point.Empty;
             if (nuevo) txtNombre.Focus();
         };
@@ -261,7 +265,7 @@ public class FormProveedor : Form
         rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
         rejilla.Controls.Add(campos.Campo("Fecha revisión", dtpRevision));
         rejilla.Controls.Add(CamposProveedor.Hueco());
-        rejilla.Controls.Add(campos.Campo("Certificados", txtCertificados));
+        rejilla.Controls.Add(campos.Campo("Certificados (notas)", txtCertificados));
         rejilla.Controls.Add(campos.Campo("Ensayo trazabilidad", txtEnsayo));
         rejilla.Controls.Add(campos.Campo("Auditoría", txtAuditoria));
         rejilla.Controls.Add(campos.Campo("RFA", txtRfa));

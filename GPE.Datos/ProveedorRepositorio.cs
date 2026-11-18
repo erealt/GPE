@@ -232,6 +232,100 @@ public class ProveedorRepositorio
         Valor("@observaciones", x.Observaciones);
     }
 
+    // Certificados (PROVEEDOR_CERTIFICADO)
+
+    // Los de un proveedor, del que caduca antes al que caduca después
+    public List<CertificadoProveedor> ObtenerCertificados(int proveedorId)
+    {
+        const string sql = @"
+            SELECT id, proveedor_id, nombre, caduca, version
+            FROM PROVEEDOR_CERTIFICADO
+            WHERE proveedor_id = @proveedor
+            ORDER BY caduca, nombre;";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@proveedor", proveedorId);
+        using var lector = comando.ExecuteReader();
+        var certificados = new List<CertificadoProveedor>();
+        while (lector.Read())
+            certificados.Add(LeerCertificado(lector));
+        return certificados;
+    }
+
+    // Los que caducan hasta esa fecha (también los ya caducados), de proveedores que no están de baja
+    public List<CertificadoPorCaducar> ObtenerCertificadosHasta(DateTime hasta)
+    {
+        const string sql = @"
+            SELECT c.id, c.proveedor_id, c.nombre, c.caduca, c.version, p.numero, p.nombre
+            FROM PROVEEDOR_CERTIFICADO c
+            JOIN PROVEEDOR p ON p.id = c.proveedor_id
+            WHERE p.baja = 0 AND c.caduca <= @hasta
+            ORDER BY c.caduca, p.nombre;";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.Add("@hasta", System.Data.SqlDbType.Date).Value = hasta.Date;
+        using var lector = comando.ExecuteReader();
+        var certificados = new List<CertificadoPorCaducar>();
+        while (lector.Read())
+            certificados.Add(new CertificadoPorCaducar(
+                LeerCertificado(lector),
+                lector.IsDBNull(5) ? null : lector.GetInt32(5),
+                lector.GetString(6)));
+        return certificados;
+    }
+
+    private static CertificadoProveedor LeerCertificado(SqlDataReader lector) => new(
+        Id: lector.GetInt32(0),
+        ProveedorId: lector.GetInt32(1),
+        Nombre: lector.GetString(2),
+        Caduca: lector.GetDateTime(3),
+        Version: (byte[])lector[4]);
+
+    public int InsertarCertificado(CertificadoProveedor c, int usuarioId)
+    {
+        const string sql = @"
+            INSERT INTO PROVEEDOR_CERTIFICADO (proveedor_id, nombre, caduca, creado_por)
+            VALUES (@proveedor, @nombre, @caduca, @usuario);
+            SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@proveedor", c.ProveedorId);
+        comando.Parameters.AddWithValue("@nombre", c.Nombre);
+        comando.Parameters.Add("@caduca", System.Data.SqlDbType.Date).Value = c.Caduca.Date;
+        comando.Parameters.AddWithValue("@usuario", usuarioId);
+        return (int)comando.ExecuteScalar();
+    }
+
+    // false si otro lo ha cambiado o borrado desde que se leyó (no se guarda nada)
+    public bool ActualizarCertificado(CertificadoProveedor c)
+    {
+        const string sql = @"
+            UPDATE PROVEEDOR_CERTIFICADO SET nombre = @nombre, caduca = @caduca
+            WHERE id = @id AND version = @version;";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@nombre", c.Nombre);
+        comando.Parameters.Add("@caduca", System.Data.SqlDbType.Date).Value = c.Caduca.Date;
+        comando.Parameters.AddWithValue("@id", c.Id);
+        comando.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)c.Version ?? DBNull.Value;
+        return comando.ExecuteNonQuery() > 0;
+    }
+
+    // false si otro lo ha cambiado o borrado desde que se leyó
+    public bool BorrarCertificado(CertificadoProveedor c)
+    {
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(
+            "DELETE FROM PROVEEDOR_CERTIFICADO WHERE id = @id AND version = @version;", conexion);
+        comando.Parameters.AddWithValue("@id", c.Id);
+        comando.Parameters.Add("@version", System.Data.SqlDbType.Timestamp).Value = (object?)c.Version ?? DBNull.Value;
+        return comando.ExecuteNonQuery() > 0;
+    }
+
     // El Nº más alto más uno (1 si no hay ninguno)
     public int SiguienteNumero()
     {

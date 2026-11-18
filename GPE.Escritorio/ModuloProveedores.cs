@@ -395,6 +395,14 @@ public class ModuloProveedores : UserControl
             .ToList();
     }
 
+    // Desde el aviso de certificados: abre la ficha de ese proveedor con la lista recién leída
+    public void AbrirProveedor(int id)
+    {
+        CargarDatos();
+        if (registros.FirstOrDefault(r => r.Proveedor.Id == id) is { } proveedor)
+            AbrirFicha(proveedor);
+    }
+
     // p == null: proveedor nuevo. Al cerrar se vuelve a leer la lista: los productos se guardan al momento,
     // aunque luego se cierre la ficha sin guardar el proveedor.
     private void AbrirFicha(ProveedorConProductos? p, bool abrirProductos = false)

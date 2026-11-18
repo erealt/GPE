@@ -156,6 +156,86 @@ public class ProveedorServicio
         return x.Id;
     }
 
+    // Certificados
+
+    // Se avisa cuando faltan estos días o menos para que caduque (lo pidió calidad: un mes antes)
+    public const int DiasAvisoCertificado = 30;
+
+    // Nombres que salen en el Excel, para elegirlos en la ventana del certificado (se puede escribir otro)
+    public static readonly string[] NombresCertificado =
+        { "BRC", "BRC PACK", "IFS", "IFS BROKER", "IFSPAC", "FSSC 22000", "ISO 9001", "ISO 14001", "ISO 22000", "FSC" };
+
+    public enum EstadoCertificado { Vigente, PorCaducar, Caducado }
+
+    public List<CertificadoProveedor> ObtenerCertificados(int proveedorId) => repositorio.ObtenerCertificados(proveedorId);
+
+    // Los de proveedores activos que ya han caducado o caducan en los próximos 30 días
+    public List<CertificadoPorCaducar> ObtenerCertificadosPorCaducar() =>
+        repositorio.ObtenerCertificadosHasta(DateTime.Today.AddDays(DiasAvisoCertificado));
+
+    // Días que faltan para que caduque: 0 = caduca hoy, negativo = ya caducado
+    public static int DiasParaCaducar(CertificadoProveedor c) => (c.Caduca.Date - DateTime.Today).Days;
+
+    // Caduca el mismo día que pone: hasta ese día incluido sigue valiendo
+    public static EstadoCertificado Estado(CertificadoProveedor c) => DiasParaCaducar(c) switch
+    {
+        < 0 => EstadoCertificado.Caducado,
+        <= DiasAvisoCertificado => EstadoCertificado.PorCaducar,
+        _ => EstadoCertificado.Vigente
+    };
+
+    // "Caduca en 12 días", "Caduca hoy", "Caducó hace 3 días"...
+    public static string TextoCaducidad(CertificadoProveedor c)
+    {
+        int dias = DiasParaCaducar(c);
+        return dias switch
+        {
+            0 => "Caduca hoy",
+            1 => "Caduca mañana",
+            > 1 when dias <= DiasAvisoCertificado => $"Caduca en {dias} días",
+            > 1 => "Vigente",
+            -1 => "Caducó ayer",
+            _ => $"Caducó hace {-dias} días"
+        };
+    }
+
+    // Nuevo (Id 0) o con cambios. Devuelve su id.
+    public int GuardarCertificado(CertificadoProveedor c)
+    {
+        if (Sesion.UsuarioActual is not Usuario usuario)
+            throw new ReglaNegocioException("No hay ningún usuario elegido.");
+        if (c.ProveedorId == 0)
+            throw new ReglaNegocioException("Guarda primero el proveedor.");
+
+        c = c with { Nombre = c.Nombre?.Trim() ?? "" };
+        if (ErrorCertificado(c) is string error)
+            throw new ReglaNegocioException(error);
+
+        if (c.Id == 0)
+            return repositorio.InsertarCertificado(c, usuario.Id);
+
+        if (!repositorio.ActualizarCertificado(c))
+            throw new ReglaNegocioException(MensajeCertificadoModificado);
+        return c.Id;
+    }
+
+    public void BorrarCertificado(CertificadoProveedor c)
+    {
+        if (!repositorio.BorrarCertificado(c))
+            throw new ReglaNegocioException(MensajeCertificadoModificado);
+    }
+
+    // Error del nombre (la fecha siempre está puesta), o null si está bien
+    public static string? ErrorCertificado(CertificadoProveedor c) =>
+        string.IsNullOrWhiteSpace(c.Nombre) ? "Escribe qué certificado es (BRC, IFS, ISO 9001...)."
+        : c.Nombre.Trim().Length > 100 ? "El nombre no puede pasar de 100 letras."
+        : null;
+
+    private const string MensajeCertificadoModificado =
+        "Otra persona ha cambiado o quitado este certificado mientras lo tenías abierto. " +
+        "Para no borrar sus cambios, los tuyos no se han guardado.\n\n" +
+        "Cierra la ficha del proveedor y vuelve a abrirla para ver lo último.";
+
     // Tabla de la hoja LISTA: el valor de la fila más alta cuyo "valor inferior" no pasa de la suma
     private static string? Buscar(int suma, params (int Desde, string Valor)[] tabla)
     {
