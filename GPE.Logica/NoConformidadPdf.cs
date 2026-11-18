@@ -88,16 +88,21 @@ public static class NoConformidadPdf
 
         // ---- 3. Análisis de la causa ----
         hoja.TituloSeccion("3. ANÁLISIS DE LA CAUSA");
+        var porQues = (nc.PorQues ?? new List<PorQue>()).Where(p => !p.Vacio).ToList();
+        hoja.TablaPorQues(porQues);
+        // Los textos libres de antes de los 5 porqués, solo en los registros que los tienen
         hoja.Texto("DESCRIPCIÓN DE LA CAUSA", nc.DescripcionCausa);
         hoja.Texto("ANÁLISIS DE LA CAUSA RAÍZ", nc.AnalisisCausaRaiz);
         hoja.Datos(new (string, string?)[]
         {
+            ("CAUSA RAÍZ", nc.CausaRaiz),
             ("CAPÍTULO DE LA NORMA", nc.CapituloNorma),
             ("MC / PCC / BPM", nc.McPccBpm),
             ("PARÁMETRO", nc.Parametro),
             ("OPERARIO CAUSANTE", nc.Operario)
         });
-        if (nc.DescripcionCausa == null && nc.AnalisisCausaRaiz == null && nc.CapituloNorma == null
+        if (porQues.Count == 0 && nc.CausaRaiz == null
+            && nc.DescripcionCausa == null && nc.AnalisisCausaRaiz == null && nc.CapituloNorma == null
             && nc.McPccBpm == null && nc.Parametro == null && nc.Operario == null)
             hoja.Vacio("Sin análisis de la causa.");
 
@@ -240,6 +245,20 @@ public static class NoConformidadPdf
                 a.Fecha?.ToString("dd/MM/yyyy", Es) ?? "—",
                 a.Prioridad ?? "—",
                 a.Hecha ? "Sí" : "No"
+            }).ToList());
+        }
+
+        // Los 5 porqués rellenados: número, pregunta y respuesta (nada si no hay ninguno)
+        public void TablaPorQues(List<PorQue> porQues)
+        {
+            if (porQues.Count == 0) return;
+            double[] anchos = { Ancho * 0.06, Ancho * 0.42, Ancho * 0.52 };
+            string[] cabeceras = { "Nº", "¿POR QUÉ?", "PORQUE" };
+            Tabla(anchos, cabeceras, porQues.Select((p, i) => new[]
+            {
+                (i + 1).ToString(),
+                p.Pregunta ?? "",
+                p.Respuesta ?? ""
             }).ToList());
         }
 
