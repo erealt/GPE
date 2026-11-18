@@ -22,6 +22,14 @@ public class ProveedorServicio
             .ToList();
     }
 
+    // Evaluación (A/B/C) de un proveedor con sus NC de ahora; null si no existe o no tiene notas
+    public string? EvaluacionActual(int proveedorId) =>
+        ObtenerProveedores().Select(p => p.Proveedor).Where(p => p.Id == proveedorId).Select(Evaluacion).FirstOrDefault();
+
+    // Si la evaluación pasa a una que pide más controles (A → B, B → C...)
+    public static bool Empeora(string? antes, string? despues) =>
+        despues != null && string.CompareOrdinal(despues, antes ?? "") > 0;
+
     // Nota de reclamaciones (tabla de calidad), con las NC de los últimos 12 meses:
     // 0 NC → 0 · 1 que no afecta a la seguridad alimentaria → 1 · 2 o 3 que no afectan → 2 ·
     // más de 3 que no afectan, o alguna que afecta → 3. Las incidencias y las mejoras no cuentan.

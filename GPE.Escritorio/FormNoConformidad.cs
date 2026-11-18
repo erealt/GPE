@@ -1069,6 +1069,8 @@ public class FormNoConformidad : Form
         }
 
         var registro = NoConformidadServicio.Normalizar(leido);
+        bool leidaAntes = false;
+        string? evaluacionAntes = registro.ProveedorId is int idProveedor ? EvaluacionProveedor(idProveedor, out leidaAntes) : null;
 
         // El número lo pone el servicio
         try
@@ -1088,7 +1090,34 @@ public class FormNoConformidad : Form
         }
 
         hayCambios = false;
+        if (leidaAntes && registro.ProveedorId is int proveedorId)
+            AvisarSiEmpeoraEvaluacion(proveedorId, evaluacionAntes);
         DialogResult = DialogResult.OK;
+    }
+
+    // La evaluación del proveedor sale de sus NC: si al guardar pasa a pedir más controles, se avisa
+    private void AvisarSiEmpeoraEvaluacion(int proveedorId, string? antes)
+    {
+        string? despues = EvaluacionProveedor(proveedorId, out bool leida);
+        if (!leida || !ProveedorServicio.Empeora(antes, despues)) return;
+
+        string nombre = (cmbProveedor.SelectedItem as ProveedorDeLista)?.Nombre ?? "El proveedor";
+        string cambio = antes == null ? $"pasa a tener la evaluación {despues}" : $"pasa de la evaluación {antes} a la {despues}";
+        Mensajes.Aviso(this, "Cambia la evaluación del proveedor",
+            $"Con esta no conformidad, {nombre} {cambio}.");
+    }
+
+    // Si no se puede leer, no se avisa: el registro ya está guardado
+    private static string? EvaluacionProveedor(int proveedorId, out bool leida)
+    {
+        leida = false;
+        try
+        {
+            var evaluacion = new ProveedorServicio().EvaluacionActual(proveedorId);
+            leida = true;
+            return evaluacion;
+        }
+        catch (DbException) { return null; }
     }
 
     private void AvisarCambiosSinGuardar(object? sender, FormClosingEventArgs e)
