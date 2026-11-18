@@ -305,6 +305,25 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
 }
 .quitar:hover:not(:disabled) { background: var(--fondo-error); color: var(--error); }
 
+/* ---------- Web de los trabajadores (Mis acciones) ---------- */
+
+.pagina.estrecha { max-width: 640px; }
+.sesion { display: flex; align-items: center; gap: 12px; margin-left: auto; font-size: 14px; }
+.sesion button { height: 34px; padding: 0 14px; }
+.ancho { width: 100%; }
+.entrar { max-width: 400px; margin: 24px auto 0; }
+.entrar h1 { margin-bottom: 2px; }
+.entrar .pequeno { margin-bottom: 18px; }
+
+.accion-trabajador { margin-bottom: 14px; }
+.accion-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.accion-problema { font-size: 14px; margin-bottom: 14px; }
+.accion-texto { margin: 4px 0 8px; white-space: pre-line; }
+.fuera-plazo { color: var(--error); font-weight: 600; }
+.accion-trabajador > button { margin-top: 6px; }
+.etiqueta.roja { background: var(--fondo-error); color: var(--error); }
+.etiqueta.gris { background: var(--cabecera-tabla); color: var(--suave); }
+
 /* ---------- Errores de Blazor ---------- */
 
 .blazor-error-boundary { background: var(--error); color: white; padding: 1rem; }

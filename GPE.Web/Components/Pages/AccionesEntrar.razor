@@ -1,0 +1,50 @@
+@page "/acciones/entrar"
+@layout LayoutTrabajadores
+@inject NavigationManager Navegacion
+
+<PageTitle>Entrar · Mis acciones</PageTitle>
+
+@* Formulario normal (no de Blazor): lo recibe /acciones/iniciar-sesion en Program.cs, que pone la cookie *@
+<div class="tarjeta entrar">
+    <h1>Entrar</h1>
+    <p class="suave pequeno">Para ver las acciones de calidad que tienes asignadas.</p>
+
+    @if (Error == "clave")
+    {
+        <div class="aviso error">Usuario o contraseña incorrectos.</div>
+    }
+    else if (Error == "bd")
+    {
+        <div class="aviso error">No se ha podido conectar con la base de datos. Prueba otra vez en un momento.</div>
+    }
+
+    <form method="post" action="acciones/iniciar-sesion">
+        <div class="campo">
+            <label>
+                Usuario
+                <input name="usuario" value="@Usuario" autocomplete="username" autocapitalize="none" required />
+            </label>
+        </div>
+        <div class="campo">
+            <label>
+                Contraseña
+                <input name="clave" type="password" autocomplete="current-password" required />
+            </label>
+        </div>
+        <button class="principal ancho" type="submit">Entrar</button>
+    </form>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Usuario { get; set; }
+
+    // Si ya ha entrado, directamente a sus acciones
+    protected override async Task OnInitializedAsync()
+    {
+        if (TrabajadorActual.PersonaDe((await EstadoSesion).User) != null)
+            Navegacion.NavigateTo("acciones");
+    }
+}

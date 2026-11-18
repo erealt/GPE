@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navegacion
+
+@* Como MainLayout, pero con el nombre de quien ha entrado y "Salir" *@
+<header class="barra">
+    <a class="marca" href="acciones">
+        <span class="logo">G</span>
+        <span>GPE</span>
+        <span class="separador"></span>
+        <span class="modulo">Mis acciones</span>
+    </a>
+    <AuthorizeView>
+        <div class="sesion">
+            <span class="suave">@TrabajadorActual.PersonaDe(context.User)</span>
+            @* Recarga entera: salir no es una página de Blazor *@
+            <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir", forceLoad: true)'>Salir</button>
+        </div>
+    </AuthorizeView>
+</header>
+
+<main class="pagina estrecha">
+    @Body
+</main>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Ha ocurrido un error inesperado.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss">🗙</span>
+</div>
