@@ -48,7 +48,7 @@ public class ResumenProveedor : TableLayoutPanel
         int deBaja = productos.Count - numeroActivos;
         activos.Poner(numeroActivos.ToString(), deBaja > 0 ? $"y {deBaja} de baja" : "Ninguno de baja", null);
 
-        reclamaciones.Poner(p.Reclamaciones?.ToString() ?? CamposProveedor.SinNota, "Nota de 0 a 2", null);
+        reclamaciones.Poner(p.Reclamaciones?.ToString() ?? CamposProveedor.SinNota, "Nota de 0 a 3, sale de sus NC", null);
     }
 
     // Etiqueta, cifra grande y una nota. Con color (A/B/C, BAJO/MEDIO/ALTO) el fondo es el de la nota; sin él, blanco.

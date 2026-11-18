@@ -192,7 +192,9 @@ public class NoConformidadServicio
                     ? new PorQue(Limpio(p.Pregunta), Limpio(p.Respuesta))
                     : new PorQue(null, null))
                 .ToList(),
-            CausaRaiz = Limpio(nc.CausaRaiz)
+            CausaRaiz = Limpio(nc.CausaRaiz),
+            // Solo cuenta en las NC de un proveedor de la lista (para su nota de reclamaciones)
+            SeguridadAlimentaria = esNc && nc.ProveedorId != null ? nc.SeguridadAlimentaria : null
         };
     }
 
@@ -225,6 +227,9 @@ public class NoConformidadServicio
         // Una NC antigua puede tener el proveedor escrito a mano (sin enlazar): se deja guardar así
         if (nc.Origen == "P" && nc.ProveedorId == null && nc.Proveedor == null)
             Error(nameof(nc.Proveedor), "Si el origen es un proveedor, elige cuál.");
+        // Hace falta para la nota de reclamaciones del proveedor
+        if (esNc && nc.ProveedorId != null && nc.SeguridadAlimentaria == null)
+            Error(nameof(nc.SeguridadAlimentaria), "Indica si afecta a la seguridad alimentaria.");
 
         if (nc.Problema == "")
             Error(nameof(nc.Problema), "Describe el problema detectado.");

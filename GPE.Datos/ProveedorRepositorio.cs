@@ -49,7 +49,7 @@ public class ProveedorRepositorio
                     FechaRevision: Fecha(6),
                     Impacto: Nota(7),
                     Estatus: Nota(8),
-                    Reclamaciones: Nota(9),
+                    Reclamaciones: null,   // la pone ProveedorServicio con sus NC; la columna era la nota a mano del Excel
                     Certificados: Texto(10),
                     EnsayoTrazabilidad: Texto(11),
                     Auditoria: Texto(12),
@@ -94,6 +94,28 @@ public class ProveedorRepositorio
         while (lector.Read())
             productos.Add(LeerProducto(lector));
         return productos;
+    }
+
+    // Por proveedor, sus NC detectadas después de "desde" que no afectan y que afectan a la seguridad alimentaria.
+    // Solo NC (no incidencias ni mejoras); sin indicar cuenta como que no afecta.
+    public Dictionary<int, (int NoAfectan, int Afectan)> ContarReclamaciones(DateTime desde)
+    {
+        const string sql = @"
+            SELECT proveedor_id,
+                   SUM(CASE WHEN seguridad_alimentaria = 1 THEN 0 ELSE 1 END),
+                   SUM(CASE WHEN seguridad_alimentaria = 1 THEN 1 ELSE 0 END)
+            FROM NO_CONFORMIDAD
+            WHERE tipo_registro = 'NC' AND proveedor_id IS NOT NULL AND fecha_detectado > @desde
+            GROUP BY proveedor_id;";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.Add("@desde", System.Data.SqlDbType.Date).Value = desde.Date;
+        using var lector = comando.ExecuteReader();
+        var cuentas = new Dictionary<int, (int, int)>();
+        while (lector.Read())
+            cuentas[lector.GetInt32(0)] = (lector.GetInt32(1), lector.GetInt32(2));
+        return cuentas;
     }
 
     // Todos los proveedores, solo id, nombre y si está de baja, por orden alfabético
@@ -348,9 +370,9 @@ public class ProveedorRepositorio
     public int Insertar(Proveedor p, int usuarioId)
     {
         const string sql = @"
-            INSERT INTO PROVEEDOR (numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus, reclamaciones,
+            INSERT INTO PROVEEDOR (numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus,
                 certificados, ensayo_trazabilidad, auditoria, rfa, relacion, historial, subcontratado, creado_por)
-            VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus, @reclamaciones,
+            VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus,
                 @certificados, @ensayo, @auditoria, @rfa, @relacion, @historial, @subcontratado, @usuario);
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
@@ -367,7 +389,7 @@ public class ProveedorRepositorio
     {
         const string sql = @"
             UPDATE PROVEEDOR SET numero = @numero, nombre = @nombre, fecha_alta = @alta, baja = @baja, tipo = @tipo,
-                fecha_revision = @revision, impacto = @impacto, estatus = @estatus, reclamaciones = @reclamaciones,
+                fecha_revision = @revision, impacto = @impacto, estatus = @estatus,
                 certificados = @certificados, ensayo_trazabilidad = @ensayo, auditoria = @auditoria, rfa = @rfa,
                 relacion = @relacion, historial = @historial, subcontratado = @subcontratado, revisar = NULL
             WHERE id = @id AND version = @version;";
@@ -391,7 +413,7 @@ public class ProveedorRepositorio
         Valor("@revision", p.FechaRevision);
         Valor("@impacto", p.Impacto);
         Valor("@estatus", p.Estatus);
-        Valor("@reclamaciones", p.Reclamaciones);
+        // reclamaciones no se guarda: la nota sale de sus NC (ProveedorServicio.NotaReclamaciones)
         Valor("@certificados", p.Certificados);
         Valor("@ensayo", p.EnsayoTrazabilidad);
         Valor("@auditoria", p.Auditoria);

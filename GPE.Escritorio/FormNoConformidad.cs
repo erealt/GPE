@@ -39,6 +39,10 @@ public class FormNoConformidad : Form
     private readonly ComboBox cmbTipo = new();
     private readonly TextBox txtCliente = new();
     private readonly ComboBox cmbProveedor = new();
+    // Solo NC de un proveedor de la lista: cuenta para su nota de reclamaciones
+    private readonly ComboBox cmbSeguridad = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private const string SeguridadSi = "Sí, afecta";
+    private const string SeguridadNo = "No afecta";
 
     // Descripción y acción inmediata
     private readonly TextBox txtProblema = new();
@@ -75,6 +79,7 @@ public class FormNoConformidad : Form
 
     private readonly CamposFormulario campos = new();
     private Control campoTipo = null!;
+    private Control campoSeguridad = null!;
     private Control tarjetaIncidencia = null!;
 
     private readonly BarraFasesCalidad barraFases = new();
@@ -109,6 +114,7 @@ public class FormNoConformidad : Form
 
         // Las NC de auditoría se numeran por año o por fecha: el número cambia con ellas
         cmbOrigen.SelectedIndexChanged += (s, e) => ActualizarSecciones();
+        cmbProveedor.SelectedIndexChanged += (s, e) => ActualizarCampoSeguridad();
         cmbSeccion.SelectedIndexChanged += (s, e) => ActualizarNumero();
         dtpDetectado.ValueChanged += (s, e) => ActualizarNumero();
 
@@ -534,6 +540,15 @@ public class FormNoConformidad : Form
 
         rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 4);
         rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 4);
+        rejilla.Controls.Add(campoSeguridad = campos.Campo("¿Afecta a la seguridad alimentaria?", cmbSeguridad,
+            new Label
+            {
+                Text = "Cuenta para la nota de reclamaciones del proveedor.",
+                AutoSize = true,
+                Font = Tema.FuenteNota,
+                ForeColor = Tema.Suave,
+                Margin = new Padding(0, 4, 0, 0)
+            }), 2, 4);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -751,6 +766,14 @@ public class FormNoConformidad : Form
 
         txtCliente.Text = nc?.Cliente ?? "";
         LlenarProveedores(nc?.ProveedorId, nc?.Proveedor);
+        cmbSeguridad.Items.Clear();
+        cmbSeguridad.Items.AddRange(new object[] { SinIndicar.ToString()!, SeguridadSi, SeguridadNo });
+        cmbSeguridad.SelectedItem = nc?.SeguridadAlimentaria switch
+        {
+            true => SeguridadSi,
+            false => SeguridadNo,
+            null => SinIndicar.ToString()
+        };
         txtProblema.Text = nc?.Problema ?? "";
         txtCausa.Text = nc?.DescripcionCausa ?? "";
         PonerFecha(dtpPrevista, nc?.FechaPrevista);
@@ -799,11 +822,16 @@ public class FormNoConformidad : Form
     private void ActualizarSegunTipo()
     {
         campoTipo.Visible = TipoElegido == TipoRegistro.NoConformidad;
+        ActualizarCampoSeguridad();
         ActualizarSecciones();
         ActualizarNumero();
         ActualizarFases();
         tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
     }
+
+    // Solo se pregunta en una NC con un proveedor de la lista
+    private void ActualizarCampoSeguridad() =>
+        campoSeguridad.Visible = TipoElegido == TipoRegistro.NoConformidad && cmbProveedor.SelectedItem is ProveedorDeLista;
 
     // Fases
 
@@ -973,6 +1001,12 @@ public class FormNoConformidad : Form
                 _ => null
             },
             ProveedorId: (cmbProveedor.SelectedItem as ProveedorDeLista)?.Id,
+            SeguridadAlimentaria: (cmbSeguridad.SelectedItem as string) switch
+            {
+                SeguridadSi => true,
+                SeguridadNo => false,
+                _ => null
+            },
             McPccBpm: Valor(cmbMcPccBpm),
             Parametro: Valor(cmbParametro),
             Operario: Valor(cmbOperario),
@@ -1004,6 +1038,7 @@ public class FormNoConformidad : Form
                 [nameof(NoConformidad.Tipo)] = cmbTipo,
                 [nameof(NoConformidad.Cliente)] = txtCliente,
                 [nameof(NoConformidad.Proveedor)] = cmbProveedor,
+                [nameof(NoConformidad.SeguridadAlimentaria)] = cmbSeguridad,
                 [nameof(NoConformidad.Problema)] = txtProblema,
                 [nameof(NoConformidad.FechaPrevista)] = dtpPrevista,
                 [nameof(NoConformidad.FechaFin)] = dtpFin,

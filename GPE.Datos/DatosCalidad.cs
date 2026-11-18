@@ -52,6 +52,7 @@ public record PorQue(string? Pregunta, string? Respuesta)
 // Version: la ROWVERSION leída, para no pisar lo que otro haya guardado.
 // ProveedorId: el proveedor de la lista de proveedores. Con él, Proveedor es su nombre en la lista; sin él,
 // Proveedor es el nombre escrito a mano en las NC antiguas (o null).
+// SeguridadAlimentaria: si la NC de un proveedor afecta a la seguridad alimentaria (null = sin indicar, cuenta como no).
 public record NoConformidad(
     int Id,
     string TipoRegistro,
@@ -77,7 +78,8 @@ public record NoConformidad(
     IReadOnlyList<PorQue>? PorQues = null,
     string? CausaRaiz = null,
     byte[]? Version = null,
-    int? ProveedorId = null)
+    int? ProveedorId = null,
+    bool? SeguridadAlimentaria = null)
 {
     public const int NumeroPorQues = 5;
 }

@@ -30,16 +30,15 @@ public class FormProveedor : Form
     private readonly TextBox txtRfa = new();
     private readonly ComboBox cmbImpacto = CamposProveedor.ComboNota(1, 3);
     private readonly ComboBox cmbEstatus = CamposProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbReclamaciones = CamposProveedor.ComboNota(0, 2);
+    private readonly Label lblReclamaciones = new();
+    private byte notaReclamaciones;   // sale de sus NC; con un proveedor nuevo, 0
     private readonly ComboBox cmbRelacion = CamposProveedor.ComboNota(0, 3, IgualEstatus);
     private readonly ComboBox cmbHistorial = CamposProveedor.ComboNota(0, 3);
     private readonly ComboBox cmbSubcontratado = CamposProveedor.ComboNota(0, 3);
 
     private readonly Label lblEvaluacion = new();
-    private readonly Label lblQueSupone = new();
 
-    // Debajo de Reclamaciones: cuántas NC tiene enlazadas y, al pulsar, cuáles
-    private readonly Label lblNc = new();
+    // Debajo de Reclamaciones: al pulsar, las NC enlazadas
     private readonly Button btnNc = Tema.BotonSecundario("Ver NC", 90);
     private List<NoConformidad> ncs = new();
     private readonly ResumenProveedor resumen = new();   // los cuatro recuadros de arriba
@@ -56,6 +55,7 @@ public class FormProveedor : Form
         original = proveedor?.Proveedor ?? new Proveedor(0, SiguienteNumero(), "", DateTime.Today, false, null, null,
             null, null, null, null, null, null, null, null, null, null, null, null);
         actual = original;
+        notaReclamaciones = original.Reclamaciones ?? 0;   // PrepararNc la vuelve a sacar con sus NC
         cmbTipo = CamposProveedor.ComboTipo(TipoProveedor.Todos, original.Tipo);
         productos = new ProductosProveedor(original.Id, proveedor?.Productos ?? new(), () => actual);
         certificados = new CertificadosProveedor(original);
@@ -136,55 +136,47 @@ public class FormProveedor : Form
         };
     }
 
-    // NC enlazadas a este proveedor (las que lo tienen elegido en su ficha). La nota de reclamaciones
-    // sigue escribiéndose a mano: la regla para sacarla de las NC la tiene que dar calidad.
-    // Se ve como un texto gris con el número y un botón pequeño "Ver NC".
-    private Control PrepararNc()
+    // Nota de reclamaciones: no se escribe, sale de las NC de los últimos 12 meses (ProveedorServicio.NotaReclamaciones).
+    // Debajo, un botón pequeño "Ver NC" con todas las enlazadas (las que lo tienen elegido en su ficha).
+    private Control DatoReclamaciones()
     {
-        var fila = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            FlowDirection = FlowDirection.TopDown,   // texto arriba y botón debajo: en una fila no cabe
-            WrapContents = false,
-            Margin = new Padding(0, 6, 0, 0)
-        };
-        lblNc.AutoSize = true;
-        lblNc.Font = Tema.FuenteNota;
-        lblNc.ForeColor = Tema.Suave;
-        lblNc.Margin = new Padding(0);
+        var dato = CamposProveedor.PanelDato("Reclamaciones");
+        lblReclamaciones.AutoSize = false;
+        lblReclamaciones.Size = new Size(46, 28);
+        lblReclamaciones.TextAlign = ContentAlignment.MiddleCenter;
+        lblReclamaciones.Font = Tema.FuenteNegrita;
+        lblReclamaciones.BackColor = Tema.CabeceraTabla;
+        lblReclamaciones.Margin = new Padding(0, 4, 0, 0);
+        dato.Controls.Add(lblReclamaciones);
 
         btnNc.Size = new Size(90, 28);
         btnNc.Font = Tema.FuentePequenaNegrita;
-        btnNc.Margin = new Padding(0, 6, 0, 0);
+        btnNc.Margin = new Padding(0, 8, 0, 0);
         btnNc.Click += (s, e) => VerNc();
-        fila.Controls.Add(lblNc);
-        fila.Controls.Add(btnNc);
+        dato.Controls.Add(btnNc);
 
-        if (original.Id == 0)
+        btnNc.Visible = false;   // nuevo, o sin NC
+        if (original.Id != 0)
         {
-            fila.Visible = false;   // nuevo: todavía no puede tener NC
-            return fila;
+            try
+            {
+                ncs = new NoConformidadServicio().ObtenerDeProveedor(original.Id);
+                PonerNotaReclamaciones();
+            }
+            catch (DbException)
+            {
+                // Se queda la nota con la que se abrió la ficha
+            }
         }
-        try
-        {
-            ncs = new NoConformidadServicio().ObtenerDeProveedor(original.Id);
-        }
-        catch (DbException)
-        {
-            lblNc.Text = "No se pudieron contar sus NC";
-            btnNc.Visible = false;
-            return fila;
-        }
-        PonerTextoNc();
-        return fila;
+        lblReclamaciones.Text = notaReclamaciones.ToString();
+        return dato;
     }
 
-    private void PonerTextoNc()
+    private void PonerNotaReclamaciones()
     {
-        int ultimoAno = NoConformidadServicio.DelUltimoAno(ncs);
-        lblNc.Text = ncs.Count == 0
-            ? "Sin NC enlazadas"
-            : $"{ncs.Count} NC en total · {ultimoAno} en los últimos 12 meses";
+        var (noAfectan, afectan) = ProveedorServicio.ContarReclamaciones(ncs);
+        notaReclamaciones = ProveedorServicio.NotaReclamaciones(noAfectan, afectan);
+        lblReclamaciones.Text = notaReclamaciones.ToString();
         btnNc.Visible = ncs.Count > 0;
     }
 
@@ -194,7 +186,8 @@ public class FormProveedor : Form
         lista.ShowDialog(this);
         if (!lista.HayCambios) return;
         ncs = lista.Registros;
-        PonerTextoNc();
+        PonerNotaReclamaciones();
+        ActualizarNotas();   // la evaluación cambia con la nota de reclamaciones
     }
 
     private int? SiguienteNumero()
@@ -281,7 +274,7 @@ public class FormProveedor : Form
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Impacto", cmbImpacto));
         rejilla.Controls.Add(campos.Campo("Estatus", cmbEstatus));
-        rejilla.Controls.Add(campos.Campo("Reclamaciones", cmbReclamaciones, PrepararNc()));
+        rejilla.Controls.Add(DatoReclamaciones());
 
         // La evaluación no se escribe: sale de las tres notas
         var dato = CamposProveedor.PanelDato("Evaluación");
@@ -291,12 +284,6 @@ public class FormProveedor : Form
         lblEvaluacion.Font = Tema.FuenteNegrita;
         lblEvaluacion.Margin = new Padding(0, 4, 0, 0);
         dato.Controls.Add(lblEvaluacion);
-        lblQueSupone.AutoSize = true;
-        lblQueSupone.ForeColor = Tema.Suave;
-        lblQueSupone.Font = Tema.FuenteNota;
-        lblQueSupone.MaximumSize = new Size(280, 0);
-        lblQueSupone.Margin = new Padding(0, 4, 0, 0);
-        dato.Controls.Add(lblQueSupone);
         rejilla.Controls.Add(dato);
 
         tarjeta.Controls.Add(rejilla);
@@ -330,7 +317,6 @@ public class FormProveedor : Form
         txtRfa.Text = p.Rfa ?? "";
         CamposProveedor.PonerNota(cmbImpacto, p.Impacto);
         CamposProveedor.PonerNota(cmbEstatus, p.Estatus);
-        CamposProveedor.PonerNota(cmbReclamaciones, p.Reclamaciones);
         CamposProveedor.PonerNota(cmbRelacion, p.Relacion);
         CamposProveedor.PonerNota(cmbHistorial, p.Historial);
         CamposProveedor.PonerNota(cmbSubcontratado, p.Subcontratado);
@@ -351,7 +337,7 @@ public class FormProveedor : Form
         Rfa = txtRfa.Text,
         Impacto = CamposProveedor.LeerNota(cmbImpacto),
         Estatus = CamposProveedor.LeerNota(cmbEstatus),
-        Reclamaciones = CamposProveedor.LeerNota(cmbReclamaciones),
+        Reclamaciones = notaReclamaciones,
         Relacion = CamposProveedor.LeerNota(cmbRelacion),
         Historial = CamposProveedor.LeerNota(cmbHistorial),
         Subcontratado = CamposProveedor.LeerNota(cmbSubcontratado)
@@ -363,9 +349,6 @@ public class FormProveedor : Form
         actual = Leer();
         string? evaluacion = ProveedorServicio.Evaluacion(actual);
         CamposProveedor.PintarNota(lblEvaluacion, evaluacion);
-        lblQueSupone.Text = evaluacion == null
-            ? "Falta el impacto, el estatus o las reclamaciones"
-            : ProveedorServicio.QueSupone(evaluacion);
 
         resumen.Actualizar(actual, productos.Productos);
         productos.Repintar();

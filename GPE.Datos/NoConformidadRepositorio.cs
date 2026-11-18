@@ -19,7 +19,7 @@ public class NoConformidadRepositorio
                    n.porque_pregunta_1, n.porque_respuesta_1, n.porque_pregunta_2, n.porque_respuesta_2,
                    n.porque_pregunta_3, n.porque_respuesta_3, n.porque_pregunta_4, n.porque_respuesta_4,
                    n.porque_pregunta_5, n.porque_respuesta_5,
-                   n.causa_raiz, n.version, n.proveedor_id
+                   n.causa_raiz, n.version, n.proveedor_id, n.seguridad_alimentaria
             FROM NO_CONFORMIDAD n
             LEFT JOIN PROVEEDOR p ON p.id = n.proveedor_id";
 
@@ -80,7 +80,8 @@ public class NoConformidadRepositorio
                     .Select(i => new PorQue(Texto(21 + 2 * i), Texto(22 + 2 * i))).ToList(),
                 CausaRaiz: Texto(31),
                 Version: (byte[])lector[32],
-                ProveedorId: lector.IsDBNull(33) ? null : lector.GetInt32(33)));
+                ProveedorId: lector.IsDBNull(33) ? null : lector.GetInt32(33),
+                SeguridadAlimentaria: lector.IsDBNull(34) ? null : lector.GetBoolean(34)));
         }
 
         return lista;
@@ -209,7 +210,7 @@ public class NoConformidadRepositorio
             INSERT INTO NO_CONFORMIDAD
                 (tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
                  problema, descripcion_causa, responsable,
-                 fecha_prevista, fecha_fin, cliente, proveedor, proveedor_id,
+                 fecha_prevista, fecha_fin, cliente, proveedor, proveedor_id, seguridad_alimentaria,
                  mc_pcc_bpm, parametro, operario,
                  capitulo_norma, analisis_causa_raiz,
                  coste_economico, horas_mano_obra,
@@ -221,7 +222,7 @@ public class NoConformidadRepositorio
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
                  @problema, @descripcion_causa, @responsable,
                  @fecha_prevista, @fecha_fin, @cliente,
-                 CASE WHEN @proveedor_id IS NULL THEN @proveedor END, @proveedor_id,
+                 CASE WHEN @proveedor_id IS NULL THEN @proveedor END, @proveedor_id, @seguridad_alimentaria,
                  @mc_pcc_bpm, @parametro, @operario,
                  @capitulo_norma, @analisis_causa_raiz,
                  @coste_economico, @horas_mano_obra,
@@ -265,7 +266,7 @@ public class NoConformidadRepositorio
                 problema = @problema, descripcion_causa = @descripcion_causa,
                 responsable = @responsable,
                 fecha_prevista = @fecha_prevista, fecha_fin = @fecha_fin,
-                cliente = @cliente, proveedor_id = @proveedor_id,
+                cliente = @cliente, proveedor_id = @proveedor_id, seguridad_alimentaria = @seguridad_alimentaria,
                 -- Enlazada a la lista: se guarda el nombre escrito a mano que tuviera antes (historia de las NC antiguas)
                 proveedor = CASE WHEN @proveedor_id IS NULL THEN @proveedor ELSE proveedor END,
                 mc_pcc_bpm = @mc_pcc_bpm, parametro = @parametro, operario = @operario,
@@ -436,6 +437,7 @@ public class NoConformidadRepositorio
         Valor("@cliente", nc.Cliente);
         Valor("@proveedor", nc.Proveedor);
         comando.Parameters.Add("@proveedor_id", System.Data.SqlDbType.Int).Value = (object?)nc.ProveedorId ?? DBNull.Value;
+        comando.Parameters.Add("@seguridad_alimentaria", System.Data.SqlDbType.Bit).Value = (object?)nc.SeguridadAlimentaria ?? DBNull.Value;
         Valor("@mc_pcc_bpm", nc.McPccBpm);
         Valor("@parametro", nc.Parametro);
         Valor("@operario", nc.Operario);

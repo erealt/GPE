@@ -8,7 +8,38 @@ public class ProveedorServicio
 {
     private readonly ProveedorRepositorio repositorio = new();
 
-    public List<ProveedorConProductos> ObtenerProveedores() => repositorio.ObtenerProveedores();
+    // Con la nota de reclamaciones sacada de sus NC
+    public List<ProveedorConProductos> ObtenerProveedores()
+    {
+        var proveedores = repositorio.ObtenerProveedores();
+        var cuentas = repositorio.ContarReclamaciones(DateTime.Today.AddYears(-1));
+        return proveedores
+            .Select(p =>
+            {
+                var (noAfectan, afectan) = cuentas.GetValueOrDefault(p.Proveedor.Id);
+                return p with { Proveedor = p.Proveedor with { Reclamaciones = NotaReclamaciones(noAfectan, afectan) } };
+            })
+            .ToList();
+    }
+
+    // Nota de reclamaciones (tabla de calidad), con las NC de los últimos 12 meses:
+    // 0 NC → 0 · 1 que no afecta a la seguridad alimentaria → 1 · 2 o 3 que no afectan → 2 ·
+    // más de 3 que no afectan, o alguna que afecta → 3. Las incidencias y las mejoras no cuentan.
+    public static byte NotaReclamaciones(int noAfectan, int afectan) =>
+        afectan > 0 || noAfectan > 3 ? (byte)3
+        : noAfectan >= 2 ? (byte)2
+        : noAfectan == 1 ? (byte)1
+        : (byte)0;
+
+    // Las NC de los últimos 12 meses que afectan y que no afectan a la seguridad alimentaria (sin indicar = no afecta)
+    public static (int NoAfectan, int Afectan) ContarReclamaciones(IEnumerable<NoConformidad> registros)
+    {
+        var delAno = registros
+            .Where(nc => nc.TipoRegistro == TipoRegistro.NoConformidad && nc.FechaDetectado.Date > DateTime.Today.AddYears(-1))
+            .ToList();
+        int afectan = delAno.Count(nc => nc.SeguridadAlimentaria == true);
+        return (delAno.Count - afectan, afectan);
+    }
 
     // "73 proveedores activos", para la tarjeta del inicio
     public string Resumen()
