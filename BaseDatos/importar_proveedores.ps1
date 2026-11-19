@@ -14,7 +14,8 @@
     la app las calcula igual que el Excel.
     IMPACTO DEL PRODUCTO y RELACIÓN copian con fórmula el impacto y el estatus del proveedor, pero en algunas filas
     se escribió otro valor a mano: ese valor se guarda (PROVEEDOR_PRODUCTO.impacto y PROVEEDOR.relacion) para que
-    las notas salgan como en el Excel. Si la celda tiene la fórmula o está vacía, se deja en NULL (= el del proveedor).
+    las notas salgan como en el Excel. Si la celda tiene la fórmula o está vacía, se guarda el estatus / el impacto
+    del proveedor (en la app ya no hay "igual que...": cada uno tiene su número).
     Lo que no cabe en su columna (una nota con texto, una fecha mal escrita) se guarda en observaciones del producto.
 #>
 param(
@@ -316,6 +317,7 @@ VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus, @r
     @rfa, @relacion, @historial, @subcontratado, @revisar, @usuario);
 SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tiene trigger
 '@, $bd, $transaccion)
+            if ($null -eq $d.Relacion) { $d.Relacion = $d.Estatus }   # con la fórmula: el estatus
             $p = $cmd.Parameters
             Valor $p '@numero' $pr.Numero $S::Int
             Valor $p '@nombre' $d.Nombre $S::NVarChar
@@ -349,6 +351,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tie
             foreach ($linea in $pr.Filas) {
                 $x = $linea.Producto
                 if (-not $x.Codigo -and -not $x.Descripcion) { continue }   # fila solo con datos del proveedor
+                if ($null -eq $x.Impacto -and $null -ne $d.Impacto) { $x.Impacto = [int]$d.Impacto }   # con la fórmula: el del proveedor
                 $cmd = New-Object System.Data.SqlClient.SqlCommand(@'
 INSERT INTO PROVEEDOR_PRODUCTO (proveedor_id, codigo, descripcion, tipo_producto, fecha_alta, baja, alergenos, posibles_alergenos,
     fecha_revision, ficha_tecnica, analisis_quimicos, analisis_micro, analisis_alergenos,

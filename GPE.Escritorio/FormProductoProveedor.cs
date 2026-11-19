@@ -64,8 +64,8 @@ public class FormProductoProveedor : Form
         bool nuevo = producto == null;
         original = producto ?? new ProductoProveedor(0, proveedor.Id, null, null, null, DateTime.Today, false, null, null,
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null);
-        cmbImpacto = CamposProveedor.ComboNota(1, 3, $"Igual que el proveedor ({proveedor.Impacto?.ToString() ?? CamposProveedor.SinNota})");
+            null, null, null) with { Impacto = proveedor.Impacto };   // nuevo: empieza con el impacto del proveedor
+        cmbImpacto = CamposProveedor.ComboNota(1, 3);
         cmbTipo = CamposProveedor.ComboTipo(TipoProductoProveedor.Todos, original.TipoProducto);
 
         Text = nuevo ? $"Nuevo producto - {proveedor.Nombre}" : $"Producto {original.Codigo} - {original.Descripcion}";

@@ -8,8 +8,6 @@ namespace GPE.Escritorio;
 // de fraude; las notas se recalculan al cambiar algo. Pestaña "Productos": ProductosProveedor.
 public class FormProveedor : Form
 {
-    private const string IgualEstatus = "Igual que el estatus";
-
     private readonly ProveedorServicio servicio = new();
     private readonly CamposFormulario campos = new();
     private readonly Proveedor original;
@@ -35,7 +33,7 @@ public class FormProveedor : Form
     private readonly ComboBox cmbEstatus = CamposProveedor.ComboNota(0, 3);
     private readonly Label lblReclamaciones = new();
     private byte notaReclamaciones;   // sale de sus NC; con un proveedor nuevo, 0
-    private readonly ComboBox cmbRelacion = CamposProveedor.ComboNota(0, 3, IgualEstatus);
+    private readonly ComboBox cmbRelacion = CamposProveedor.ComboNota(0, 3);
     private readonly ComboBox cmbHistorial = CamposProveedor.ComboNota(0, 3);
     private readonly ComboBox cmbSubcontratado = CamposProveedor.ComboNota(0, 3);
 

@@ -32,7 +32,7 @@ public record Proveedor(
     bool AuditoriaNoAplica,
     string? AuditoriaMotivo,   // solo con "No aplica"
     short? RfaAnio,
-    byte? Relacion,    // null = igual que el estatus
+    byte? Relacion,
     byte? Historial,
     byte? Subcontratado,
     string? Revisar,   // datos que en el Excel eran distintos según la fila
@@ -57,7 +57,7 @@ public record ProductoProveedor(
     DateTime? EurochocFecha,
     string? EurochocAlcance,
     string? EurochocResultado,
-    byte? Impacto,     // null = el del proveedor
+    byte? Impacto,     // al crearlo, el del proveedor; luego se puede cambiar
     byte? ControlRecepcion,
     byte? Reclamaciones,
     string? Parametro,

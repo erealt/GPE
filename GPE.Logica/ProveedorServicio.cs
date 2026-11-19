@@ -305,16 +305,10 @@ public class ProveedorServicio
         _ => null
     };
 
-    // IMPACTO DEL PRODUCTO (columna AD): el del proveedor, salvo que el producto tenga el suyo
-    public static byte? ImpactoProducto(Proveedor p, ProductoProveedor producto) => producto.Impacto ?? p.Impacto;
-
-    // RELACIÓN (columna AS): el estatus, salvo que el proveedor tenga otra
-    public static byte? Relacion(Proveedor p) => p.Relacion ?? p.Estatus;
-
     // FRECUENCIA MUESTREO (columna AH): IMPACTO DEL PRODUCTO + estatus + CONTROL RECEPCIÓN + RECLAMACIONES del producto.
     // 1-3 A, 4-6 B, 7-9 C, 10-12 D (LISTA, tabla 2º).
     public static string? FrecuenciaMuestreo(Proveedor p, ProductoProveedor producto) =>
-        Buscar(N(ImpactoProducto(p, producto)) + N(p.Estatus) + N(producto.ControlRecepcion) + N(producto.Reclamaciones),
+        Buscar(N(producto.Impacto) + N(p.Estatus) + N(producto.ControlRecepcion) + N(producto.Reclamaciones),
             (1, "A"), (4, "B"), (7, "C"), (10, "D"));
 
     // ALCANCE MUESTREO (columna AI)
@@ -338,7 +332,7 @@ public class ProveedorServicio
 
     // PUNTUACIÓN (columna AV): O * D por el valor más alto de RELACIÓN, HISTORIAL y P. SUBCONTRATADO
     public static int Puntuacion(Proveedor p, ProductoProveedor x) =>
-        OcurrenciaPorDeteccion(x) * Math.Max(N(Relacion(p)), Math.Max(N(p.Historial), N(p.Subcontratado)));
+        OcurrenciaPorDeteccion(x) * Math.Max(N(p.Relacion),Math.Max(N(p.Historial), N(p.Subcontratado)));
 
     // RIESGO FRAUDE (columna AW): 1-6 BAJO, 7-12 MEDIO, 13-27 ALTO (LISTA, tabla 4º)
     public static string? RiesgoFraude(Proveedor p, ProductoProveedor x) =>

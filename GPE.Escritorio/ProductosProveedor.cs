@@ -187,7 +187,7 @@ public class ProductosProveedor
                 e.Value = muestreo ?? CamposProveedor.SinNota;
                 celda.ToolTipText = muestreo == null
                     ? "Falta el impacto, el estatus o el control en recepción"
-                    : $"Impacto {Nota(ProveedorServicio.ImpactoProducto(p, x))} + estatus {Nota(p.Estatus)}"
+                    : $"Impacto {Nota(x.Impacto)} + estatus {Nota(p.Estatus)}"
                       + $" + control recepción {Nota(x.ControlRecepcion)} + reclamaciones {Nota(x.Reclamaciones)}"
                       + $"\n{ProveedorServicio.AlcanceMuestreo(muestreo)}";
                 break;

@@ -25,7 +25,7 @@ CREATE TABLE PROVEEDOR (
     auditoria NVARCHAR(500) NULL,
     rfa NVARCHAR(500) NULL,
     -- RELACIÓN: en el Excel es el estatus, salvo en los proveedores donde se escribió otro valor a mano.
-    -- NULL = igual que el estatus.
+    -- proveedor_relacion_impacto.sql rellena las vacías con el estatus: ya no hay "igual que el estatus".
     relacion TINYINT NULL,
     historial TINYINT NULL,
     subcontratado TINYINT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE PROVEEDOR_PRODUCTO (
     eurochoc_alcance NVARCHAR(500) NULL,
     eurochoc_resultado NVARCHAR(1000) NULL,
     -- IMPACTO DEL PRODUCTO: en el Excel es el del proveedor, salvo en los productos donde se escribió otro a mano.
-    -- NULL = igual que el del proveedor.
+    -- proveedor_relacion_impacto.sql rellena los vacíos con el del proveedor: ya no hay "igual que el proveedor".
     impacto TINYINT NULL,
     control_recepcion TINYINT NULL,
     reclamaciones TINYINT NULL,
