@@ -14,7 +14,7 @@ public class ModuloInicio : UserControl
         var (scroll, pila) = Componentes.Pagina();
 
         string nombre = Sesion.UsuarioActual?.Nombre.Split(' ')[0] ?? "";
-        pila.Controls.Add(Componentes.Cabecera("INICIO", $"Hola, {nombre}", "¿Qué quieres hacer hoy?"));
+        pila.Controls.Add(Componentes.Cabecera("INICIO", $"Hola, {nombre}"));
 
         var tarjetas = new FlowLayoutPanel
         {
