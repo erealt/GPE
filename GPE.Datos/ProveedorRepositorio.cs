@@ -10,7 +10,7 @@ public class ProveedorRepositorio
         id, proveedor_id, codigo, descripcion, tipo_producto, fecha_alta, baja, alergenos, posibles_alergenos,
         fecha_revision, ficha_tecnica, analisis_quimicos, analisis_micro, analisis_alergenos,
         eurochoc_fecha, eurochoc_alcance, eurochoc_resultado, impacto, control_recepcion, reclamaciones, parametro,
-        p_historial, p_motivacion, p_facilidad, d_origen, d_cadena, d_medidas,
+        p_historial, p_motivacion, p_facilidad, d_origen, d_cadena, d_medidas, relacion, historial, subcontratado,
         medidas_preventivas, observaciones, version";
 
     // Todos los proveedores con sus productos, ordenados por Nº
@@ -19,7 +19,7 @@ public class ProveedorRepositorio
         const string sqlProveedores = @"
             SELECT id, numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus, reclamaciones,
                    certificados, ensayo_fecha, ensayo_no_aplica, ensayo_motivo, auditoria_fecha, auditoria_no_aplica,
-                   auditoria_motivo, rfa_anio, relacion, historial, subcontratado, revisar, version
+                   auditoria_motivo, rfa_anio, revisar, version
             FROM PROVEEDOR
             ORDER BY CASE WHEN numero IS NULL THEN 1 ELSE 0 END, numero, nombre;";
 
@@ -59,11 +59,8 @@ public class ProveedorRepositorio
                     AuditoriaNoAplica: lector.GetBoolean(15),
                     AuditoriaMotivo: Texto(16),
                     RfaAnio: lector.IsDBNull(17) ? null : lector.GetInt16(17),
-                    Relacion: Nota(18),
-                    Historial: Nota(19),
-                    Subcontratado: Nota(20),
-                    Revisar: Texto(21),
-                    Version: (byte[])lector[22]));
+                    Revisar: Texto(18),
+                    Version: (byte[])lector[19]));
         }
 
         using (var comando = new SqlCommand(sqlProductos, conexion))
@@ -178,9 +175,12 @@ public class ProveedorRepositorio
             DOrigen: Nota(24),
             DCadena: Nota(25),
             DMedidas: Nota(26),
-            MedidasPreventivas: Texto(27),
-            Observaciones: Texto(28),
-            Version: (byte[])lector[29]);
+            Relacion: Nota(27),
+            Historial: Nota(28),
+            Subcontratado: Nota(29),
+            MedidasPreventivas: Texto(30),
+            Observaciones: Texto(31),
+            Version: (byte[])lector[32]);
     }
 
     // Un producto nuevo; devuelve su id
@@ -190,11 +190,13 @@ public class ProveedorRepositorio
             INSERT INTO PROVEEDOR_PRODUCTO (proveedor_id, codigo, descripcion, tipo_producto, fecha_alta, baja, alergenos,
                 posibles_alergenos, fecha_revision, ficha_tecnica, analisis_quimicos, analisis_micro, analisis_alergenos,
                 eurochoc_fecha, eurochoc_alcance, eurochoc_resultado, impacto, control_recepcion, reclamaciones, parametro,
-                p_historial, p_motivacion, p_facilidad, d_origen, d_cadena, d_medidas, medidas_preventivas, observaciones, creado_por)
+                p_historial, p_motivacion, p_facilidad, d_origen, d_cadena, d_medidas, relacion, historial, subcontratado,
+                medidas_preventivas, observaciones, creado_por)
             VALUES (@proveedor, @codigo, @descripcion, @tipo, @alta, @baja, @alergenos,
                 @posibles, @revision, @ficha, @quimicos, @micro, @analisisAlergenos,
                 @eurochocFecha, @eurochocAlcance, @eurochocResultado, @impacto, @control, @reclamaciones, @parametro,
-                @pHistorial, @pMotivacion, @pFacilidad, @dOrigen, @dCadena, @dMedidas, @medidas, @observaciones, @usuario);
+                @pHistorial, @pMotivacion, @pFacilidad, @dOrigen, @dCadena, @dMedidas, @relacion, @historial, @subcontratado,
+                @medidas, @observaciones, @usuario);
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
         using var conexion = Conexion.Abrir();
@@ -216,6 +218,7 @@ public class ProveedorRepositorio
                 eurochoc_resultado = @eurochocResultado, impacto = @impacto, control_recepcion = @control,
                 reclamaciones = @reclamaciones, parametro = @parametro, p_historial = @pHistorial, p_motivacion = @pMotivacion,
                 p_facilidad = @pFacilidad, d_origen = @dOrigen, d_cadena = @dCadena, d_medidas = @dMedidas,
+                relacion = @relacion, historial = @historial, subcontratado = @subcontratado,
                 medidas_preventivas = @medidas, observaciones = @observaciones
             WHERE id = @id AND version = @version;";
 
@@ -255,6 +258,9 @@ public class ProveedorRepositorio
         Valor("@dOrigen", x.DOrigen);
         Valor("@dCadena", x.DCadena);
         Valor("@dMedidas", x.DMedidas);
+        Valor("@relacion", x.Relacion);
+        Valor("@historial", x.Historial);
+        Valor("@subcontratado", x.Subcontratado);
         Valor("@medidas", x.MedidasPreventivas);
         Valor("@observaciones", x.Observaciones);
     }
@@ -377,10 +383,10 @@ public class ProveedorRepositorio
         const string sql = @"
             INSERT INTO PROVEEDOR (numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus,
                 certificados, ensayo_fecha, ensayo_no_aplica, ensayo_motivo, auditoria_fecha, auditoria_no_aplica,
-                auditoria_motivo, rfa_anio, relacion, historial, subcontratado, creado_por)
+                auditoria_motivo, rfa_anio, creado_por)
             VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus,
                 @certificados, @ensayoFecha, @ensayoNoAplica, @ensayoMotivo, @auditoriaFecha, @auditoriaNoAplica,
-                @auditoriaMotivo, @rfa, @relacion, @historial, @subcontratado, @usuario);
+                @auditoriaMotivo, @rfa, @usuario);
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
         using var conexion = Conexion.Abrir();
@@ -400,7 +406,7 @@ public class ProveedorRepositorio
                 certificados = @certificados, ensayo_fecha = @ensayoFecha, ensayo_no_aplica = @ensayoNoAplica,
                 ensayo_motivo = @ensayoMotivo, auditoria_fecha = @auditoriaFecha, auditoria_no_aplica = @auditoriaNoAplica,
                 auditoria_motivo = @auditoriaMotivo, rfa_anio = @rfa,
-                relacion = @relacion, historial = @historial, subcontratado = @subcontratado, revisar = NULL
+                revisar = NULL
             WHERE id = @id AND version = @version;";
 
         using var conexion = Conexion.Abrir();
@@ -431,8 +437,5 @@ public class ProveedorRepositorio
         Valor("@auditoriaNoAplica", p.AuditoriaNoAplica);
         Valor("@auditoriaMotivo", p.AuditoriaMotivo);
         Valor("@rfa", p.RfaAnio);
-        Valor("@relacion", p.Relacion);
-        Valor("@historial", p.Historial);
-        Valor("@subcontratado", p.Subcontratado);
     }
 }

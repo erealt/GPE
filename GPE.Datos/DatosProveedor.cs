@@ -12,7 +12,7 @@ public static class TipoProveedor
     public static readonly string[] Todos = { "MMPP", "PROD. ACABADO", "CONT. DIRECTO", "CONT. INDIRECTO", "DISTRIBUIDOR" };
 }
 
-// Columnas A-N de la hoja PRODUCTOS, más HISTORIAL y P. SUBCONTRATADO. Las notas no se guardan: ver ProveedorServicio.
+// Columnas A-N de la hoja PRODUCTOS. Las notas no se guardan: ver ProveedorServicio.
 public record Proveedor(
     int Id,
     int? Numero,
@@ -32,9 +32,6 @@ public record Proveedor(
     bool AuditoriaNoAplica,
     string? AuditoriaMotivo,   // solo con "No aplica"
     short? RfaAnio,
-    byte? Relacion,
-    byte? Historial,
-    byte? Subcontratado,
     string? Revisar,   // datos que en el Excel eran distintos según la fila
     byte[]? Version);  // null = proveedor nuevo, sin guardar
 
@@ -67,6 +64,10 @@ public record ProductoProveedor(
     byte? DOrigen,
     byte? DCadena,
     byte? DMedidas,
+    // Riesgo del proveedor para cometer fraude: en el Excel está en cada fila, por eso es de cada producto
+    byte? Relacion,
+    byte? Historial,
+    byte? Subcontratado,
     string? MedidasPreventivas,
     string? Observaciones,
     byte[]? Version);  // null = producto nuevo, sin guardar

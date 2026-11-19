@@ -331,12 +331,13 @@ public class ProveedorServicio
         Buscar(OcurrenciaPorDeteccion(x), (1, "BAJO"), (3, "MEDIO"), (6, "ALTO"));
 
     // PUNTUACIÓN (columna AV): O * D por el valor más alto de RELACIÓN, HISTORIAL y P. SUBCONTRATADO
-    public static int Puntuacion(Proveedor p, ProductoProveedor x) =>
-        OcurrenciaPorDeteccion(x) * Math.Max(N(p.Relacion),Math.Max(N(p.Historial), N(p.Subcontratado)));
+    // (los tres son del producto, como en cada fila del Excel)
+    public static int Puntuacion(ProductoProveedor x) =>
+        OcurrenciaPorDeteccion(x) * Math.Max(N(x.Relacion), Math.Max(N(x.Historial), N(x.Subcontratado)));
 
     // RIESGO FRAUDE (columna AW): 1-6 BAJO, 7-12 MEDIO, 13-27 ALTO (LISTA, tabla 4º)
-    public static string? RiesgoFraude(Proveedor p, ProductoProveedor x) =>
-        Buscar(Puntuacion(p, x), (1, "BAJO"), (7, "MEDIO"), (13, "ALTO"));
+    public static string? RiesgoFraude(ProductoProveedor x) =>
+        Buscar(Puntuacion(x), (1, "BAJO"), (7, "MEDIO"), (13, "ALTO"));
 
     // ACTUACIÓN CONTROL (columna AX)
     public static string? Actuacion(string? riesgoFraude) => riesgoFraude switch
