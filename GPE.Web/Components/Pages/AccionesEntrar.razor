@@ -2,12 +2,15 @@
 @layout LayoutTrabajadores
 @inject NavigationManager Navegacion
 
-<PageTitle>Entrar · Mis acciones</PageTitle>
+<PageTitle>Entrar · @(EsControl ? "Control diario" : "Mis acciones")</PageTitle>
 
-@* Formulario normal (no de Blazor): lo recibe /acciones/iniciar-sesion en Program.cs, que pone la cookie *@
+@* Formulario normal (no de Blazor): lo recibe /acciones/iniciar-sesion en Program.cs, que pone la cookie.
+   Sirve para "Mis acciones" y para el control diario (?volver=/control). *@
 <div class="tarjeta entrar">
     <h1>Entrar</h1>
-    <p class="suave pequeno">Para ver las acciones de calidad que tienes asignadas.</p>
+    <p class="suave pequeno">
+        @(EsControl ? "Para pasar el control diario de calidad." : "Para ver las acciones de calidad que tienes asignadas.")
+    </p>
 
     @if (Error == "clave")
     {
@@ -19,6 +22,10 @@
     }
 
     <form method="post" action="acciones/iniciar-sesion">
+        @if (EsControl)
+        {
+            <input type="hidden" name="volver" value="/control" />
+        }
         <div class="campo">
             <label>
                 Usuario
@@ -40,11 +47,14 @@
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? Usuario { get; set; }
+    [SupplyParameterFromQuery] private string? Volver { get; set; }
 
-    // Si ya ha entrado, directamente a sus acciones
+    private bool EsControl => Volver == "/control";
+
+    // Si ya ha entrado, directamente a donde iba
     protected override async Task OnInitializedAsync()
     {
         if (TrabajadorActual.PersonaDe((await EstadoSesion).User) != null)
-            Navegacion.NavigateTo("acciones");
+            Navegacion.NavigateTo(EsControl ? "control" : "acciones");
     }
 }

@@ -1,24 +1,26 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navegacion
 
-@* Como MainLayout, pero con el nombre de quien ha entrado y "Salir" *@
+@* Como MainLayout, pero con el nombre de quien ha entrado y "Salir".
+   Lo usan "Mis acciones" (/acciones) y el control diario de calidad (/control). *@
 <header class="barra">
-    <a class="marca" href="acciones">
+    <a class="marca" href="@Inicio">
         <span class="logo">G</span>
         <span>GPE</span>
         <span class="separador"></span>
-        <span class="modulo">Mis acciones</span>
+        <span class="modulo">@(EsControl ? "Control diario" : "Mis acciones")</span>
     </a>
     <AuthorizeView>
         <div class="sesion">
             <span class="suave">@TrabajadorActual.PersonaDe(context.User)</span>
             @* Recarga entera: salir no es una página de Blazor *@
-            <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir", forceLoad: true)'>Salir</button>
+            <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir" + (EsControl ? "?volver=%2Fcontrol" : ""), forceLoad: true)'>Salir</button>
         </div>
     </AuthorizeView>
 </header>
 
-<main class="pagina estrecha">
+@* El control diario es una tabla ancha: usa todo el ancho de la pantalla *@
+<main class="pagina @(EsControl ? "ancha" : "estrecha")">
     @Body
 </main>
 
@@ -27,3 +29,17 @@
     <a href="." class="reload">Recargar</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    // En /control y en la página de entrar cuando se vuelve al control
+    private bool EsControl
+    {
+        get
+        {
+            string ruta = Navegacion.ToBaseRelativePath(Navegacion.Uri);
+            return ruta.StartsWith("control") || ruta.Contains("volver=%2Fcontrol", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private string Inicio => EsControl ? "control" : "acciones";
+}

@@ -324,6 +324,93 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
 .etiqueta.roja { background: var(--fondo-error); color: var(--error); }
 .etiqueta.gris { background: var(--cabecera-tabla); color: var(--suave); }
 
+
+
+/* ---------- Control diario de calidad (/control): la tabla de la rutina del escritorio ---------- */
+
+.pagina.ancha { max-width: none; }
+.rutina-cabecera { align-items: flex-end; }
+.progreso { font-weight: 600; }
+.revisiones, .pestanas-planta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.revision { height: 36px; padding: 0 14px; background: white; color: var(--texto); border-color: var(--borde); font-size: 14px; }
+.revision.elegida { border-color: var(--acento); background: var(--acento-suave); color: var(--acento); }
+.revision.nueva { color: var(--acento); border-style: dashed; }
+.pestanas-planta .revision { height: 42px; min-width: 150px; }
+
+/* Mismos colores que Tema.ColorEstadoCasilla del escritorio */
+.leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.casilla-leyenda { padding: 3px 8px; border-radius: 4px; font-size: 12.5px; font-weight: 600; }
+.ok { background: rgb(225, 245, 232); color: rgb(25, 120, 70); }
+.no { background: var(--fondo-error); color: var(--error); }
+.mto { background: var(--fondo-aviso); color: var(--aviso); }
+.na { background: rgb(236, 238, 236); color: rgb(90, 100, 95); }
+.no-revisa { background: rgb(226, 228, 224); color: var(--suave); }
+
+/* Se desplaza en los dos sentidos con la columna de los puntos y la fila de las máquinas fijas */
+.tabla-rutina {
+    /* Al bajar la página, la tabla ocupa toda la pantalla debajo de la barra de arriba */
+    overflow: auto; max-height: calc(100dvh - 76px); margin-top: 8px;
+    background: white; border: 1px solid rgb(180, 186, 180); border-radius: var(--radio);
+}
+.tabla-rutina table { width: auto; border-collapse: separate; border-spacing: 0; }
+.tabla-rutina th, .tabla-rutina td { border-right: 1px solid rgb(180, 186, 180); border-bottom: 1px solid rgb(180, 186, 180); }
+.tabla-rutina thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--cabecera-tabla);
+    font-size: 11.5px; font-weight: 700; padding: 6px 4px; text-align: center; cursor: pointer;
+    white-space: normal; line-height: 1.15; min-width: 52px; max-width: 70px;
+}
+.tabla-rutina .col-punto {
+    position: sticky; left: 0; z-index: 1; background: var(--cabecera-tabla); text-align: left;
+    font-size: 13px; font-weight: 600; padding: 6px 10px; min-width: 150px; max-width: 190px; cursor: pointer;
+    white-space: normal; line-height: 1.2;
+}
+.tabla-rutina thead .col-punto { z-index: 3; font-size: 11.5px; color: var(--suave); cursor: default; }
+.tabla-rutina td {
+    width: 52px; height: 44px; padding: 0; text-align: center; font-weight: 700; font-size: 14px;
+    cursor: pointer; position: relative; font-variant-numeric: tabular-nums;
+}
+.tabla-rutina td.no-revisa { cursor: default; }
+.tabla-rutina .elegida { outline: 2px solid var(--acento); outline-offset: -2px; }
+.tabla-rutina th.elegida { background: var(--acento-suave); color: var(--acento); }
+/* Esquina morada si tiene comentario, como en el escritorio */
+.tabla-rutina td.con-comentario::after {
+    content: ""; position: absolute; top: 0; right: 0;
+    border-style: solid; border-width: 0 9px 9px 0; border-color: transparent var(--acento) transparent transparent;
+}
+
+/* Panel al pulsar: abajo de la pantalla, como un menú del móvil */
+.fondo-panel { position: fixed; inset: 0; background: rgba(20, 35, 30, .25); z-index: 40; }
+.panel-casilla {
+    position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 41;
+    width: min(480px, 100%); max-height: 85vh; overflow-y: auto;
+    background: white; border-radius: 14px 14px 0 0; padding: 16px 16px 22px;
+    box-shadow: 0 -6px 24px rgba(20, 35, 30, .18);
+}
+.panel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.panel-casilla .estados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.panel-casilla .estado { height: 50px; border: 2px solid transparent; font-size: 15px; }
+.panel-casilla .estado.marcado { border-color: currentColor; }
+.panel-casilla .todo { height: 54px; margin-bottom: 6px; font-size: 16px; }
+.panel-casilla input { height: 48px; font-size: 17px; }
+.panel-casilla textarea { width: 100%; }
+
+/* Móvil en vertical: la columna de los puntos más estrecha para que quepan más máquinas */
+@media (max-width: 600px) {
+    .tabla-rutina .col-punto { min-width: 110px; max-width: 120px; font-size: 12px; padding: 6px 8px; }
+}
+
+/* Móvil en horizontal: poco alto, se aprovecha para la tabla */
+@media (max-height: 500px) {
+    .barra { height: 44px; }
+    .pagina.ancha { padding-top: 12px; }
+    .rutina-cabecera h1 { font-size: 20px; }
+    .tabla-rutina { max-height: calc(100dvh - 52px); }
+    .tabla-rutina td { height: 40px; }
+    .panel-casilla { max-height: 100dvh; padding-top: 10px; }
+    .panel-casilla .estados { grid-template-columns: repeat(4, 1fr); }
+    .panel-casilla .estado { height: 44px; font-size: 13.5px; white-space: normal; }
+}
+
 /* ---------- Errores de Blazor ---------- */
 
 .blazor-error-boundary { background: var(--error); color: white; padding: 1rem; }

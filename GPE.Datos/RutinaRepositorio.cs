@@ -399,6 +399,78 @@ public class RutinaRepositorio
         }
     }
 
+    // Web del control diario: guarda una sola casilla en el momento (la crea, la cambia o, si viene
+    // vacía, la quita). Si aún no hay ronda ese día o no existe esa revisión, las crea.
+    // Cambia la versión de la ronda para que el escritorio no borre esta casilla al guardar.
+    public void GuardarCasilla(DateTime fecha, ResultadoRutina resultado, bool vacia, int usuarioId)
+    {
+        using var conexion = Conexion.Abrir();
+        using var transaccion = conexion.BeginTransaction();
+
+        SqlCommand Comando(string sql)
+        {
+            var comando = new SqlCommand(sql, conexion, transaccion);
+            comando.Parameters.AddWithValue("@usuario", usuarioId);
+            return comando;
+        }
+
+        // UPDLOCK + HOLDLOCK: si dos móviles crean la ronda del día a la vez, el segundo espera al primero
+        int rutinaId;
+        using (var comando = Comando(@"
+            DECLARE @id INT = (SELECT id FROM RUTINA WITH (UPDLOCK, HOLDLOCK) WHERE fecha = @fecha);
+            IF @id IS NULL
+            BEGIN
+                INSERT INTO RUTINA (fecha, creado_por) VALUES (@fecha, @usuario);
+                SET @id = CAST(SCOPE_IDENTITY() AS INT);
+            END
+            ELSE
+                UPDATE RUTINA SET fecha = fecha WHERE id = @id;   -- solo para cambiar la versión
+            SELECT @id;"))
+        {
+            comando.Parameters.AddWithValue("@fecha", fecha.Date);
+            rutinaId = (int)comando.ExecuteScalar();
+        }
+
+        if (!vacia)
+        {
+            // Las revisiones que falten hasta esta, empezadas ahora
+            using var comando = Comando(@"
+                DECLARE @n INT = 1;
+                WHILE @n <= @revision
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM RUTINA_REVISION WHERE rutina_id = @rutina AND numero = @n)
+                        INSERT INTO RUTINA_REVISION (rutina_id, numero, hora, creado_por)
+                        VALUES (@rutina, @n, CAST(SYSDATETIME() AS TIME(0)), @usuario);
+                    SET @n += 1;
+                END");
+            comando.Parameters.AddWithValue("@rutina", rutinaId);
+            comando.Parameters.AddWithValue("@revision", resultado.Revision);
+            comando.ExecuteNonQuery();
+        }
+
+        using (var comando = Comando(vacia
+            ? @"DELETE FROM RUTINA_RESULTADO
+                WHERE rutina_id = @rutina AND revision = @revision AND punto_id = @punto AND seccion_id = @seccion;"
+            : @"UPDATE RUTINA_RESULTADO SET estado = @estado, valor = @valor, comentario = @comentario
+                WHERE rutina_id = @rutina AND revision = @revision AND punto_id = @punto AND seccion_id = @seccion;
+                IF @@ROWCOUNT = 0
+                    INSERT INTO RUTINA_RESULTADO (rutina_id, revision, punto_id, seccion_id, estado, valor, comentario)
+                    VALUES (@rutina, @revision, @punto, @seccion, @estado, @valor, @comentario);"))
+        {
+            void Valor(string nombre, object? valor) => comando.Parameters.AddWithValue(nombre, valor ?? DBNull.Value);
+            Valor("@rutina", rutinaId);
+            Valor("@revision", resultado.Revision);
+            Valor("@punto", resultado.PuntoId);
+            Valor("@seccion", resultado.SeccionId);
+            Valor("@estado", resultado.Estado);
+            Valor("@valor", resultado.Valor);
+            Valor("@comentario", resultado.Comentario);
+            comando.ExecuteNonQuery();
+        }
+
+        transaccion.Commit();
+    }
+
     // Apunta en la casilla la incidencia que se ha abierto desde ella. false si la casilla ya no existe.
     public bool Vincular(int rutinaId, int revision, int puntoId, int seccionId, int noConformidadId)
     {
