@@ -18,7 +18,8 @@ CREATE TABLE PROVEEDOR (
     impacto TINYINT NULL,
     estatus TINYINT NULL,
     reclamaciones TINYINT NULL,
-    -- Texto: en el Excel se mezclan fechas y explicaciones ("BRC: 12/04/27", "NA", "No se realiza por confianza...")
+    -- Texto: en el Excel se mezclan fechas y explicaciones ("BRC: 12/04/27", "NA", "No se realiza por confianza...").
+    -- proveedor_ensayo_auditoria_rfa.sql cambia ensayo_trazabilidad y auditoria por fecha + "No aplica", y rfa por el año.
     certificados NVARCHAR(500) NULL,
     ensayo_trazabilidad NVARCHAR(500) NULL,
     auditoria NVARCHAR(500) NULL,

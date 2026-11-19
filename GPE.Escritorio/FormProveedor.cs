@@ -24,10 +24,13 @@ public class FormProveedor : Form
     private readonly ComboBox cmbEstado = CamposProveedor.ComboEstado();
     private readonly ComboBox cmbTipo;
     private readonly DateTimePicker dtpRevision = CamposProveedor.Fecha();
-    private readonly TextBox txtCertificados = new();
-    private readonly TextBox txtEnsayo = new();
-    private readonly TextBox txtAuditoria = new();
-    private readonly TextBox txtRfa = new();
+    private readonly DateTimePicker dtpEnsayo = CamposProveedor.Fecha();
+    private readonly CheckBox chkEnsayoNoAplica = new();
+    private readonly TextBox txtEnsayoMotivo = new();
+    private readonly DateTimePicker dtpAuditoria = CamposProveedor.Fecha();
+    private readonly CheckBox chkAuditoriaNoAplica = new();
+    private readonly TextBox txtAuditoriaMotivo = new();
+    private readonly TextBox txtRfa = new() { MaxLength = 4 };
     private readonly ComboBox cmbImpacto = CamposProveedor.ComboNota(1, 3);
     private readonly ComboBox cmbEstatus = CamposProveedor.ComboNota(0, 3);
     private readonly Label lblReclamaciones = new();
@@ -53,7 +56,7 @@ public class FormProveedor : Form
     {
         bool nuevo = proveedor == null;
         original = proveedor?.Proveedor ?? new Proveedor(0, SiguienteNumero(), "", DateTime.Today, false, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, false, null, null, false, null, null, null, null, null, null, null);
         actual = original;
         notaReclamaciones = original.Reclamaciones ?? 0;   // PrepararNc la vuelve a sacar con sus NC
         cmbTipo = CamposProveedor.ComboTipo(TipoProveedor.Todos, original.Tipo);
@@ -258,12 +261,37 @@ public class FormProveedor : Form
         rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
         rejilla.Controls.Add(campos.Campo("Fecha revisión", dtpRevision));
         rejilla.Controls.Add(CamposProveedor.Hueco());
-        rejilla.Controls.Add(campos.Campo("Certificados (notas)", txtCertificados));
-        rejilla.Controls.Add(campos.Campo("Ensayo trazabilidad", txtEnsayo));
-        rejilla.Controls.Add(campos.Campo("Auditoría", txtAuditoria));
-        rejilla.Controls.Add(campos.Campo("RFA", txtRfa));
+        rejilla.Controls.Add(campos.Campo("Ensayo trazabilidad", dtpEnsayo,
+            NoAplica(dtpEnsayo, chkEnsayoNoAplica, txtEnsayoMotivo)));
+        rejilla.Controls.Add(campos.Campo("Auditoría", dtpAuditoria,
+            NoAplica(dtpAuditoria, chkAuditoriaNoAplica, txtAuditoriaMotivo)));
+        rejilla.Controls.Add(campos.Campo("RFA (año)", txtRfa));
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
+    }
+
+    // Debajo de la fecha: casilla "No aplica" y, si se marca, el motivo. Con "No aplica" no se puede poner fecha.
+    private static Control NoAplica(DateTimePicker fecha, CheckBox noAplica, TextBox motivo)
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Margin = new Padding(0, 6, 0, 0) };
+        noAplica.Text = "No aplica";
+        noAplica.AutoSize = true;
+        noAplica.Margin = new Padding(0, 0, 0, 4);
+        motivo.Dock = DockStyle.Top;
+        motivo.MaxLength = 500;
+        motivo.PlaceholderText = "Motivo (opcional)";
+        panel.Controls.Add(noAplica);
+        panel.Controls.Add(motivo);
+
+        void Ajustar()
+        {
+            motivo.Visible = noAplica.Checked;
+            fecha.Enabled = !noAplica.Checked;
+            if (noAplica.Checked) fecha.Checked = false;
+        }
+        noAplica.CheckedChanged += (s, e) => Ajustar();
+        Ajustar();
+        return panel;
     }
 
     // Evaluación de frecuencia de revisión del proveedor
@@ -311,10 +339,13 @@ public class FormProveedor : Form
         CamposProveedor.PonerTipo(cmbTipo, p.Tipo);
         CamposProveedor.PonerFecha(dtpAlta, p.FechaAlta);
         CamposProveedor.PonerFecha(dtpRevision, p.FechaRevision);
-        txtCertificados.Text = p.Certificados ?? "";
-        txtEnsayo.Text = p.EnsayoTrazabilidad ?? "";
-        txtAuditoria.Text = p.Auditoria ?? "";
-        txtRfa.Text = p.Rfa ?? "";
+        CamposProveedor.PonerFecha(dtpEnsayo, p.EnsayoFecha);
+        chkEnsayoNoAplica.Checked = p.EnsayoNoAplica;
+        txtEnsayoMotivo.Text = p.EnsayoMotivo ?? "";
+        CamposProveedor.PonerFecha(dtpAuditoria, p.AuditoriaFecha);
+        chkAuditoriaNoAplica.Checked = p.AuditoriaNoAplica;
+        txtAuditoriaMotivo.Text = p.AuditoriaMotivo ?? "";
+        txtRfa.Text = p.RfaAnio?.ToString() ?? "";
         CamposProveedor.PonerNota(cmbImpacto, p.Impacto);
         CamposProveedor.PonerNota(cmbEstatus, p.Estatus);
         CamposProveedor.PonerNota(cmbRelacion, p.Relacion);
@@ -322,7 +353,7 @@ public class FormProveedor : Form
         CamposProveedor.PonerNota(cmbSubcontratado, p.Subcontratado);
     }
 
-    // Lo que hay escrito. El Nº, si no es un número, queda vacío (Guardar lo marca como error).
+    // Lo que hay escrito. El Nº y el año de RFA, si no son un número, quedan vacíos (Guardar lo marca como error).
     private Proveedor Leer() => original with
     {
         Numero = int.TryParse(txtNumero.Text.Trim(), out int numero) ? numero : null,
@@ -331,10 +362,13 @@ public class FormProveedor : Form
         Tipo = CamposProveedor.LeerTipo(cmbTipo),
         FechaAlta = CamposProveedor.LeerFecha(dtpAlta),
         FechaRevision = CamposProveedor.LeerFecha(dtpRevision),
-        Certificados = txtCertificados.Text,
-        EnsayoTrazabilidad = txtEnsayo.Text,
-        Auditoria = txtAuditoria.Text,
-        Rfa = txtRfa.Text,
+        EnsayoFecha = CamposProveedor.LeerFecha(dtpEnsayo),
+        EnsayoNoAplica = chkEnsayoNoAplica.Checked,
+        EnsayoMotivo = txtEnsayoMotivo.Text,
+        AuditoriaFecha = CamposProveedor.LeerFecha(dtpAuditoria),
+        AuditoriaNoAplica = chkAuditoriaNoAplica.Checked,
+        AuditoriaMotivo = txtAuditoriaMotivo.Text,
+        RfaAnio = short.TryParse(txtRfa.Text.Trim(), out short anio) ? anio : null,
         Impacto = CamposProveedor.LeerNota(cmbImpacto),
         Estatus = CamposProveedor.LeerNota(cmbEstatus),
         Reclamaciones = notaReclamaciones,
@@ -367,6 +401,11 @@ public class FormProveedor : Form
             campos.MarcarError(txtNumero, "Escribe solo números.");
             primerError = txtNumero;
         }
+        if (txtRfa.Text.Trim() != "" && leido.RfaAnio == null)
+        {
+            campos.MarcarError(txtRfa, "Escribe un año de 4 cifras, por ejemplo 2024.");
+            primerError ??= txtRfa;
+        }
 
         List<(string Campo, string Mensaje)> errores;
         try
@@ -383,10 +422,9 @@ public class FormProveedor : Form
         {
             [nameof(Proveedor.Numero)] = txtNumero,
             [nameof(Proveedor.Nombre)] = txtNombre,
-            [nameof(Proveedor.Certificados)] = txtCertificados,
-            [nameof(Proveedor.EnsayoTrazabilidad)] = txtEnsayo,
-            [nameof(Proveedor.Auditoria)] = txtAuditoria,
-            [nameof(Proveedor.Rfa)] = txtRfa
+            [nameof(Proveedor.EnsayoMotivo)] = dtpEnsayo,
+            [nameof(Proveedor.AuditoriaMotivo)] = dtpAuditoria,
+            [nameof(Proveedor.RfaAnio)] = txtRfa
         };
         foreach (var (campo, mensaje) in errores)
         {

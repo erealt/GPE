@@ -91,7 +91,7 @@ public static class CamposProveedor
     {
         foreach (Control hijo in padre.Controls)
         {
-            if (hijo is TextBox { ReadOnly: false } or ComboBox or DateTimePicker)
+            if (hijo is TextBox { ReadOnly: false } or ComboBox or DateTimePicker or CheckBox)
                 yield return hijo;
             foreach (var nieto in Entradas(hijo))
                 yield return nieto;
@@ -107,6 +107,7 @@ public static class CamposProveedor
             {
                 case ComboBox combo: combo.SelectedIndexChanged += (s, e) => accion(); break;
                 case DateTimePicker fecha: fecha.ValueChanged += (s, e) => accion(); break;
+                case CheckBox casilla: casilla.CheckedChanged += (s, e) => accion(); break;
                 default: control.TextChanged += (s, e) => accion(); break;
             }
         }

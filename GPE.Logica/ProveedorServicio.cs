@@ -74,9 +74,11 @@ public class ProveedorServicio
             Nombre = p.Nombre?.Trim() ?? "",
             Tipo = Limpio(p.Tipo),
             Certificados = Limpio(p.Certificados),
-            EnsayoTrazabilidad = Limpio(p.EnsayoTrazabilidad),
-            Auditoria = Limpio(p.Auditoria),
-            Rfa = Limpio(p.Rfa)
+            // Con "No aplica" no hay fecha; sin él, no hay motivo
+            EnsayoFecha = p.EnsayoNoAplica ? null : p.EnsayoFecha,
+            EnsayoMotivo = p.EnsayoNoAplica ? Limpio(p.EnsayoMotivo) : null,
+            AuditoriaFecha = p.AuditoriaNoAplica ? null : p.AuditoriaFecha,
+            AuditoriaMotivo = p.AuditoriaNoAplica ? Limpio(p.AuditoriaMotivo) : null
         };
     }
 
@@ -94,11 +96,13 @@ public class ProveedorServicio
 
         foreach (var (campo, texto) in new[]
         {
-            (nameof(Proveedor.Certificados), p.Certificados), (nameof(Proveedor.EnsayoTrazabilidad), p.EnsayoTrazabilidad),
-            (nameof(Proveedor.Auditoria), p.Auditoria), (nameof(Proveedor.Rfa), p.Rfa)
+            (nameof(Proveedor.EnsayoMotivo), p.EnsayoMotivo), (nameof(Proveedor.AuditoriaMotivo), p.AuditoriaMotivo)
         })
             if (texto?.Length > 500)
                 errores.Add((campo, "No puede pasar de 500 letras."));
+
+        if (p.RfaAnio is < 1990 or > 2100)
+            errores.Add((nameof(Proveedor.RfaAnio), "Escribe un año de 4 cifras, por ejemplo 2024."));
         return errores;
     }
 

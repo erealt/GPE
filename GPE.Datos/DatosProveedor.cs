@@ -25,9 +25,13 @@ public record Proveedor(
     byte? Estatus,
     byte? Reclamaciones,
     string? Certificados,
-    string? EnsayoTrazabilidad,
-    string? Auditoria,
-    string? Rfa,
+    DateTime? EnsayoFecha,
+    bool EnsayoNoAplica,
+    string? EnsayoMotivo,      // solo con "No aplica"
+    DateTime? AuditoriaFecha,
+    bool AuditoriaNoAplica,
+    string? AuditoriaMotivo,   // solo con "No aplica"
+    short? RfaAnio,
     byte? Relacion,    // null = igual que el estatus
     byte? Historial,
     byte? Subcontratado,

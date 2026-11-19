@@ -18,7 +18,8 @@ public class ProveedorRepositorio
     {
         const string sqlProveedores = @"
             SELECT id, numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus, reclamaciones,
-                   certificados, ensayo_trazabilidad, auditoria, rfa, relacion, historial, subcontratado, revisar, version
+                   certificados, ensayo_fecha, ensayo_no_aplica, ensayo_motivo, auditoria_fecha, auditoria_no_aplica,
+                   auditoria_motivo, rfa_anio, relacion, historial, subcontratado, revisar, version
             FROM PROVEEDOR
             ORDER BY CASE WHEN numero IS NULL THEN 1 ELSE 0 END, numero, nombre;";
 
@@ -51,14 +52,18 @@ public class ProveedorRepositorio
                     Estatus: Nota(8),
                     Reclamaciones: null,   // la pone ProveedorServicio con sus NC; la columna era la nota a mano del Excel
                     Certificados: Texto(10),
-                    EnsayoTrazabilidad: Texto(11),
-                    Auditoria: Texto(12),
-                    Rfa: Texto(13),
-                    Relacion: Nota(14),
-                    Historial: Nota(15),
-                    Subcontratado: Nota(16),
-                    Revisar: Texto(17),
-                    Version: (byte[])lector[18]));
+                    EnsayoFecha: Fecha(11),
+                    EnsayoNoAplica: lector.GetBoolean(12),
+                    EnsayoMotivo: Texto(13),
+                    AuditoriaFecha: Fecha(14),
+                    AuditoriaNoAplica: lector.GetBoolean(15),
+                    AuditoriaMotivo: Texto(16),
+                    RfaAnio: lector.IsDBNull(17) ? null : lector.GetInt16(17),
+                    Relacion: Nota(18),
+                    Historial: Nota(19),
+                    Subcontratado: Nota(20),
+                    Revisar: Texto(21),
+                    Version: (byte[])lector[22]));
         }
 
         using (var comando = new SqlCommand(sqlProductos, conexion))
@@ -371,9 +376,11 @@ public class ProveedorRepositorio
     {
         const string sql = @"
             INSERT INTO PROVEEDOR (numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus,
-                certificados, ensayo_trazabilidad, auditoria, rfa, relacion, historial, subcontratado, creado_por)
+                certificados, ensayo_fecha, ensayo_no_aplica, ensayo_motivo, auditoria_fecha, auditoria_no_aplica,
+                auditoria_motivo, rfa_anio, relacion, historial, subcontratado, creado_por)
             VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus,
-                @certificados, @ensayo, @auditoria, @rfa, @relacion, @historial, @subcontratado, @usuario);
+                @certificados, @ensayoFecha, @ensayoNoAplica, @ensayoMotivo, @auditoriaFecha, @auditoriaNoAplica,
+                @auditoriaMotivo, @rfa, @relacion, @historial, @subcontratado, @usuario);
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
         using var conexion = Conexion.Abrir();
@@ -390,7 +397,9 @@ public class ProveedorRepositorio
         const string sql = @"
             UPDATE PROVEEDOR SET numero = @numero, nombre = @nombre, fecha_alta = @alta, baja = @baja, tipo = @tipo,
                 fecha_revision = @revision, impacto = @impacto, estatus = @estatus,
-                certificados = @certificados, ensayo_trazabilidad = @ensayo, auditoria = @auditoria, rfa = @rfa,
+                certificados = @certificados, ensayo_fecha = @ensayoFecha, ensayo_no_aplica = @ensayoNoAplica,
+                ensayo_motivo = @ensayoMotivo, auditoria_fecha = @auditoriaFecha, auditoria_no_aplica = @auditoriaNoAplica,
+                auditoria_motivo = @auditoriaMotivo, rfa_anio = @rfa,
                 relacion = @relacion, historial = @historial, subcontratado = @subcontratado, revisar = NULL
             WHERE id = @id AND version = @version;";
 
@@ -415,9 +424,13 @@ public class ProveedorRepositorio
         Valor("@estatus", p.Estatus);
         // reclamaciones no se guarda: la nota sale de sus NC (ProveedorServicio.NotaReclamaciones)
         Valor("@certificados", p.Certificados);
-        Valor("@ensayo", p.EnsayoTrazabilidad);
-        Valor("@auditoria", p.Auditoria);
-        Valor("@rfa", p.Rfa);
+        Valor("@ensayoFecha", p.EnsayoFecha);
+        Valor("@ensayoNoAplica", p.EnsayoNoAplica);
+        Valor("@ensayoMotivo", p.EnsayoMotivo);
+        Valor("@auditoriaFecha", p.AuditoriaFecha);
+        Valor("@auditoriaNoAplica", p.AuditoriaNoAplica);
+        Valor("@auditoriaMotivo", p.AuditoriaMotivo);
+        Valor("@rfa", p.RfaAnio);
         Valor("@relacion", p.Relacion);
         Valor("@historial", p.Historial);
         Valor("@subcontratado", p.Subcontratado);

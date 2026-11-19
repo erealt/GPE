@@ -1,6 +1,6 @@
 ﻿<#
     Pasa la hoja PRODUCTOS del Excel "CP-RG05 - EVALUACIÓN PROVEEDORES Y FRAUDE" a PROVEEDOR y PROVEEDOR_PRODUCTO.
-    Se ejecuta una vez, después de proveedores.sql.
+    Se ejecuta una vez, después de proveedores.sql y proveedor_ensayo_auditoria_rfa.sql.
 
     En la hoja cada fila es un proveedor con uno de sus productos, y los datos del proveedor (columnas A-N,
     HISTORIAL y P. SUBCONTRATADO) se repiten en cada fila. Solo se miran las filas de productos activos (las de
@@ -86,6 +86,16 @@ function Nota($v, $min, $max) {
         if ($n -ge $min -and $n -le $max) { return @($n, $t) }
     }
     return @($null, $t)
+}
+
+# ENSAYO TRAZABILIDAD y AUDITORÍA. Devuelve @(fecha, noAplica, motivo): una fecha va a la fecha; "NA" o "NO APLICA"
+# es "No aplica" sin motivo; otro texto ("No se realiza por confianza...") es "No aplica" con ese motivo.
+function FechaONoAplica($texto) {
+    $f = Fecha $texto
+    if ($f[0]) { return @($f[0], $false, $null) }
+    if (-not $f[1]) { return @($null, $false, $null) }
+    if ($f[1].ToUpperInvariant() -in 'NA', 'N/A', 'NO APLICA') { return @($null, $true, $null) }
+    return @($null, $true, $f[1])
 }
 
 # Lectura del Excel
@@ -299,9 +309,11 @@ try {
             $d = $pr.Datos
             $cmd = New-Object System.Data.SqlClient.SqlCommand(@'
 INSERT INTO PROVEEDOR (numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus, reclamaciones,
-    certificados, ensayo_trazabilidad, auditoria, rfa, relacion, historial, subcontratado, revisar, creado_por)
+    certificados, ensayo_fecha, ensayo_no_aplica, ensayo_motivo, auditoria_fecha, auditoria_no_aplica, auditoria_motivo,
+    rfa_anio, relacion, historial, subcontratado, revisar, creado_por)
 VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus, @reclamaciones,
-    @certificados, @ensayo, @auditoria, @rfa, @relacion, @historial, @subcontratado, @revisar, @usuario);
+    @certificados, @ensayoFecha, @ensayoNoAplica, @ensayoMotivo, @auditoriaFecha, @auditoriaNoAplica, @auditoriaMotivo,
+    @rfa, @relacion, @historial, @subcontratado, @revisar, @usuario);
 SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tiene trigger
 '@, $bd, $transaccion)
             $p = $cmd.Parameters
@@ -316,9 +328,19 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tie
                 Valor $p $par[0] $(if ($null -ne $d[$par[1]]) { [byte]$d[$par[1]] }) $S::TinyInt
             }
             Valor $p '@certificados' $d.Certificados $S::NVarChar
-            Valor $p '@ensayo' $d.Ensayo $S::NVarChar
-            Valor $p '@auditoria' $d.Auditoria $S::NVarChar
-            Valor $p '@rfa' $d.Rfa $S::NVarChar
+            foreach ($par in @(@('ensayo', 'Ensayo'), @('auditoria', 'Auditoria'))) {
+                $e = FechaONoAplica $d[$par[1]]
+                Valor $p "@$($par[0])Fecha" $e[0] $S::Date
+                Valor $p "@$($par[0])NoAplica" ([bool]$e[1]) $S::Bit
+                Valor $p "@$($par[0])Motivo" $e[2] $S::NVarChar
+            }
+            # RFA: solo el año
+            $anio = 0
+            if ($d.Rfa -and -not ([int]::TryParse($d.Rfa, [ref]$anio) -and $anio -ge 1990 -and $anio -le 2100)) {
+                Aviso $pr.Filas[0].Fila "RFA '$($d.Rfa)' no es un año; se deja vacío."
+                $anio = 0
+            }
+            Valor $p '@rfa' $(if ($anio) { [int16]$anio }) $S::SmallInt
             Valor $p '@revisar' $pr.Revisar $S::NVarChar
             Valor $p '@usuario' $UsuarioId $S::Int
             try { $id = [int]$cmd.ExecuteScalar() }
