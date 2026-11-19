@@ -3,13 +3,12 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Cuatro recuadros de arriba de la ficha del proveedor, con lo más importante para verlo sin leer las tarjetas:
-// evaluación, riesgo de fraude más alto, productos activos y reclamaciones.
+// Tres recuadros de arriba de la ficha del proveedor, con lo más importante para verlo sin leer las tarjetas:
+// evaluación, productos activos y reclamaciones.
 // Se crean una vez; Actualizar solo cambia sus textos y colores.
 public class ResumenProveedor : TableLayoutPanel
 {
     private readonly Recuadro evaluacion = new("Evaluación", ultimo: false);
-    private readonly Recuadro riesgo = new("Riesgo de fraude más alto", ultimo: false);
     private readonly Recuadro activos = new("Productos activos", ultimo: false);
     private readonly Recuadro reclamaciones = new("Reclamaciones", ultimo: true);
 
@@ -17,17 +16,16 @@ public class ResumenProveedor : TableLayoutPanel
     {
         Dock = DockStyle.Fill;
         AutoSize = true;
-        ColumnCount = 4;
+        ColumnCount = 3;
         RowCount = 1;
         Margin = new Padding(0, 0, 0, 20);
-        for (int i = 0; i < 4; i++)
-            ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        for (int i = 0; i < 3; i++)
+            ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 3));
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         Controls.Add(evaluacion.Panel, 0, 0);
-        Controls.Add(riesgo.Panel, 1, 0);
-        Controls.Add(activos.Panel, 2, 0);
-        Controls.Add(reclamaciones.Panel, 3, 0);
+        Controls.Add(activos.Panel, 1, 0);
+        Controls.Add(reclamaciones.Panel, 2, 0);
     }
 
     // p: lo que hay escrito en la ficha, aunque no esté guardado
@@ -38,11 +36,6 @@ public class ResumenProveedor : TableLayoutPanel
             nota == null ? "Faltan datos para calcularla"
                          : $"Impacto + estatus + reclamaciones = {(p.Impacto ?? 0) + (p.Estatus ?? 0) + (p.Reclamaciones ?? 0)}",
             Tema.ColorNotaProveedor(nota ?? ""));
-
-        string? masAlto = ProveedorServicio.RiesgoFraudeMasAlto(new ProveedorConProductos(p, productos));
-        riesgo.Poner(masAlto ?? CamposProveedor.SinNota,
-            productos.Count == 0 ? "Todavía no tiene productos" : "De sus productos activos",
-            Tema.ColorNotaProveedor(masAlto ?? ""));
 
         int numeroActivos = productos.Count(x => !x.Baja);
         int deBaja = productos.Count - numeroActivos;

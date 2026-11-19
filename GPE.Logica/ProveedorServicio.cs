@@ -350,11 +350,4 @@ public class ProveedorServicio
     };
 
     public static readonly string[] Riesgos = { "BAJO", "MEDIO", "ALTO" };
-
-    // El riesgo de fraude más alto de los productos que no están de baja (null si ninguno lo tiene)
-    public static string? RiesgoFraudeMasAlto(ProveedorConProductos p) =>
-        p.Productos.Where(x => !x.Baja)
-            .Select(x => RiesgoFraude(p.Proveedor, x))
-            .OfType<string>()
-            .MaxBy(r => Array.IndexOf(Riesgos, r));
 }

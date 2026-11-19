@@ -10,8 +10,9 @@ public class ProductosProveedor
 {
     private const int ColumnaEstado = 3;
     private const int ColumnaMuestreo = 4;
-    private const int ColumnaRiesgo = 5;
-    private const int ColumnaActuacion = 6;
+    private const int ColumnaVulnerabilidad = 5;
+    private const int ColumnaRiesgo = 6;
+    private const int ColumnaActuacion = 7;
 
     private readonly ProveedorServicio servicio = new();
     private readonly int proveedorId;
@@ -110,7 +111,7 @@ public class ProductosProveedor
         (string Nombre, int Ancho)[] columnas =
         {
             ("CÓDIGO", 130), ("DESCRIPCIÓN", 320), ("TIPO PRODUCTO", 160), ("ESTADO", 100),
-            ("MUESTREO", 110), ("RIESGO FRAUDE", 140), ("ACTUACIÓN", 230)
+            ("MUESTREO", 110), ("RIESGO", 110), ("RIESGO FRAUDE", 140), ("ACTUACIÓN", 230)
         };
         foreach (var (nombre, ancho) in columnas)
         {
@@ -165,7 +166,7 @@ public class ProductosProveedor
             x.Descripcion ?? CamposProveedor.SinNota,
             x.TipoProducto ?? CamposProveedor.SinNota,
             x.Baja ? CamposProveedor.Baja : CamposProveedor.Activo,
-            "", "", "");   // muestreo, riesgo y actuación dependen de las notas del proveedor: TextoCalculado
+            "", "", "", "");   // muestreo, riesgo, riesgo fraude y actuación dependen de las notas del proveedor: TextoCalculado
 
         if (x.Baja)
             fila.DefaultCellStyle.ForeColor = Tema.Suave;
@@ -190,13 +191,19 @@ public class ProductosProveedor
                       + $" + control recepción {Nota(x.ControlRecepcion)} + reclamaciones {Nota(x.Reclamaciones)}"
                       + $"\n{ProveedorServicio.AlcanceMuestreo(muestreo)}";
                 break;
+            case ColumnaVulnerabilidad:
+                string? vulnerabilidad = ProveedorServicio.RiesgoVulnerabilidad(x);
+                e.Value = vulnerabilidad ?? CamposProveedor.SinNota;
+                celda.ToolTipText = vulnerabilidad == null
+                    ? "Faltan las notas de fraude del producto"
+                    : $"O × D = {ProveedorServicio.OcurrenciaPorDeteccion(x)}";
+                break;
             case ColumnaRiesgo:
                 string? riesgo = ProveedorServicio.RiesgoFraude(p, x);
                 e.Value = riesgo ?? CamposProveedor.SinNota;
                 celda.ToolTipText = riesgo == null
                     ? "Faltan las notas de fraude del producto"
-                    : $"O × D = {ProveedorServicio.OcurrenciaPorDeteccion(x)} (vulnerabilidad {ProveedorServicio.RiesgoVulnerabilidad(x)})"
-                      + $"\nPuntuación = {ProveedorServicio.Puntuacion(p, x)}";
+                    : $"Puntuación = {ProveedorServicio.Puntuacion(p, x)}";
                 break;
             case ColumnaActuacion:
                 e.Value = ProveedorServicio.Actuacion(ProveedorServicio.RiesgoFraude(p, x)) ?? CamposProveedor.SinNota;
@@ -215,6 +222,7 @@ public class ProductosProveedor
         {
             ColumnaEstado => x.Baja ? CamposProveedor.Baja : CamposProveedor.Activo,
             ColumnaMuestreo => ProveedorServicio.FrecuenciaMuestreo(p, x),
+            ColumnaVulnerabilidad => ProveedorServicio.RiesgoVulnerabilidad(x),
             ColumnaRiesgo => ProveedorServicio.RiesgoFraude(p, x),
             _ => null
         };
