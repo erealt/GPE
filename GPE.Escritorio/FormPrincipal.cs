@@ -51,8 +51,9 @@ public class FormPrincipal : Form
         if (Sesion.VeCalidad) PrepararAvisoCertificados();
     }
 
-    // Certificados de proveedores caducados o que caducan en 30 días: se avisa al abrir GPE a quien ve Calidad.
-    // Si hay otra ventana abierta (el aviso de devoluciones, por ejemplo), se espera a volver a la principal.
+    // Certificados de proveedores caducados o que caducan en 30 días: a quien ve Calidad le sale un recuadro pequeño
+    // abajo a la derecha cada vez que abre GPE. También se ven en la pantalla Proveedores.
+    // Si hay otra ventana abierta (el aviso de devoluciones, por ejemplo), se espera.
     private bool avisoCertificadosPendiente;
 
     private void PrepararAvisoCertificados()
@@ -78,17 +79,14 @@ public class FormPrincipal : Form
         }
         if (certificados.Count == 0) return;
 
-        int? elegido;
-        using (var aviso = new FormAvisoCertificados(certificados))
+        var aviso = new FormAvisoEsquina("Certificados de proveedores", FormAvisoCertificados.Resumen(certificados) + ".");
+        aviso.VerPulsado += (s, e) =>
         {
-            aviso.ShowDialog(this);
-            elegido = aviso.ProveedorElegido;
-        }
-        if (elegido == null) return;
-
-        var moduloProveedores = modulos.First(m => m.Nombre == "Proveedores");
-        Mostrar(moduloProveedores);
-        ((ModuloProveedores)moduloProveedores.Contenido!).AbrirProveedor(elegido.Value);
+            var moduloProveedores = modulos.First(m => m.Nombre == "Proveedores");
+            Mostrar(moduloProveedores);
+            ((ModuloProveedores)moduloProveedores.Contenido!).VerCertificados();
+        };
+        aviso.MostrarEn(this);
     }
 
     // Devoluciones se crea al arrancar para que el aviso de pendientes funcione sin entrar en el módulo

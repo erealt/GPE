@@ -3,8 +3,8 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Aviso al abrir GPE con los certificados de proveedores activos que ya han caducado o caducan en 30 días o menos.
-// Sale cada vez que se abre GPE hasta que se pone la fecha del certificado renovado (o se quita).
+// Lista de los certificados de proveedores activos que ya han caducado o caducan en 30 días o menos.
+// Se abre con "Ver" desde el aviso pequeño de la esquina o desde la pantalla Proveedores.
 public class FormAvisoCertificados : Form
 {
     private readonly ListView lista = new();
@@ -25,15 +25,9 @@ public class FormAvisoCertificados : Form
         BackColor = Tema.Fondo;
         Font = Tema.Fuente;
 
-        int caducados = certificados.Count(c => ProveedorServicio.Estado(c.Certificado) == ProveedorServicio.EstadoCertificado.Caducado);
-        int porCaducar = certificados.Count - caducados;
-        var partes = new List<string>();
-        if (caducados > 0) partes.Add(caducados == 1 ? "1 certificado caducado" : $"{caducados} certificados caducados");
-        if (porCaducar > 0) partes.Add(porCaducar == 1 ? "1 certificado caduca pronto" : $"{porCaducar} certificados caducan pronto");
-
         var lblTitulo = new Label
         {
-            Text = "⚠  " + string.Join(" y ", partes),
+            Text = "⚠  " + Resumen(certificados),
             Dock = DockStyle.Top,
             Height = 50,
             Padding = new Padding(20, 15, 20, 0),
@@ -44,7 +38,7 @@ public class FormAvisoCertificados : Form
         var lblExplicacion = new Label
         {
             Text = $"Certificados de proveedores activos que caducan en {ProveedorServicio.DiasAvisoCertificado} días o menos. " +
-                   "Volverán a salir cada vez que abras GPE, hasta que pongas la nueva fecha en la ficha del proveedor.",
+                   "Dejan de salir cuando pones la nueva fecha en la ficha del proveedor.",
             Dock = DockStyle.Top,
             Height = 60,
             Padding = new Padding(20, 10, 20, 0),
@@ -85,7 +79,7 @@ public class FormAvisoCertificados : Form
         var marcoLista = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 0, 20, 0) };
         marcoLista.Controls.Add(lista);
 
-        var btnMasTarde = Tema.BotonSecundario("Ahora no", 140);
+        var btnMasTarde = Tema.BotonSecundario("Cerrar", 140);
         btnMasTarde.DialogResult = DialogResult.Cancel;
         btnAbrir.Click += (s, e) => Abrir();
 
@@ -113,6 +107,25 @@ public class FormAvisoCertificados : Form
 
         if (lista.Items.Count > 0) lista.Items[0].Selected = true;
         btnAbrir.Enabled = lista.SelectedItems.Count > 0;
+    }
+
+    // "2 certificados caducados y 1 certificado caduca pronto"
+    public static string Resumen(List<CertificadoPorCaducar> certificados)
+    {
+        int caducados = certificados.Count(c => ProveedorServicio.Estado(c.Certificado) == ProveedorServicio.EstadoCertificado.Caducado);
+        int porCaducar = certificados.Count - caducados;
+        var partes = new List<string>();
+        if (caducados > 0) partes.Add(caducados == 1 ? "1 certificado caducado" : $"{caducados} certificados caducados");
+        if (porCaducar > 0) partes.Add(porCaducar == 1 ? "1 certificado caduca pronto" : $"{porCaducar} certificados caducan pronto");
+        return string.Join(" y ", partes);
+    }
+
+    // Abre la lista y, si se elige uno, devuelve su proveedor
+    public static int? Elegir(IWin32Window padre, List<CertificadoPorCaducar> certificados)
+    {
+        using var ventana = new FormAvisoCertificados(certificados);
+        ventana.ShowDialog(padre);
+        return ventana.ProveedorElegido;
     }
 
     private void Abrir()

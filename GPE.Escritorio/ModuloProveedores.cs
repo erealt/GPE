@@ -30,6 +30,8 @@ public class ModuloProveedores : UserControl
     private readonly ComboBox cmbEstado = new();
     private readonly Button btnLimpiar = Tema.BotonSecundario("Limpiar filtros", 140);
     private readonly Label lblContador = new();
+    private readonly Button btnCertificados = new();   // "⚠ 3 certificados caducan pronto", solo si hay alguno
+    private List<CertificadoPorCaducar> certificados = new();
     private readonly DataGridView grid = new();
     private readonly Label lblVacio = new();
 
@@ -159,13 +161,28 @@ public class ModuloProveedores : UserControl
         var barra = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 3,
             BackColor = Color.White,
             Margin = new Padding(0, 10, 0, 0),
             Padding = new Padding(15, 0, 10, 0)
         };
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        barra.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        btnCertificados.AutoSize = true;
+        btnCertificados.Height = 34;
+        btnCertificados.Anchor = AnchorStyles.Right;
+        btnCertificados.Margin = new Padding(0, 0, 10, 0);
+        btnCertificados.Padding = new Padding(10, 0, 10, 0);
+        btnCertificados.FlatStyle = FlatStyle.Flat;
+        btnCertificados.FlatAppearance.BorderColor = Tema.Aviso;
+        btnCertificados.BackColor = Tema.AvisoFondo;
+        btnCertificados.ForeColor = Tema.Aviso;
+        btnCertificados.Font = Tema.FuenteNegrita;
+        btnCertificados.Cursor = Cursors.Hand;
+        btnCertificados.Visible = false;
+        btnCertificados.Click += (s, e) => VerCertificados();
 
         lblContador.Dock = DockStyle.Fill;
         lblContador.ForeColor = Tema.Texto;
@@ -178,7 +195,8 @@ public class ModuloProveedores : UserControl
         btnLimpiar.Click += (s, e) => LimpiarFiltros();
 
         barra.Controls.Add(lblContador, 0, 0);
-        barra.Controls.Add(btnLimpiar, 1, 0);
+        barra.Controls.Add(btnCertificados, 1, 0);
+        barra.Controls.Add(btnLimpiar, 2, 0);
         return barra;
     }
 
@@ -316,6 +334,31 @@ public class ModuloProveedores : UserControl
                 cmbTipo.Items.Add(tipo);
 
         AplicarFiltros();
+        CargarCertificados();
+    }
+
+    // Certificados caducados o que caducan en 30 días: si falla la lectura, simplemente no se enseña el aviso
+    private void CargarCertificados()
+    {
+        try
+        {
+            certificados = servicio.ObtenerCertificadosPorCaducar();
+        }
+        catch (DbException)
+        {
+            certificados = new();
+        }
+        btnCertificados.Text = "⚠  " + FormAvisoCertificados.Resumen(certificados);
+        btnCertificados.Visible = certificados.Count > 0;
+    }
+
+    // Lista de esos certificados; al elegir uno se abre la ficha de su proveedor
+    public void VerCertificados()
+    {
+        CargarDatos();
+        if (certificados.Count == 0) return;
+        if (FormAvisoCertificados.Elegir(this, certificados) is int id)
+            AbrirProveedor(id);
     }
 
     private static DataGridViewRow CrearFila(DataGridView grid, ProveedorConProductos p)
