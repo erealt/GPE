@@ -347,7 +347,7 @@ public class FormPrincipal : Form
             Text = Sesion.UsuarioActual?.Nombre ?? ""
         };
 
-        // Cierra la sesión y vuelve a la pantalla de elegir usuario
+        // Cierra la sesión y vuelve a la pantalla de entrar
         var btnSalir = Tema.BotonSecundario("Salir", 90);
         btnSalir.Dock = DockStyle.Fill;
         btnSalir.Click += (s, e) =>
