@@ -8,7 +8,7 @@ internal static class Conexion
     // La variable de entorno GPE_CONEXION permite usar otra base de datos (p. ej. una de pruebas)
     private static readonly string CadenaConexion =
         Environment.GetEnvironmentVariable("GPE_CONEXION")
-        ?? "Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;";
+        ?? "Server=localhost;Database=miGPE;Integrated Security=True;TrustServerCertificate=True;";
 
     // Los triggers de historial leen el usuario de SESSION_CONTEXT(N'usuario_id').
     public static SqlConnection Abrir()
