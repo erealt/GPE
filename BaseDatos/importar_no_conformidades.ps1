@@ -87,6 +87,20 @@ function CausaRaiz($v, $fila) {
     return $grupo
 }
 
+# Si el análisis está escrito como "¿Por qué...? Porque... ¿Por qué...? Porque...", se reparte en los 5 porqués
+# de la aplicación. Si es texto normal (o tiene más de 5 preguntas) devuelve $null y el texto se deja tal cual.
+function PorQues($texto, $fila) {
+    if (-not $texto -or $texto -notmatch '^¿\s*Por\s+qu[eé]') { return $null }
+    $pares = [regex]::Matches($texto, '(?s)(¿\s*Por\s+qu[eé][^?]*\?)\s*(.*?)\s*(?=¿\s*Por\s+qu[eé]|\z)')
+    if ($pares.Count -gt 5) {
+        Aviso $fila "el análisis de la causa raíz tiene $($pares.Count) porqués (máximo 5); se deja como texto."
+        return $null
+    }
+    return @($pares | ForEach-Object {
+        [pscustomobject]@{ Pregunta = $_.Groups[1].Value.Trim(); Respuesta = (Texto $_.Groups[2].Value) }
+    })
+}
+
 # Lectura del Excel
 
 $Excel = (Resolve-Path $Excel).Path
@@ -146,6 +160,9 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
         ResponsableCorrectora = Texto $c.ResponsableCorrectora
         Seguimiento = Texto $c.Seguimiento
     }
+    # Los porqués van a sus casillas y el texto ya no se repite en "Análisis de la causa raíz"
+    $r | Add-Member PorQues (PorQues $r.AnalisisCausaRaiz $fila)
+    if ($r.PorQues) { $r.AnalisisCausaRaiz = $null }
     if ($r.FechaFin -and $r.FechaFin -lt $r.FechaDetectado) {
         Aviso $fila "la fecha fin ($($r.FechaFin.ToString('dd/MM/yy'))) es anterior a la de detección; se importa igual."
     }
@@ -176,6 +193,9 @@ INSERT INTO NO_CONFORMIDAD
      fecha_prevista, fecha_fin, cliente, proveedor,
      mc_pcc_bpm, parametro, operario,
      capitulo_norma, analisis_causa_raiz, causa_raiz,
+     porque_pregunta_1, porque_respuesta_1, porque_pregunta_2, porque_respuesta_2,
+     porque_pregunta_3, porque_respuesta_3, porque_pregunta_4, porque_respuesta_4,
+     porque_pregunta_5, porque_respuesta_5,
      coste_economico, horas_mano_obra, creado_por)
 VALUES
     (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
@@ -183,6 +203,9 @@ VALUES
      @fecha_prevista, @fecha_fin, @cliente, @proveedor,
      @mc_pcc_bpm, @parametro, @operario,
      @capitulo_norma, @analisis_causa_raiz, @causa_raiz,
+     @porque_pregunta_1, @porque_respuesta_1, @porque_pregunta_2, @porque_respuesta_2,
+     @porque_pregunta_3, @porque_respuesta_3, @porque_pregunta_4, @porque_respuesta_4,
+     @porque_pregunta_5, @porque_respuesta_5,
      @coste_economico, @horas_mano_obra, @usuario);
 SELECT CAST(SCOPE_IDENTITY() AS INT);
 '@
@@ -236,6 +259,11 @@ try {
             [void]$p.AddWithValue('@operario', (Valor $r.Operario))
             [void]$p.AddWithValue('@capitulo_norma', (Valor $r.CapituloNorma))
             [void]$p.AddWithValue('@analisis_causa_raiz', (Valor $r.AnalisisCausaRaiz))
+            for ($k = 0; $k -lt 5; $k++) {
+                $pq = if ($r.PorQues) { $r.PorQues | Select-Object -Skip $k -First 1 }
+                [void]$p.AddWithValue("@porque_pregunta_$($k + 1)", (Valor $pq.Pregunta))
+                [void]$p.AddWithValue("@porque_respuesta_$($k + 1)", (Valor $pq.Respuesta))
+            }
             [void]$p.AddWithValue('@causa_raiz', (Valor $r.CausaRaiz))
             [void]$p.Add('@coste_economico', [Data.SqlDbType]::Decimal); $p['@coste_economico'].Value = Valor $r.Coste
             [void]$p.Add('@horas_mano_obra', [Data.SqlDbType]::Decimal); $p['@horas_mano_obra'].Value = Valor $r.Horas
