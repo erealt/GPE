@@ -185,6 +185,18 @@ public class ModuloInicio : UserControl
         }
     }
 
+    public static string? ResumenAnalisis()
+    {
+        try
+        {
+            return new AnalisisServicio().Resumen();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
+
     public static string? ResumenProveedores()
     {
         try
