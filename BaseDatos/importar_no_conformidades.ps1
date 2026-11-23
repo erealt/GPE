@@ -189,7 +189,7 @@ function Valor($v) { if ($null -eq $v) { [DBNull]::Value } else { $v } }
 $sqlRegistro = @'
 INSERT INTO NO_CONFORMIDAD
     (tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
-     problema, descripcion_causa, responsable,
+     problema, descripcion_causa,
      fecha_prevista, fecha_fin, cliente, proveedor,
      mc_pcc_bpm, parametro, operario,
      capitulo_norma, analisis_causa_raiz, causa_raiz,
@@ -199,7 +199,7 @@ INSERT INTO NO_CONFORMIDAD
      coste_economico, horas_mano_obra, creado_por)
 VALUES
     (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
-     @problema, @descripcion_causa, @responsable,
+     @problema, @descripcion_causa,
      @fecha_prevista, @fecha_fin, @cliente, @proveedor,
      @mc_pcc_bpm, @parametro, @operario,
      @capitulo_norma, @analisis_causa_raiz, @causa_raiz,
@@ -249,7 +249,6 @@ try {
             [void]$p.AddWithValue('@tipo', (Valor $r.Tipo))
             [void]$p.AddWithValue('@problema', $r.Problema)
             [void]$p.AddWithValue('@descripcion_causa', (Valor $r.DescripcionCausa))
-            [void]$p.AddWithValue('@responsable', (Valor $r.Responsable))
             [void]$p.Add('@fecha_prevista', [Data.SqlDbType]::Date); $p['@fecha_prevista'].Value = Valor $r.FechaPrevista
             [void]$p.Add('@fecha_fin', [Data.SqlDbType]::Date); $p['@fecha_fin'].Value = Valor $r.FechaFin
             [void]$p.AddWithValue('@cliente', (Valor $r.Cliente))

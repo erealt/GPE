@@ -11,7 +11,7 @@ public class NoConformidadRepositorio
     // si está enlazado, y si no, lo que se escribió a mano (NC antiguas).
     private const string SqlRegistros = @"
             SELECT n.id, n.tipo_registro, n.numero, n.fecha_detectado, n.origen, n.seccion, n.tipo,
-                   n.problema, n.descripcion_causa, n.responsable,
+                   n.problema, n.descripcion_causa,
                    n.fecha_prevista, n.fecha_fin, n.cliente, COALESCE(p.nombre, n.proveedor) AS proveedor,
                    n.mc_pcc_bpm, n.parametro, n.operario,
                    n.capitulo_norma, n.analisis_causa_raiz,
@@ -64,24 +64,23 @@ public class NoConformidadRepositorio
                 Tipo: Texto(6),
                 Problema: lector.GetString(7),
                 DescripcionCausa: Texto(8),
-                Responsable: Texto(9),
-                FechaPrevista: Fecha(10),
-                FechaFin: Fecha(11),
-                Cliente: Texto(12),
-                Proveedor: Texto(13),
-                McPccBpm: Texto(14),
-                Parametro: Texto(15),
-                Operario: Texto(16),
-                CapituloNorma: Texto(17),
-                AnalisisCausaRaiz: Texto(18),
-                CosteEconomico: Numero(19),
-                HorasManoObra: Numero(20),
+                FechaPrevista: Fecha(9),
+                FechaFin: Fecha(10),
+                Cliente: Texto(11),
+                Proveedor: Texto(12),
+                McPccBpm: Texto(13),
+                Parametro: Texto(14),
+                Operario: Texto(15),
+                CapituloNorma: Texto(16),
+                AnalisisCausaRaiz: Texto(17),
+                CosteEconomico: Numero(18),
+                HorasManoObra: Numero(19),
                 PorQues: Enumerable.Range(0, NoConformidad.NumeroPorQues)
-                    .Select(i => new PorQue(Texto(21 + 2 * i), Texto(22 + 2 * i))).ToList(),
-                CausaRaiz: Texto(31),
-                Version: (byte[])lector[32],
-                ProveedorId: lector.IsDBNull(33) ? null : lector.GetInt32(33),
-                SeguridadAlimentaria: lector.IsDBNull(34) ? null : lector.GetBoolean(34)));
+                    .Select(i => new PorQue(Texto(20 + 2 * i), Texto(21 + 2 * i))).ToList(),
+                CausaRaiz: Texto(30),
+                Version: (byte[])lector[31],
+                ProveedorId: lector.IsDBNull(32) ? null : lector.GetInt32(32),
+                SeguridadAlimentaria: lector.IsDBNull(33) ? null : lector.GetBoolean(33)));
         }
 
         return lista;
@@ -209,7 +208,7 @@ public class NoConformidadRepositorio
         const string sql = @"
             INSERT INTO NO_CONFORMIDAD
                 (tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
-                 problema, descripcion_causa, responsable,
+                 problema, descripcion_causa,
                  fecha_prevista, fecha_fin, cliente, proveedor, proveedor_id, seguridad_alimentaria,
                  mc_pcc_bpm, parametro, operario,
                  capitulo_norma, analisis_causa_raiz,
@@ -220,7 +219,7 @@ public class NoConformidadRepositorio
                  causa_raiz, creado_por)
             VALUES
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
-                 @problema, @descripcion_causa, @responsable,
+                 @problema, @descripcion_causa,
                  @fecha_prevista, @fecha_fin, @cliente,
                  CASE WHEN @proveedor_id IS NULL THEN @proveedor END, @proveedor_id, @seguridad_alimentaria,
                  @mc_pcc_bpm, @parametro, @operario,
@@ -264,7 +263,6 @@ public class NoConformidadRepositorio
                 tipo_registro = @tipo_registro, numero = @numero, fecha_detectado = @fecha_detectado,
                 origen = @origen, seccion = @seccion, tipo = @tipo,
                 problema = @problema, descripcion_causa = @descripcion_causa,
-                responsable = @responsable,
                 fecha_prevista = @fecha_prevista, fecha_fin = @fecha_fin,
                 cliente = @cliente, proveedor_id = @proveedor_id, seguridad_alimentaria = @seguridad_alimentaria,
                 -- Enlazada a la lista: se guarda el nombre escrito a mano que tuviera antes (historia de las NC antiguas)
@@ -431,7 +429,6 @@ public class NoConformidadRepositorio
         Valor("@tipo", nc.Tipo);
         Valor("@problema", nc.Problema);
         Valor("@descripcion_causa", nc.DescripcionCausa);
-        Valor("@responsable", nc.Responsable);
         Valor("@fecha_prevista", nc.FechaPrevista?.Date);
         Valor("@fecha_fin", nc.FechaFin?.Date);
         Valor("@cliente", nc.Cliente);

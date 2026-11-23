@@ -11,8 +11,8 @@ public class ModuloNoConformidades : UserControl
     private const int ColumnaDetectada = 1;
     private const int ColumnaTipo = 2;
     private const int ColumnaProblema = 4;
-    private const int ColumnaPrevista = 6;
-    private const int ColumnaEstado = 7;
+    private const int ColumnaPrevista = 5;
+    private const int ColumnaEstado = 6;
 
     private const string TodasLasSecciones = "Todas";
     private const string EstadoAbiertas = "Abiertas";
@@ -257,7 +257,7 @@ public class ModuloNoConformidades : UserControl
         (string Nombre, int Ancho)[] columnas =
         {
             ("Nº", 70), ("DETECTADA", 110), ("TIPO", 115), ("SECCIÓN", 145),
-            ("PROBLEMA", 0), ("RESPONSABLE", 125), ("PREVISTA", 100), ("ESTADO", 140)
+            ("PROBLEMA", 0), ("PREVISTA", 100), ("ESTADO", 140)
         };
         foreach (var (nombre, ancho) in columnas)
         {
@@ -380,7 +380,6 @@ public class ModuloNoConformidades : UserControl
             nc.TipoRegistro,
             nc.Seccion ?? "—",
             problema,
-            nc.Responsable ?? "—",
             Corta(nc.FechaPrevista),
             NoConformidadServicio.Estado(nc));
 
@@ -427,7 +426,7 @@ public class ModuloNoConformidades : UserControl
 
         return registros.Where(nc =>
                 (texto == "" || Contiene(nc.Numero) || Contiene(nc.Problema) || Contiene(nc.Cliente)
-                    || Contiene(nc.Proveedor) || Contiene(nc.Responsable))
+                    || Contiene(nc.Proveedor))
                 && (tipo == null || nc.TipoRegistro == tipo)
                 && (seccion == null || nc.Seccion == seccion)
                 && (estado == null

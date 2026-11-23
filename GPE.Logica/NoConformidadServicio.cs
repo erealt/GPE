@@ -178,7 +178,6 @@ public class NoConformidadServicio
             Tipo = esNc ? Limpio(nc.Tipo) : null,
             Problema = nc.Problema.Trim(),
             DescripcionCausa = Limpio(nc.DescripcionCausa),
-            Responsable = Limpio(nc.Responsable),
             Cliente = Limpio(nc.Cliente),
             Proveedor = Limpio(nc.Proveedor),
             McPccBpm = esIncidencia ? Limpio(nc.McPccBpm) : null,

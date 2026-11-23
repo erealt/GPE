@@ -47,7 +47,6 @@ public class FormNoConformidad : Form
     // Descripción y acción inmediata
     private readonly TextBox txtProblema = new();
     private readonly TextBox txtCausa = new();
-    private readonly ComboBox cmbResponsable = new();
     private readonly DateTimePicker dtpPrevista = new();
     private readonly DateTimePicker dtpFin = new();
 
@@ -538,8 +537,7 @@ public class FormNoConformidad : Form
         rejilla.Controls.Add(problema, 0, 3);
         rejilla.SetColumnSpan(problema, 3);
 
-        rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 4);
-        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 4);
+        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 0, 4);
         rejilla.Controls.Add(campoSeguridad = campos.Campo("¿Afecta a la seguridad alimentaria?", cmbSeguridad,
             new Label
             {
@@ -548,7 +546,7 @@ public class FormNoConformidad : Form
                 Font = Tema.FuenteNota,
                 ForeColor = Tema.Suave,
                 Margin = new Padding(0, 4, 0, 0)
-            }), 2, 4);
+            }), 1, 4);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -758,7 +756,6 @@ public class FormNoConformidad : Form
         LlenarLista(cmbOrigen, ListaCalidad.Origen, nc?.Origen);
         LlenarLista(cmbSeccion, ListaCalidad.Seccion, nc?.Seccion);
         LlenarLista(cmbTipo, ListaCalidad.Tipo, nc?.Tipo);
-        LlenarLista(cmbResponsable, ListaCalidad.Persona, nc?.Responsable);
         LlenarLista(cmbMcPccBpm, ListaCalidad.McPccBpm, nc?.McPccBpm);
         LlenarLista(cmbParametro, ListaCalidad.Parametro, nc?.Parametro);
         LlenarLista(cmbOperario, ListaCalidad.Operario, nc?.Operario);
@@ -990,7 +987,6 @@ public class FormNoConformidad : Form
             Tipo: Valor(cmbTipo),
             Problema: txtProblema.Text,
             DescripcionCausa: txtCausa.Text,
-            Responsable: Valor(cmbResponsable),
             FechaPrevista: LeerFecha(dtpPrevista),
             FechaFin: LeerFecha(dtpFin),
             Cliente: txtCliente.Text,

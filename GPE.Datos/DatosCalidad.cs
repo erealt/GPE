@@ -63,7 +63,6 @@ public record NoConformidad(
     string? Tipo,
     string Problema,
     string? DescripcionCausa,
-    string? Responsable,
     DateTime? FechaPrevista,
     DateTime? FechaFin,
     string? Cliente,
