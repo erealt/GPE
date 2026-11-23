@@ -12,6 +12,7 @@ public class FormLogin : Form
 
     private readonly TextBox txtUsuario = new();
     private readonly TextBox txtClave = new();
+    private readonly CheckBox chkRecordar = new();
     private readonly Label lblError = new();
     private readonly Button btnEntrar = Tema.BotonPrincipal("Entrar", 120);
 
@@ -19,7 +20,7 @@ public class FormLogin : Form
     {
         Text = "GPE - Entrar";
         Icon = Tema.Icono;
-        ClientSize = new Size(420, 330);
+        ClientSize = new Size(420, 350);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -53,15 +54,40 @@ public class FormLogin : Form
         txtClave.Width = 356;
         txtClave.UseSystemPasswordChar = true;
 
+        chkRecordar.Text = "Recordarme en este ordenador";
+        chkRecordar.ForeColor = Tema.Texto;
+        chkRecordar.Location = new Point(32, 218);
+        chkRecordar.AutoSize = true;
+
         lblError.ForeColor = Tema.Error;
-        lblError.Location = new Point(32, 218);
+        lblError.Location = new Point(32, 248);
         lblError.AutoSize = true;
 
-        btnEntrar.Location = new Point(268, 260);
+        btnEntrar.Location = new Point(268, 280);
         btnEntrar.Click += (s, e) => Entrar();
 
         AcceptButton = btnEntrar;
-        Controls.AddRange(new Control[] { lblTitulo, lblSubtitulo, lblUsuario, txtUsuario, lblClave, txtClave, lblError, btnEntrar });
+        Controls.AddRange(new Control[] { lblTitulo, lblSubtitulo, lblUsuario, txtUsuario, lblClave, txtClave, chkRecordar, lblError, btnEntrar });
+
+        var recordado = Recordar.Leer();
+        if (recordado != null)
+        {
+            txtUsuario.Text = recordado.Value.Usuario;
+            txtClave.Text = recordado.Value.Clave;
+            chkRecordar.Checked = true;
+        }
+    }
+
+    // Entra sin enseñar la ventana si hay usuario recordado y sigue siendo válido.
+    // Si ya no vale (contraseña cambiada, usuario dado de baja...) se olvida y hay que entrar a mano.
+    public bool EntrarRecordado()
+    {
+        if (!chkRecordar.Checked) return false;
+        Entrar();
+        if (DialogResult == DialogResult.OK) return true;
+        chkRecordar.Checked = false;
+        Recordar.Olvidar();
+        return false;
     }
 
     private void Entrar()
@@ -102,6 +128,9 @@ public class FormLogin : Form
         if (Sesion.Roles.Count == 0)
             Mensajes.Informacion(this, "Sin permisos",
                 $"{usuario.Nombre} no tiene ningún rol asignado: podrá consultar las devoluciones, pero no hacer ningún paso.");
+
+        if (chkRecordar.Checked) Recordar.Guardar(txtUsuario.Text, txtClave.Text);
+        else Recordar.Olvidar();
 
         Sesion.UsuarioActual = usuario;
         DialogResult = DialogResult.OK;

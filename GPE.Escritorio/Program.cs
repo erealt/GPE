@@ -16,12 +16,16 @@ static class Program
         };
 
         // Con "Salir" se vuelve a la pantalla de entrar; al cerrar la ventana se acaba
+        bool primeraVez = true;
         while (true)
         {
             // Sin usuario no se puede registrar el historial, así que no se entra
             using (var entrar = new FormLogin())
             {
-                if (entrar.ShowDialog() != DialogResult.OK) return;
+                // Al abrir el programa, si se marcó "Recordarme", entra directamente
+                bool dentro = primeraVez && entrar.EntrarRecordado();
+                primeraVez = false;
+                if (!dentro && entrar.ShowDialog() != DialogResult.OK) return;
             }
 
             // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)
@@ -31,6 +35,9 @@ static class Program
             using var principal = new FormPrincipal();
             Application.Run(principal);
             if (!principal.CambiarUsuario) return;
+
+            // Quien pulsa "Salir" deja el ordenador libre para otro: se olvida el usuario recordado
+            Recordar.Olvidar();
 
             GPE.Datos.Sesion.UsuarioActual = null;
             GPE.Datos.Sesion.Roles = new();
