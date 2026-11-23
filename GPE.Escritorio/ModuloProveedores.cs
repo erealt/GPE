@@ -40,6 +40,9 @@ public class ModuloProveedores : UserControl
         Dock = DockStyle.Fill;
         Controls.Add(CrearContenido());
         Load += (s, e) => CargarDatos();
+        // El módulo no se cierra al cambiar de pantalla: al volver se lee otra vez, porque una NC nueva
+        // cambia las reclamaciones y la evaluación
+        VisibleChanged += (s, e) => { if (Visible && Created) CargarDatos(); };
     }
 
     private Panel CrearContenido()
