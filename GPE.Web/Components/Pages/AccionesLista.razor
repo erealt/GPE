@@ -1,0 +1,179 @@
+@page "/acciones"
+@layout LayoutTrabajadores
+@inject NavigationManager Navegacion
+
+<PageTitle>Mis acciones</PageTitle>
+
+<div class="cabecera">
+    <div>
+        <h1>Mis acciones</h1>
+        <p class="suave">Acciones de incidencias y no conformidades que tienes pendientes.</p>
+    </div>
+</div>
+
+@if (hecha != null)
+{
+    <div class="aviso bien">Apuntada como hecha: @hecha. Calidad ya lo ve en la ficha.</div>
+}
+@if (error != null)
+{
+    <div class="aviso error">@error</div>
+}
+
+@if (acciones == null)
+{
+    @if (error == null)
+    {
+        <p class="suave">Cargando...</p>
+    }
+}
+else if (acciones.Count == 0)
+{
+    <div class="tarjeta vacio">No tienes ninguna acción pendiente.</div>
+}
+else
+{
+    <p class="suave contador">@acciones.Count @(acciones.Count == 1 ? "acción pendiente" : "acciones pendientes")</p>
+
+    @foreach (var a in acciones)
+    {
+        <div class="tarjeta accion-trabajador">
+            <div class="accion-cabecera">
+                <span class="numero">@Registro(a)</span>
+                @if (a.Prioridad != null)
+                {
+                    <span class="etiqueta @ColorPrioridad(a.Prioridad)">@a.Prioridad</span>
+                }
+            </div>
+            <p class="accion-problema suave">@a.Problema</p>
+
+            <div class="etiqueta-dato">@(a.Clase == "INMEDIATA" ? "ACCIÓN INMEDIATA" : "ACCIÓN CORRECTORA")</div>
+            <p class="accion-texto">@a.Accion</p>
+
+            @if (a.Fecha != null)
+            {
+                <p class="pequeno @(a.Fecha < DateTime.Today ? "fuera-plazo" : "suave")">
+                    Fecha: @a.Fecha.Value.ToString("dd/MM/yyyy")@(a.Fecha < DateTime.Today ? " · fuera de plazo" : "")
+                </p>
+            }
+
+            @if (abierta == a.Id)
+            {
+                <div class="campo">
+                    <label>
+                        Comentario (opcional)
+                        <textarea rows="3" placeholder="Qué has hecho, si quieres contarlo" @bind="comentario"></textarea>
+                    </label>
+                </div>
+                <div class="acciones">
+                    <button class="secundario" @onclick="Cancelar" disabled="@guardando">Cancelar</button>
+                    <button class="principal" @onclick="() => MarcarHecha(a)" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Confirmar")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <button class="principal ancho" @onclick="() => Abrir(a.Id)">La he hecho</button>
+            }
+        </div>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
+
+    private readonly TrabajadorWebServicio servicio = new();
+
+    private string persona = "";
+    private Usuario? usuario;        // para que el historial diga quién la ha marcado
+    private List<AccionTrabajador>? acciones;
+    private string? error;
+    private string? hecha;           // la última marcada, para el aviso de arriba
+
+    private int? abierta;            // la que tiene abierto el comentario
+    private string comentario = "";
+    private bool guardando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
+        {
+            Navegacion.NavigateTo("acciones/entrar");
+            return;
+        }
+        // Quien solo es de Calidad no tiene "Mis acciones": va al control diario
+        if (!TrabajadorActual.VeAcciones(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+        usuario = TrabajadorActual.Usuario(sesion);
+        persona = usuario!.Nombre;
+        Cargar();
+    }
+
+    private void Cargar()
+    {
+        try
+        {
+            acciones = servicio.ObtenerPendientes(persona);
+        }
+        catch (DbException ex)
+        {
+            error = "No se han podido cargar tus acciones. " + ex.Message;
+        }
+    }
+
+    private void Abrir(int id)
+    {
+        abierta = id;
+        comentario = "";
+        hecha = null;
+        error = null;
+    }
+
+    private void Cancelar() => abierta = null;
+
+    private async Task MarcarHecha(AccionTrabajador accion)
+    {
+        guardando = true;
+        error = null;
+        await Task.Yield();   // para que se vea "Guardando..." mientras tanto
+
+        try
+        {
+            using (Sesion.Como(usuario!))
+                servicio.MarcarHecha(accion.Id, persona, comentario);
+            hecha = Registro(accion);
+            abierta = null;
+        }
+        catch (ReglaNegocioException ex)
+        {
+            error = ex.Message;
+            abierta = null;
+        }
+        catch (DbException ex)
+        {
+            // Se deja abierta con el comentario escrito para que pueda volver a intentarlo
+            error = "No se ha podido guardar. Prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
+        Cargar();
+    }
+
+    private static string Registro(AccionTrabajador a) =>
+        (a.TipoRegistro == "INCIDENCIA" ? "Incidencia" : a.TipoRegistro == "MEJORA" ? "Mejora" : "NC")
+        + (a.NumeroNc != null ? " " + a.NumeroNc : "");
+
+    private static string ColorPrioridad(string prioridad) => prioridad switch
+    {
+        "Alta" => "roja",
+        "Media" => "ambar",
+        _ => "gris"
+    };
+}

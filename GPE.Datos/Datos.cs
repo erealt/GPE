@@ -106,6 +106,9 @@ public static class Sesion
     private static bool SoloTransporte => Roles.Count == 1 && TieneRol(Rol.Transporte);
     public static bool VeCalidad => TieneRol(Rol.Calidad);
     public static bool VeDeca => TieneRol(Rol.Transporte);
+
+    // Los que solo tienen el rol Trabajador no entran en el escritorio: lo suyo está en la web
+    public static bool SoloWeb => Roles.Count > 0 && Roles.All(r => r == Rol.Trabajador);
 }
 
 // Nombres de la tabla ROL. Cada rol hace sus pasos; el resto solo consulta.
@@ -115,6 +118,7 @@ public static class Rol
     public const string Transporte = "Transporte";           // recogida
     public const string Almacen = "Almacén";                 // llegada y revisión de la mercancía
     public const string Calidad = "Calidad";                 // no conformidades y rutina del supervisor
+    public const string Trabajador = "Trabajador";           // solo la web: sus acciones de NC (/acciones)
 
     public static readonly string[] Devoluciones = { Administracion, Transporte, Almacen };
 }

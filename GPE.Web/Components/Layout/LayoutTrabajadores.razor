@@ -1,0 +1,113 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navegacion
+
+@* La web con login: "Mis acciones" (/acciones), el control diario de calidad (/control) y el DeCA.
+   Quien ha entrado tiene a la izquierda un menú desplegable (☰) solo con lo que su rol puede ver.
+   El DeCA no pide usuario: sin haber entrado se ve como antes, sin menú. *@
+<AuthorizeView>
+    <Authorized>
+        <header class="barra">
+            <button class="boton-menu" title="Menú" @onclick="AlternarMenu">☰</button>
+            <a class="marca" href="@TrabajadorActual.Inicio(context.User).TrimStart('/')">
+                <span class="logo">G</span>
+                <span>GPE</span>
+                <span class="separador"></span>
+                <span class="modulo">@Modulo</span>
+            </a>
+        </header>
+
+        @* Ordenador: abierto y se cierra con ☰. Móvil: cerrado y se abre con ☰ encima de la página. *@
+        <div class="con-menu @(menuAlternado ? "alternado" : "")">
+            <nav class="menu-lateral">
+                <div class="menu-usuario">
+                    <span class="suave">@TrabajadorActual.Nombre(context.User)</span>
+                    @* Recarga entera: salir no es una página de Blazor *@
+                    <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir" + (Seccion is "control" or "agua" ? "?volver=%2F" + Seccion : ""), forceLoad: true)'>Salir</button>
+                </div>
+
+                @if (TrabajadorActual.VeAcciones(context.User))
+                {
+                    <a class="@Activo("acciones")" href="acciones" @onclick="CerrarEnMovil">Mis acciones</a>
+                }
+                @if (TrabajadorActual.VeControl(context.User))
+                {
+                    <a class="@Activo("control")" href="control" @onclick="CerrarEnMovil">Control diario</a>
+                    <a class="@Activo("agua")" href="agua" @onclick="CerrarEnMovil">Control de agua</a>
+                }
+                @if (TrabajadorActual.VeDeca(context.User))
+                {
+                    <a class="@Activo("deca")" href="deca" @onclick="CerrarEnMovil">DeCA</a>
+                }
+            </nav>
+            <div class="fondo-menu" @onclick="AlternarMenu"></div>
+
+            <main class="pagina @Ancho">
+                @Body
+            </main>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <header class="barra">
+            <a class="marca" href="@(Seccion == "deca" ? "deca" : "acciones/entrar")">
+                <span class="logo">G</span>
+                <span>GPE</span>
+                <span class="separador"></span>
+                <span class="modulo">@Modulo</span>
+            </a>
+        </header>
+
+        <main class="pagina @Ancho">
+            @Body
+        </main>
+    </NotAuthorized>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Ha ocurrido un error inesperado.
+    <a href="." class="reload">Recargar</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool menuAlternado;
+
+    // "acciones", "control", "agua" o "deca" según la página (la de entrar con ?volver=/control cuenta como control)
+    private string Seccion
+    {
+        get
+        {
+            string ruta = Navegacion.ToBaseRelativePath(Navegacion.Uri);
+            if (ruta.StartsWith("control") || ruta.Contains("volver=%2Fcontrol", StringComparison.OrdinalIgnoreCase))
+                return "control";
+            if (ruta.StartsWith("agua") || ruta.Contains("volver=%2Fagua", StringComparison.OrdinalIgnoreCase))
+                return "agua";
+            if (ruta.StartsWith("acciones"))
+                return "acciones";
+            return "deca";
+        }
+    }
+
+    private string Modulo => Seccion switch
+    {
+        "control" => "Control diario",
+        "agua" => "Control de agua",
+        "acciones" => "Mis acciones",
+        _ => "DeCA"
+    };
+
+    // El control diario es una tabla ancha: usa todo el ancho de la pantalla
+    private string Ancho => Seccion switch
+    {
+        "control" => "ancha",
+        "acciones" => "estrecha",
+        _ => ""
+    };
+
+    private string Activo(string seccion) => Seccion == seccion ? "activo" : "";
+
+    private void AlternarMenu() => menuAlternado = !menuAlternado;
+
+    // En el móvil el menú tapa la página: al elegir una, se cierra. En el ordenador los enlaces solo
+    // se pueden pulsar con el menú abierto (sin alternar), así que ahí no cambia nada.
+    private void CerrarEnMovil() => menuAlternado = false;
+}

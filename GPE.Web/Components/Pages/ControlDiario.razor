@@ -1,0 +1,425 @@
+@page "/control"
+@layout LayoutTrabajadores
+@inject NavigationManager Navegacion
+
+<PageTitle>Control diario</PageTitle>
+
+@* La rutina de calidad del escritorio (ModuloRutinaCalidad) para la tablet y el móvil: la misma tabla
+   de puntos × máquinas por planta y el mismo panel al pulsar una casilla, un punto o una máquina.
+   Cada casilla se guarda al momento, así pueden ir dos personas a la vez. *@
+
+@if (error != null)
+{
+    <div class="aviso error">@error</div>
+}
+
+@if (plantilla == null)
+{
+    @if (error == null)
+    {
+        <p class="suave">Cargando...</p>
+    }
+}
+else
+{
+    <div class="cabecera rutina-cabecera">
+        <div>
+            <h1>Control diario</h1>
+            <p class="suave">@Hoy()</p>
+        </div>
+        <p class="suave progreso">@Progreso()</p>
+    </div>
+
+    <div class="revisiones">
+        @foreach (var r in revisiones)
+        {
+            <button class="revision @(r.Numero == revision ? "elegida" : "")" @onclick="() => ElegirRevision(r.Numero)">
+                @NombreRevision(r)
+            </button>
+        }
+        @if (PuedeAnadirRevision)
+        {
+            <button class="revision nueva" @onclick="NuevaRevision">+ Nueva revisión</button>
+        }
+    </div>
+
+    <div class="pestanas-planta">
+        @foreach (var p in new[] { Planta.Baja, Planta.Superior })
+        {
+            <button class="revision @(p == planta ? "elegida" : "")" @onclick="() => ElegirPlanta(p)">@Planta.Nombre(p)</button>
+        }
+    </div>
+
+    <div class="leyenda">
+        @foreach (var estado in EstadoCasilla.Todos)
+        {
+            <span class="casilla-leyenda @Clase(estado)">@Simbolo(estado)&nbsp; @EstadoCasilla.Nombre(estado)</span>
+        }
+        <span class="casilla-leyenda no-revisa">No se revisa</span>
+    </div>
+    <p class="suave pequeno">
+        Pulsa una casilla para marcarla. Pulsa el nombre de un punto o de una máquina para marcarla entera ("Todo correcto").
+    </p>
+
+    var secciones = plantilla.Secciones.Where(s => s.Planta == planta).ToList();
+    var puntos = plantilla.Puntos.Where(p => secciones.Any(s => Editable(p, s))).ToList();
+
+    <div class="tabla-rutina">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-punto">PUNTO DE CONTROL</th>
+                    @foreach (var s in secciones)
+                    {
+                        <th class="col-maquina @(Elegida(null, s) ? "elegida" : "")" @onclick="() => AbrirColumna(s)">@s.Nombre</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in puntos)
+                {
+                    <tr>
+                        <th class="col-punto @(Elegida(p, null) ? "elegida" : "")" @onclick="() => AbrirFila(p)">@p.Nombre</th>
+                        @foreach (var s in secciones)
+                        {
+                            var c = Casilla(p, s);
+                            if (!Editable(p, s))
+                            {
+                                <td class="no-revisa"></td>
+                            }
+                            else
+                            {
+                                <td class="@(c?.Estado is string e ? Clase(e) : "") @(Elegida(p, s) ? "elegida" : "") @(c?.Comentario != null ? "con-comentario" : "")"
+                                    @onclick="() => AbrirCasilla(p, s)">
+                                    @(c?.Estado is string est ? Simbolo(est) : c?.Valor?.ToString("0.##"))
+                                </td>
+                            }
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (panelPuntos.Count > 0)
+    {
+        <div class="fondo-panel" @onclick="CerrarPanel"></div>
+        <div class="panel-casilla">
+            <div class="panel-titulo">
+                <strong>@panelTitulo</strong>
+                <button class="quitar" @onclick="CerrarPanel">✕</button>
+            </div>
+
+            @if (panelError != null)
+            {
+                <p class="error-campo">@panelError</p>
+            }
+
+            @if (UnaCasilla is var (punto, seccion))
+            {
+                var actual = Casilla(punto, seccion);
+                @if (punto.Numerico)
+                {
+                    <div class="campo">
+                        <input inputmode="decimal" placeholder="Valor (por ejemplo 12,5)" @bind="valorTexto" disabled="@guardando" />
+                    </div>
+                }
+                else
+                {
+                    <div class="estados">
+                        @foreach (var estado in EstadoCasilla.Todos)
+                        {
+                            <button class="estado @Clase(estado) @(actual?.Estado == estado ? "marcado" : "")" disabled="@guardando"
+                                    @onclick="() => GuardarUna(punto, seccion, actual, estado)">
+                                @Simbolo(estado)&nbsp; @EstadoCasilla.Nombre(estado)
+                            </button>
+                        }
+                    </div>
+                }
+                <div class="campo">
+                    <textarea rows="2" placeholder="Comentario (opcional)" @bind="comentarioTexto" disabled="@guardando"></textarea>
+                </div>
+                <div class="acciones">
+                    <button class="secundario" disabled="@(guardando || actual == null)" @onclick="() => Vaciar(punto, seccion)">Vaciar</button>
+                    <button class="principal" disabled="@guardando" @onclick="() => GuardarUna(punto, seccion, actual, actual?.Estado)">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+                @if (actual?.NumeroIncidencia != null)
+                {
+                    <p class="pequeno suave">Incidencia @actual.NumeroIncidencia</p>
+                }
+            }
+            else
+            {
+                int vacias = panelPuntos.Count(c => !c.Punto.Numerico && !Rellena(Casilla(c.Punto, c.Seccion)));
+                <button class="estado ok ancho todo" disabled="@(guardando || vacias == 0)" @onclick="() => MarcarVarias(EstadoCasilla.Correcto, soloVacias: true)">
+                    ✓&nbsp; Todo correcto (@vacias)
+                </button>
+                <p class="suave pequeno">Solo rellena las vacías: lo ya marcado no cambia. Para cambiarlo todo, elige un estado:</p>
+                <div class="estados">
+                    @foreach (var estado in EstadoCasilla.Todos)
+                    {
+                        <button class="estado @Clase(estado)" disabled="@guardando" @onclick="() => MarcarVarias(estado, soloVacias: false)">
+                            @Simbolo(estado)&nbsp; @EstadoCasilla.Nombre(estado)
+                        </button>
+                    }
+                </div>
+                <button class="secundario ancho" disabled="@guardando" @onclick="() => MarcarVarias(null, soloVacias: false)">Vaciar todas</button>
+            }
+        </div>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
+
+    private readonly RutinaServicio servicio = new();
+    private readonly DateTime fecha = DateTime.Today;
+    private Usuario? usuario;        // lo que marque queda a su nombre en el historial
+
+    private PlantillaRutina? plantilla;
+    private List<RevisionRutina> revisiones = new();
+    private Dictionary<(int Revision, int Punto, int Seccion), ResultadoRutina> resultados = new();
+    private int revision = 1;
+    private string planta = Planta.Baja;
+    private string? error;
+
+    // Panel abierto: las casillas a las que afecta (una, una fila o una columna)
+    private List<(RutinaPunto Punto, RutinaSeccion Seccion)> panelPuntos = new();
+    private string panelTitulo = "";
+    private string? panelError;
+    private string? comentarioTexto;
+    private string? valorTexto;
+    private bool guardando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
+        {
+            Navegacion.NavigateTo("acciones/entrar?volver=%2Fcontrol");
+            return;
+        }
+        // Solo Calidad y Administración: los demás, a sus acciones
+        if (!TrabajadorActual.VeControl(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+        usuario = TrabajadorActual.Usuario(sesion);
+        Cargar(primeraVez: true);
+    }
+
+    // Lee la plantilla y la ronda de hoy; después de guardar se vuelve a leer la ronda
+    // para ver también lo que haya marcado la otra persona.
+    private void Cargar(bool primeraVez = false)
+    {
+        try
+        {
+            if (primeraVez)
+                plantilla = servicio.ObtenerPlantilla();
+            var datos = servicio.ObtenerRutina(fecha);
+
+            // La revisión nueva que aún no tiene casillas no está en la base de datos: se conserva
+            var nueva = revisiones.FirstOrDefault(r => r.Numero == revision && r.Hora == null);
+            revisiones = datos.Revisiones;
+            if (nueva != null && !revisiones.Any(r => r.Numero == nueva.Numero))
+                revisiones.Add(nueva);
+            if (primeraVez)
+                revision = revisiones.Max(r => r.Numero);
+
+            resultados = datos.Resultados.ToDictionary(r => (r.Revision, r.PuntoId, r.SeccionId));
+            error = null;
+        }
+        catch (DbException ex)
+        {
+            error = "No se ha podido leer el control de hoy. Comprueba la conexión y recarga la página. " + ex.Message;
+        }
+    }
+
+    private ResultadoRutina? Casilla(RutinaPunto p, RutinaSeccion s) =>
+        resultados.GetValueOrDefault((revision, p.Id, s.Id));
+
+    // Como en el escritorio: se revisa si está en la plantilla
+    private bool Editable(RutinaPunto p, RutinaSeccion s) => plantilla!.Aplica.Contains((p.Id, s.Id));
+
+    private string Progreso()
+    {
+        var todas = plantilla!.Secciones.SelectMany(s => plantilla.Puntos.Where(p => Editable(p, s)).Select(p => (p, s))).ToList();
+        int hechas = todas.Count(c => Rellena(Casilla(c.p, c.s)));
+        return $"{hechas} de {todas.Count} casillas";
+    }
+
+    // Revisiones y plantas
+
+    private static string NombreRevision(RevisionRutina r) =>
+        r.Hora == null ? $"{r.Numero}ª revisión · sin empezar" : RutinaServicio.NombreRevision(r);
+
+    // Solo una revisión sin empezar a la vez
+    private bool PuedeAnadirRevision => revisiones.All(r => r.Hora != null);
+
+    private void ElegirRevision(int numero)
+    {
+        revision = numero;
+        CerrarPanel();
+    }
+
+    private void NuevaRevision()
+    {
+        int numero = revisiones.Max(r => r.Numero) + 1;
+        revisiones.Add(new RevisionRutina(numero, null));
+        revision = numero;
+        CerrarPanel();
+    }
+
+    private void ElegirPlanta(string p)
+    {
+        planta = p;
+        CerrarPanel();
+    }
+
+    // Panel
+
+    // Lo pulsado: casilla (punto y máquina), fila (solo punto) o columna (solo máquina)
+    private RutinaPunto? panelPunto;
+    private RutinaSeccion? panelSeccion;
+
+    private (RutinaPunto, RutinaSeccion)? UnaCasilla =>
+        panelPunto != null && panelSeccion != null ? (panelPunto, panelSeccion) : null;
+
+    private bool Elegida(RutinaPunto? p, RutinaSeccion? s) =>
+        panelPuntos.Count > 0 && panelPunto?.Id == p?.Id && panelSeccion?.Id == s?.Id;
+
+    private static bool Rellena(ResultadoRutina? c) => c?.Estado != null || c?.Valor != null;
+
+    private void AbrirCasilla(RutinaPunto p, RutinaSeccion s)
+    {
+        var actual = Casilla(p, s);
+        Abrir($"{p.Nombre} · {s.Nombre}", p, s, new() { (p, s) });
+        comentarioTexto = actual?.Comentario;
+        valorTexto = actual?.Valor?.ToString("0.##");
+    }
+
+    private void AbrirFila(RutinaPunto p) =>
+        Abrir(p.Nombre, p, null,
+            plantilla!.Secciones.Where(s => s.Planta == planta && Editable(p, s)).Select(s => (p, s)).ToList());
+
+    private void AbrirColumna(RutinaSeccion s) =>
+        Abrir(s.Nombre, null, s, plantilla!.Puntos.Where(p => Editable(p, s)).Select(p => (p, s)).ToList());
+
+    private void Abrir(string titulo, RutinaPunto? p, RutinaSeccion? s, List<(RutinaPunto, RutinaSeccion)> casillas)
+    {
+        panelTitulo = titulo;
+        panelPunto = p;
+        panelSeccion = s;
+        panelPuntos = casillas;
+        panelError = null;
+    }
+
+    private void CerrarPanel()
+    {
+        panelPuntos = new();
+        panelPunto = null;
+        panelSeccion = null;
+    }
+
+    // Guardado
+
+    private Task GuardarUna(RutinaPunto p, RutinaSeccion s, ResultadoRutina? actual, string? estado)
+    {
+        decimal? valor = null;
+        if (p.Numerico && !string.IsNullOrWhiteSpace(valorTexto))
+        {
+            if (!decimal.TryParse(valorTexto.Trim().Replace('.', ','), System.Globalization.NumberStyles.Number,
+                    new System.Globalization.CultureInfo("es-ES"), out var numero))
+            {
+                panelError = "Escribe un número (por ejemplo 12,5).";
+                return Task.CompletedTask;
+            }
+            valor = numero;
+        }
+        var casilla = (actual ?? Vacia(p, s)) with
+        {
+            Estado = p.Numerico ? null : estado,
+            Valor = p.Numerico ? valor : null,
+            Comentario = comentarioTexto
+        };
+        return Guardar(new() { casilla });
+    }
+
+    private Task Vaciar(RutinaPunto p, RutinaSeccion s) =>
+        Guardar(new() { (Casilla(p, s) ?? Vacia(p, s)) with { Estado = null, Valor = null } });
+
+    // Fila o columna entera, como "Todo correcto" del escritorio
+    private Task MarcarVarias(string? estado, bool soloVacias)
+    {
+        var lista = new List<ResultadoRutina>();
+        foreach (var (p, s) in panelPuntos)
+        {
+            var actual = Casilla(p, s);
+            if (p.Numerico && estado != null) continue;
+            if (soloVacias && Rellena(actual)) continue;
+
+            var nueva = (actual ?? Vacia(p, s)) with { Estado = p.Numerico ? null : estado, Valor = p.Numerico ? null : actual?.Valor };
+            if (nueva != actual && !(actual == null && RutinaServicio.Vacia(nueva)))
+                lista.Add(nueva);
+        }
+        return Guardar(lista);
+    }
+
+    private ResultadoRutina Vacia(RutinaPunto p, RutinaSeccion s) =>
+        new(p.Id, s.Id, null, null, null, Revision: revision);
+
+    private async Task Guardar(List<ResultadoRutina> casillas)
+    {
+        guardando = true;
+        panelError = null;
+        await Task.Yield();   // para que se vean los botones desactivados mientras tanto
+
+        try
+        {
+            using (Sesion.Como(usuario!))
+                foreach (var casilla in casillas)
+                    servicio.GuardarCasilla(fecha, casilla, plantilla!);
+            CerrarPanel();
+        }
+        catch (ReglaNegocioException ex)
+        {
+            panelError = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            panelError = "No se ha guardado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
+        Cargar();
+    }
+
+    // Presentación: mismos símbolos que el escritorio (OpcionesCasilla.Simbolo)
+
+    private static string Simbolo(string estado) => estado switch
+    {
+        EstadoCasilla.Correcto => "✓",
+        EstadoCasilla.NoCorrecto => "NO",
+        EstadoCasilla.Mantenimiento => "M",
+        _ => "N/A"
+    };
+
+    private static string Clase(string estado) => estado switch
+    {
+        EstadoCasilla.Correcto => "ok",
+        EstadoCasilla.NoCorrecto => "no",
+        EstadoCasilla.Mantenimiento => "mto",
+        _ => "na"
+    };
+
+    private string Hoy()
+    {
+        string texto = fecha.ToString("dddd, d 'de' MMMM");
+        return char.ToUpper(texto[0]) + texto[1..];
+    }
+}
