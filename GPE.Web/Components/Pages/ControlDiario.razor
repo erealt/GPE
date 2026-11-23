@@ -1,7 +1,6 @@
 @page "/control"
 @layout LayoutTrabajadores
 @inject NavigationManager Navegacion
-@inject UsuarioWeb usuarioWeb
 
 <PageTitle>Control diario</PageTitle>
 
@@ -177,6 +176,7 @@ else
 
     private readonly RutinaServicio servicio = new();
     private readonly DateTime fecha = DateTime.Today;
+    private Usuario? usuario;        // lo que marque queda a su nombre en el historial
 
     private PlantillaRutina? plantilla;
     private List<RevisionRutina> revisiones = new();
@@ -195,11 +195,19 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (TrabajadorActual.PersonaDe((await EstadoSesion).User) == null)
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
         {
             Navegacion.NavigateTo("acciones/entrar?volver=%2Fcontrol");
             return;
         }
+        // Solo Calidad y Administración: los demás, a sus acciones
+        if (!TrabajadorActual.VeControl(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+        usuario = TrabajadorActual.Usuario(sesion);
         Cargar(primeraVez: true);
     }
 
@@ -371,8 +379,7 @@ else
 
         try
         {
-            // El historial de GPE necesita un usuario de la tabla USUARIO: el de la web ("UsuarioWeb")
-            using (usuarioWeb.Operacion())
+            using (Sesion.Como(usuario!))
                 foreach (var casilla in casillas)
                     servicio.GuardarCasilla(fecha, casilla, plantilla!);
             CerrarPanel();

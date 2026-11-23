@@ -4,7 +4,7 @@ using System.Text;
 namespace GPE.Logica;
 
 // Contraseñas cifradas con PBKDF2: "PBKDF2-SHA256$iteraciones$sal$resultado" (Base64).
-// Mismo formato que ClaveWeb de la web de trabajadores (rama aplicacion).
+// Mismo formato que tenían las contraseñas de la web de trabajadores (TRABAJADOR_WEB).
 public static class Clave
 {
     private const string Prefijo = "PBKDF2-SHA256";

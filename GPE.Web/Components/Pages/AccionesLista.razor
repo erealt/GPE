@@ -1,7 +1,6 @@
 @page "/acciones"
 @layout LayoutTrabajadores
 @inject NavigationManager Navegacion
-@inject UsuarioWeb usuarioWeb
 
 <PageTitle>Mis acciones</PageTitle>
 
@@ -87,6 +86,7 @@ else
     private readonly TrabajadorWebServicio servicio = new();
 
     private string persona = "";
+    private Usuario? usuario;        // para que el historial diga quién la ha marcado
     private List<AccionTrabajador>? acciones;
     private string? error;
     private string? hecha;           // la última marcada, para el aviso de arriba
@@ -97,13 +97,20 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        string? quien = TrabajadorActual.PersonaDe((await EstadoSesion).User);
-        if (quien == null)
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
         {
             Navegacion.NavigateTo("acciones/entrar");
             return;
         }
-        persona = quien;
+        // Quien solo es de Calidad no tiene "Mis acciones": va al control diario
+        if (!TrabajadorActual.VeAcciones(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+        usuario = TrabajadorActual.Usuario(sesion);
+        persona = usuario!.Nombre;
         Cargar();
     }
 
@@ -137,9 +144,7 @@ else
 
         try
         {
-            // El historial de GPE necesita un usuario de la tabla USUARIO: el de la web
-            // ("UsuarioWeb"). Quién la ha hecho de verdad va en la nota de las observaciones.
-            using (usuarioWeb.Operacion())
+            using (Sesion.Como(usuario!))
                 servicio.MarcarHecha(accion.Id, persona, comentario);
             hecha = Registro(accion);
             abierta = null;

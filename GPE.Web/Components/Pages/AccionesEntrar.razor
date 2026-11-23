@@ -54,7 +54,10 @@
     // Si ya ha entrado, directamente a donde iba
     protected override async Task OnInitializedAsync()
     {
-        if (TrabajadorActual.PersonaDe((await EstadoSesion).User) != null)
-            Navegacion.NavigateTo(EsControl ? "control" : "acciones");
+        var sesion = (await EstadoSesion).User;
+        if (TrabajadorActual.HaEntrado(sesion))
+            Navegacion.NavigateTo(EsControl && TrabajadorActual.VeControl(sesion)
+                ? "control"
+                : TrabajadorActual.Inicio(sesion).TrimStart('/'));
     }
 }

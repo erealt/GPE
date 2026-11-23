@@ -18,12 +18,13 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddSingleton<UsuarioWeb>();
 
-// Web de los trabajadores (/acciones) y control diario de calidad (/control): entran con usuario y contraseña y la sesión se queda
-// abierta en el móvil 90 días desde la última vez que la usan. El DeCA no pide nada.
+// Web de los trabajadores (/acciones) y control diario de calidad (/control): entran con su usuario y
+// contraseña del escritorio y la sesión se queda abierta en el móvil 90 días desde la última vez que
+// la usan. El DeCA no pide nada.
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(opciones =>
     {
-        opciones.Cookie.Name = "GPE.Trabajador";
+        opciones.Cookie.Name = "GPE.Web";   // distinto del de TRABAJADOR_WEB: esas sesiones ya no valen
         opciones.Cookie.SameSite = SameSiteMode.Strict;
         opciones.LoginPath = "/acciones/entrar";
         opciones.ExpireTimeSpan = TimeSpan.FromDays(90);
@@ -60,23 +61,31 @@ app.MapPost("/acciones/iniciar-sesion", async (HttpContext http) =>
     string volver = Volver(formulario["volver"].ToString());
     string conVolver = volver == "/acciones" ? "" : "&volver=" + Uri.EscapeDataString(volver);
 
-    TrabajadorWeb? trabajador;
+    Usuario? encontrado;
+    List<string> roles = new();
     try
     {
-        trabajador = new TrabajadorWebServicio().Entrar(usuario, formulario["clave"].ToString());
+        encontrado = new LoginServicio().Entrar(usuario, formulario["clave"].ToString());
+        if (encontrado != null)
+            roles = new DevolucionServicio().ObtenerRoles(encontrado.Id);
     }
     catch (DbException)
     {
         return Results.Redirect("/acciones/entrar?error=bd" + conVolver);
     }
-    if (trabajador == null)
+    if (encontrado == null)
         return Results.Redirect("/acciones/entrar?error=clave&usuario=" + Uri.EscapeDataString(usuario.Trim()) + conVolver);
 
     var identidad = new ClaimsIdentity(
-        [new Claim(ClaimTypes.Name, trabajador.Usuario), new Claim(TrabajadorActual.Persona, trabajador.Persona)],
+        [new Claim(ClaimTypes.NameIdentifier, encontrado.Id.ToString()), new Claim(ClaimTypes.Name, encontrado.Nombre),
+         .. roles.Select(r => new Claim(ClaimTypes.Role, r))],
         CookieAuthenticationDefaults.AuthenticationScheme);
-    await http.SignInAsync(new ClaimsPrincipal(identidad), new AuthenticationProperties { IsPersistent = true });
-    return Results.Redirect(volver);
+    var principal = new ClaimsPrincipal(identidad);
+    await http.SignInAsync(principal, new AuthenticationProperties { IsPersistent = true });
+
+    // Si iba a una página que no le toca, a la suya
+    bool puede = volver == "/control" ? TrabajadorActual.VeControl(principal) : TrabajadorActual.VeAcciones(principal);
+    return Results.Redirect(puede ? volver : TrabajadorActual.Inicio(principal));
 }).DisableAntiforgery();
 
 app.MapGet("/acciones/salir", async (HttpContext http, string? volver) =>

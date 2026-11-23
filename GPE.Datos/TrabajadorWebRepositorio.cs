@@ -2,8 +2,9 @@ using Microsoft.Data.SqlClient;
 
 namespace GPE.Datos;
 
-// Web de los trabajadores (TRABAJADOR_WEB): sus acciones de NC/incidencias pendientes y marcarlas hechas.
-// Las acciones son de una persona de la lista PERSONA (NC_ACCION.responsable), no de un usuario de GPE.
+// Web de los trabajadores: sus acciones de NC/incidencias pendientes y marcarlas hechas.
+// Las acciones son de una persona de la lista PERSONA (NC_ACCION.responsable); en la web se busca
+// por el nombre del usuario que ha entrado (USUARIO.nombre).
 public class TrabajadorWebRepositorio
 {
     // Las mismas que reciben el correo: inmediatas y correctoras sin hacer, de registros sin cerrar
@@ -14,19 +15,6 @@ public class TrabajadorWebRepositorio
           AND a.hecha = 0
           AND a.clase IN (N'INMEDIATA', N'CORRECTORA')
           AND n.fecha_fin IS NULL";
-
-    public TrabajadorWeb? ObtenerPorUsuario(string usuario)
-    {
-        const string sql = "SELECT id, usuario, clave, persona, activo FROM TRABAJADOR_WEB WHERE usuario = @usuario;";
-
-        using var conexion = Conexion.Abrir();
-        using var comando = new SqlCommand(sql, conexion);
-        comando.Parameters.AddWithValue("@usuario", usuario);
-        using var lector = comando.ExecuteReader();
-        if (!lector.Read()) return null;
-        return new TrabajadorWeb(lector.GetInt32(0), lector.GetString(1), lector.GetString(2),
-            lector.GetString(3), lector.GetBoolean(4));
-    }
 
     public List<AccionTrabajador> ObtenerPendientes(string persona)
     {
@@ -99,8 +87,6 @@ public class TrabajadorWebRepositorio
         return comando.ExecuteScalar() is int;
     }
 }
-
-public record TrabajadorWeb(int Id, string Usuario, string Clave, string Persona, bool Activo);
 
 public record AccionTrabajador(
     int Id,
