@@ -1,19 +1,22 @@
 ﻿INSTALAR GPE EN EL SERVIDOR (pruebas de calidad)
 ================================================
 
-Se instala en el servidor:
-  - La base de datos GPE: copia de la base del ordenador de desarrollo (miGPE), con sus datos
-    y sus usuarios.
-  - La web (acciones, control diario, agua y DeCA) en IIS.
-  - La aplicación de escritorio, en una carpeta compartida \\SERVIDOR\GPE desde la que cada
-    ordenador la instala. Se actualiza sola al abrirla.
+Servidor: servereurochoc (el mismo donde ya está la web del DeCA de prueba).
+
+Qué se hace:
+  - Base de datos GPE: se cambia la del DeCA de prueba por una copia de miGPE (la base del
+    ordenador de desarrollo), con sus datos y sus usuarios.
+  - SQL Server: se abre para que los ordenadores de la red entren con el usuario gpe_app.
+  - La web (acciones, control diario, agua y DeCA): se actualiza.
+  - La aplicación de escritorio: se publica en \\servereurochoc\DATOS\GPE. Cada ordenador la
+    instala desde ahí y se actualiza sola al abrirla. Ya lleva dentro la conexión a la base
+    de datos del servidor.
   - La tarea diaria que borra los PDF del DeCA de más de un año.
 
-El paquete lleva:
+El paquete (Despliegue\paquete) lleva:
   Web\                   la web
   Avisos\                el programa de la tarea diaria
-  Escritorio\            la aplicación de escritorio (ClickOnce)
-  BaseDatos\             GPE.bak (la copia de la base de datos) y los scripts
+  BaseDatos\             GPE.bak (la copia de miGPE) y los scripts
   gpe_app.txt            contraseña del usuario de SQL de la aplicación (el script la usa y la borra)
   instalar-servidor.ps1  hace la instalación
   LEEME.txt              esta guía
@@ -25,75 +28,67 @@ A. EN EL ORDENADOR DE DESARROLLO
 A1. Tener en main todo lo que se va a probar (la rama web juntada en main) y sin cambios
     a medias.
 
-A2. El servidor es servereurochoc (el mismo donde ya está la web del DeCA de prueba).
-    Se usa el nombre, no la IP: la aplicación de escritorio se instala y se actualiza
-    desde \\servereurochoc\GPE.
+A2. Preparar (PowerShell normal, en la carpeta del proyecto):
 
-A3. Preparar el paquete (PowerShell normal, en la carpeta del proyecto):
+      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor servereurochoc -Instalacion \\servereurochoc\DATOS\GPE
 
-      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor servereurochoc
+    Tarda unos minutos. Hace:
+      - publica la web y la tarea en Despliegue\paquete;
+      - hace la copia de miGPE (BaseDatos\GPE.bak);
+      - publica la aplicación de escritorio directamente en \\servereurochoc\DATOS\GPE.
+    Termina con "Paquete listo en ...\Despliegue\paquete".
 
-    Tarda unos minutos. Termina con "Paquete listo en ...\Despliegue\paquete".
-    Hace: publica la web y la tarea, hace una copia de miGPE, crea la contraseña del usuario
-    de SQL y publica la aplicación de escritorio ya apuntando a ese servidor.
+    Hasta terminar el apartado B, que nadie instale la aplicación: todavía no podría
+    entrar en la base de datos.
 
-A4. Copiar la carpeta Despliegue\paquete entera al servidor, por ejemplo a C:\Instalacion-GPE
+A3. Copiar la carpeta Despliegue\paquete entera al servidor, por ejemplo a C:\Instalacion-GPE
     (USB, carpeta compartida o copiar y pegar por Escritorio remoto).
-    gpe_app.txt lleva una contraseña: no dejar la carpeta en un sitio al que entre más gente.
+    gpe_app.txt lleva una contraseña: no dejar el paquete en DATOS ni en otro sitio al que
+    entre más gente.
+
+A4. Proteger la carpeta de la aplicación. DATOS es para todos y cualquiera podría borrar o
+    cambiar los archivos de GPE, o leer la contraseña de la base de datos que va dentro.
+    En el Explorador: clic derecho en Z:\GPE, Propiedades, Seguridad, Opciones avanzadas,
+    "Deshabilitar herencia". Dejar solo:
+      - tú: Control total;
+      - las personas de calidad que van a instalarla: Lectura y ejecución.
 
 
 B. EN EL SERVIDOR
 =================
 
-Entrar con un usuario administrador. El servidor necesita Internet (para subir los PDF del
-DeCA a eurochoc.es). Tener a mano el usuario y la contraseña de aplicación de WordPress
-(los mismos que GPE_WP_USUARIO y GPE_WP_CLAVE del ordenador de desarrollo).
+Entrar con un usuario administrador (Escritorio remoto). Tener a mano el usuario y la
+contraseña de aplicación de WordPress (los mismos que GPE_WP_USUARIO y GPE_WP_CLAVE del
+ordenador de desarrollo).
 
-B1. SQL Server
-    Si el servidor ya tiene SQL Server, mirar la versión: tiene que ser 2025 o más nuevo,
-    porque la copia de la base de datos viene de un SQL Server 2025. Si es más antiguo,
-    ver "La versión de SQL Server es más antigua" en SI ALGO FALLA.
-
-    Si no tiene SQL Server, instalar SQL Server 2025 Express (gratis):
-      a. Descargarlo de https://www.microsoft.com/sql-server/sql-server-downloads
-         (apartado "Express", "Descargar ahora").
-      b. Abrirlo y elegir "Básica". Aceptar y esperar a que termine.
-      c. Instalarlo con el MISMO usuario administrador con el que se va a ejecutar el script
-         (ese usuario queda como administrador de SQL Server).
-
-    No hace falta tocar nada más de SQL Server: el script activa el puerto 1433 y la
-    entrada con usuario de SQL.
+B1. Mirar la versión de SQL Server
+    Tiene que ser SQL Server 2025, porque la copia viene de un SQL Server 2025.
+    Para verlo: botón Inicio, escribir "Aplicaciones instaladas" y buscar "SQL Server".
+    Si es más antigua (2019, 2022...), ver "La versión de SQL Server es más antigua" en
+    SI ALGO FALLA. El script lo comprueba también y, si no vale, se para sin tocar nada.
 
 B2. Ejecutar el script
     1. Abrir PowerShell como administrador (botón Inicio, escribir PowerShell, clic derecho,
        Ejecutar como administrador).
-    2. LA PRIMERA VEZ escribir (cambiando la carpeta si se copió en otro sitio):
+    2. Escribir (cambiando la carpeta si se copió en otro sitio):
 
          cd C:\Instalacion-GPE
          powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -ReemplazarBaseDatos
 
-       -ReemplazarBaseDatos cambia la base GPE del DeCA de prueba que ya hay en servereurochoc
-       por la copia de miGPE. Antes guarda la que había (GPE-antes-FECHA.bak, en la carpeta de
-       copias de SQL Server).
+       -ReemplazarBaseDatos cambia la base GPE del DeCA de prueba por la copia de miGPE.
+       Antes guarda la que había (GPE-antes-FECHA.bak, en la carpeta de copias de SQL Server).
+       SOLO ESTA PRIMERA VEZ. Si hay que repetir el script, o en las actualizaciones
+       (apartado D), sin -ReemplazarBaseDatos: si se pone, se pierde lo que haya hecho calidad.
 
-       En las actualizaciones (apartado D), SIN -ReemplazarBaseDatos: si se pone, se pierde
-       lo que haya hecho calidad.
+    3. Va diciendo lo que hace. Puede reiniciar SQL Server (para abrir el puerto 1433 y
+       permitir el usuario gpe_app). Pregunta el usuario y la contraseña de aplicación de
+       WordPress: pulsar Intro en las dos para dejar las que ya hay.
 
-    3. Va diciendo lo que hace. Pregunta el usuario y la contraseña de aplicación de WordPress
-       (la contraseña no se ve al escribirla; se puede pegar con clic derecho).
-
-    En servereurochoc ya debería estar el Hosting Bundle (lo instaló la web del DeCA). Si aun
-    así se para en el paso 4 diciendo que falta el Hosting Bundle de .NET 10:
-      a. Descargarlo de https://dotnet.microsoft.com/download/dotnet/10.0
-         (columna "ASP.NET Core Runtime", enlace "Hosting Bundle" de Windows).
-      b. Instalarlo (doble clic, Siguiente).
-      c. Cerrar PowerShell, abrir otro como administrador y volver a ejecutar el script
-         SIN -ReemplazarBaseDatos (la base ya se cambió la primera vez).
-
-    Al terminar dice la dirección de la web y la de la aplicación.
+    Si dice "Tu usuario de Windows no es administrador (sysadmin) de SQL Server", entrar en el
+    servidor con el usuario que instaló SQL Server y repetir.
 
 B3. Comprobar en el servidor
-    - Abrir http://localhost/ en el navegador: tiene que salir la pantalla para entrar.
+    Abrir http://localhost/ en el navegador: tiene que salir la pantalla para entrar.
 
 
 C. EN LOS ORDENADORES DE CALIDAD
@@ -101,15 +96,14 @@ C. EN LOS ORDENADORES DE CALIDAD
 
 C1. Instalar la aplicación de escritorio
     1. Abrir el Explorador de archivos y escribir arriba, en la barra de la ruta:
-         \\NOMBRE-DEL-SERVIDOR\GPE
-       Si pide usuario y contraseña, poner un usuario del servidor y marcar "Recordar".
+         \\servereurochoc\DATOS\GPE
     2. Doble clic en setup.exe y aceptar. Se abre GPE y queda en el menú Inicio.
     3. Si tiene McAfee: lo bloqueará y la aplicación no se abrirá. En McAfee, Elementos en
        cuarentena, restaurar GPE.Escritorio.dll y marcarlo como seguro. Pasa con cada
        versión nueva.
 
 C2. Entrar
-    Los usuarios son los de la base de datos copiada, todos con la contraseña Prueba1234:
+    Los usuarios son los de miGPE, todos con la contraseña Prueba1234:
       calidad      rol Calidad
       admin        Administración (todo)
       trabajador   rol Trabajador (solo web: sus acciones)
@@ -117,10 +111,10 @@ C2. Entrar
     La aplicación todavía no permite cambiar contraseñas.
 
 C3. La web
-    Desde el navegador del ordenador, la tablet o el móvil (conectados a la red de la empresa):
-      http://NOMBRE-DEL-SERVIDOR/
-    Si en el móvil o la tablet no abre con el nombre, usar la IP del servidor
-    (en el servidor: PowerShell, ipconfig, "Dirección IPv4"): http://192.168.X.X/
+    - En los ordenadores:  http://servereurochoc/
+    - En el móvil y la tablet, conectados a la wifi de la empresa:  http://192.168.2.249/
+      (los móviles no entienden los nombres de la red de Windows).
+      Conviene guardar la dirección como favorito o "Añadir a pantalla de inicio".
     - Calidad ve el control diario y el agua.
     - Trabajador ve sus acciones.
     - Administración ve todo.
@@ -129,49 +123,50 @@ C3. La web
 D. ACTUALIZAR MÁS ADELANTE
 ==========================
 
-En el ordenador de desarrollo, volver a preparar el paquete con el MISMO nombre de servidor
-(paso A3), copiarlo al servidor y volver a ejecutar instalar-servidor.ps1 (paso B2).
+Solo la aplicación de escritorio (no hace falta ir al servidor):
+
+      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor servereurochoc -Instalacion \\servereurochoc\DATOS\GPE -SoloEscritorio
+
+  Los ordenadores se actualizan al abrir GPE. McAfee volverá a bloquearla (ver C1).
+
+La web o todo: el comando de A2, copiar el paquete al servidor y ejecutar instalar-servidor.ps1
+SIN -ReemplazarBaseDatos.
   - La base de datos del servidor NO se toca: se conserva lo que haya hecho calidad.
     Si una versión nueva trae un script en BaseDatos, hay que ejecutarlo a mano en el
     servidor (en SQL Server Management Studio, sobre la base GPE).
-  - En WordPress pulsar Intro para dejar lo que había.
-  - Los ordenadores se actualizan solos al abrir GPE (preguntan si se instala la versión nueva).
-  - McAfee volverá a bloquearla (ver C1).
 
-Para preparar el paquete hace falta el certificado "GPE Eurochoc" del ordenador de desarrollo
-(se creó la primera vez, dura 10 años). Si se prepara desde otro ordenador, los ordenadores
-de calidad no se actualizarán y habrá que desinstalar GPE e instalarla de nuevo.
+Para publicar la aplicación hacen falta dos cosas que están solo en el ordenador de desarrollo:
+  - el certificado "GPE Eurochoc" (se creó la primera vez, dura 10 años);
+  - la contraseña de gpe_app, en %LOCALAPPDATA%\GPE\gpe_app.txt.
+Si se publica desde otro ordenador, los ordenadores de calidad no se actualizarán y habrá que
+desinstalar GPE, instalarla de nuevo y volver a ejecutar instalar-servidor.ps1.
 
 
 SI ALGO FALLA
 =============
 
-- "No hay SQL Server en este servidor": instalar SQL Server Express (B1).
-
-- "Tu usuario de Windows no es administrador (sysadmin) de SQL Server": ejecutar el script
-  con el usuario que instaló SQL Server.
-
 - La versión de SQL Server es más antigua (2019, 2022...): la copia GPE.bak no se puede abrir.
   Hacerlo así:
     1. En el ordenador de desarrollo, en SQL Server Management Studio: clic derecho en miGPE,
        Tareas, "Exportar aplicación de capa de datos". Guardar el archivo .bacpac.
-    2. Llevarlo al servidor. En Management Studio del servidor: clic derecho en "Bases de
-       datos", "Importar aplicación de capa de datos", elegir el .bacpac y llamar a la base GPE.
-    3. Volver a ejecutar el script: verá que GPE ya existe y hará el resto.
+    2. En el servidor, en Management Studio: borrar la base GPE (clic derecho, Eliminar)
+       después de hacer una copia de seguridad de ella. Luego clic derecho en "Bases de datos",
+       "Importar aplicación de capa de datos", elegir el .bacpac y llamar a la base GPE.
+    3. Ejecutar el script SIN -ReemplazarBaseDatos: verá que GPE ya existe y hará el resto.
 
 - "HTTP Error 500.19" o "500.30" en la web: falta el Hosting Bundle o se instaló antes que IIS.
   Volver a instalar el Hosting Bundle (opción Reparar) y ejecutar: iisreset
 
-- La web o la aplicación dicen que no pueden conectar con la base de datos:
+- La aplicación o la web dicen que no pueden conectar con la base de datos:
     * Desde el servidor sí y desde otros ordenadores no: el cortafuegos. El script abre los
       puertos 80 y 1433 para redes de dominio y privadas; si la red del servidor está como
       "Pública", cambiarla a privada.
-    * Volver a ejecutar el script: da otra vez los permisos.
+    * Volver a ejecutar el script (sin -ReemplazarBaseDatos): da otra vez los permisos.
 
 - La aplicación no se abre en un ordenador: McAfee (ver C1).
 
-- "No se puede encontrar \\SERVIDOR\GPE" en los ordenadores: el nombre del servidor no es el
-  mismo que se usó en A3, o el ordenador no ve el servidor en la red.
+- La IP 192.168.2.249 tiene que ser siempre la misma. Si el servidor la coge automática, en el
+  router reservarla para él ("Reserva DHCP" o "IP estática").
 
 - En el registro de la tarea diaria sale "ERROR: Falta configurar GPE_SMTP_USUARIO...": es
   normal, en el servidor no hay correo. El borrado de los PDF se hace igual.
@@ -182,9 +177,8 @@ QUÉ DEJA INSTALADO
 
 - Base de datos GPE en SQL Server (puerto 1433), con el usuario de SQL gpe_app (el que usa la
   aplicación de escritorio) y el permiso de la web (IIS APPPOOL\GPE).
-- La web en C:\GPE\Web, sitio "GPE Web" de IIS (puerto 80). Si estaba el sitio "GPE DeCA" de
-  la primera instalación, se le cambia el nombre.
-- La aplicación de escritorio en C:\GPE\Escritorio, compartida como \\SERVIDOR\GPE (solo lectura).
+- La web en C:\GPE\Web, sitio "GPE Web" de IIS (puerto 80). El sitio "GPE DeCA" de la primera
+  instalación pasa a llamarse así.- La aplicación de escritorio en \\servereurochoc\DATOS\GPE.
 - Las copias de los PDF del DeCA en C:\GPE\DeCA.
 - GPE.Avisos en C:\GPE\Avisos y la tarea programada "GPE - Borrado DeCA", cada día a las 3:00.
   Su registro: C:\Windows\System32\config\systemprofile\AppData\Local\GPE\avisos.log

@@ -6,15 +6,13 @@
 # y la base de datos que ya existe NO se toca.
 #
 # Opcionales:
-#   -ReemplazarBaseDatos       la base GPE que ya hay se guarda en una copia y se cambia por la del paquete
-#   -InstanciaSql SQLEXPRESS   solo si en el servidor hay más de una instancia de SQL Server
+#   -ReemplazarBaseDatos       la base GPE que ya hay se guarda en una copia y se cambia por la del paquete#   -InstanciaSql SQLEXPRESS   solo si en el servidor hay más de una instancia de SQL Server
 #   -UsuarioWeb 1              id del usuario a cuyo nombre se guardan los DeCA hechos desde la web
 #   -Puerto 80                 puerto de la web
 #   -Carpeta C:\GPE            dónde se instala todo
 
 param(
-    [switch]$ReemplazarBaseDatos,
-    [string]$InstanciaSql = "",
+    [switch]$ReemplazarBaseDatos,    [string]$InstanciaSql = "",
     [int]$UsuarioWeb = 1,
     [int]$Puerto = 80,
     [string]$Carpeta = "C:\GPE"
@@ -52,7 +50,10 @@ $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { throw "Hay que abrir PowerShell como administrador (clic derecho, Ejecutar como administrador)." }
 
-foreach ($necesaria in "Web", "Avisos", "Escritorio", "BaseDatos") {
+# Escritorio solo viene si la aplicación no se publicó directamente en una carpeta compartida (-Instalacion)
+$conEscritorio = Test-Path (Join-Path $PSScriptRoot "Escritorio")
+
+foreach ($necesaria in "Web", "Avisos", "BaseDatos") {
     if (-not (Test-Path (Join-Path $PSScriptRoot $necesaria))) {
         throw "No encuentro la carpeta '$necesaria' junto a este script. Ejecútalo desde la carpeta del paquete."
     }
@@ -106,8 +107,9 @@ $esAdmin = Sql $sql "SELECT IS_SRVROLEMEMBER('sysadmin')"
 if ($esAdmin -ne 1) { throw "Tu usuario de Windows no es administrador (sysadmin) de SQL Server. Hay que ejecutar el script con el usuario que instaló SQL Server." }
 
 if (-not (Get-NetFirewallRule -DisplayName "GPE SQL Server (1433)" -ErrorAction SilentlyContinue)) {
+    # Solo desde la red local: aunque alguien abriera el puerto en el router, desde Internet no entraría
     New-NetFirewallRule -DisplayName "GPE SQL Server (1433)" -Direction Inbound -Protocol TCP -LocalPort 1433 `
-        -Action Allow -Profile Domain, Private | Out-Null
+        -Action Allow -Profile Domain, Private -RemoteAddress LocalSubnet | Out-Null
 }
 Write-Host "SQL Server listo (puerto 1433 abierto en el cortafuegos)."
 
@@ -230,6 +232,7 @@ if ((Test-Path "IIS:\AppPools\$grupo") -and (Get-WebAppPoolState $grupo).Value -
 }
 
 foreach ($parte in "Web", "Avisos", "Escritorio") {
+    if (-not (Test-Path (Join-Path $PSScriptRoot $parte))) { continue }
     robocopy (Join-Path $PSScriptRoot $parte) (Join-Path $Carpeta $parte) /E /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "No se pudo copiar la carpeta $parte (robocopy $LASTEXITCODE)." }
 }
@@ -246,17 +249,21 @@ Write-Host "Copiado."
 
 # ---------- 6. Carpeta compartida para instalar el escritorio ----------
 
-Paso "6. Carpeta compartida \\$env:COMPUTERNAME\$recurso"
-$carpetaEscritorio = Join-Path $Carpeta "Escritorio"
-# "Todos" en Windows en español, "Everyone" en inglés
-$todos = ([Security.Principal.SecurityIdentifier]"S-1-1-0").Translate([Security.Principal.NTAccount]).Value
-if (-not (Get-SmbShare -Name $recurso -ErrorAction SilentlyContinue)) {
-    New-SmbShare -Name $recurso -Path $carpetaEscritorio -ReadAccess $todos | Out-Null
+Paso "6. Carpeta compartida para la aplicación de escritorio"
+if ($conEscritorio) {
+    $carpetaEscritorio = Join-Path $Carpeta "Escritorio"
+    # "Todos" en Windows en español, "Everyone" en inglés
+    $todos = ([Security.Principal.SecurityIdentifier]"S-1-1-0").Translate([Security.Principal.NTAccount]).Value
+    if (-not (Get-SmbShare -Name $recurso -ErrorAction SilentlyContinue)) {
+        New-SmbShare -Name $recurso -Path $carpetaEscritorio -ReadAccess $todos | Out-Null
+    }
+    icacls $carpetaEscritorio /grant "*S-1-1-0:(OI)(CI)RX" /Q | Out-Null
+    Enable-NetFirewallRule -DisplayGroup "Compartir archivos e impresoras" -ErrorAction SilentlyContinue
+    Enable-NetFirewallRule -DisplayGroup "File and Printer Sharing" -ErrorAction SilentlyContinue
+    Write-Host "Los ordenadores instalan la aplicación desde \\$env:COMPUTERNAME\$recurso\setup.exe"
+} else {
+    Write-Host "Nada que hacer: la aplicación ya se publicó en la carpeta compartida desde el ordenador de desarrollo."
 }
-icacls $carpetaEscritorio /grant "*S-1-1-0:(OI)(CI)RX" /Q | Out-Null
-Enable-NetFirewallRule -DisplayGroup "Compartir archivos e impresoras" -ErrorAction SilentlyContinue
-Enable-NetFirewallRule -DisplayGroup "File and Printer Sharing" -ErrorAction SilentlyContinue
-Write-Host "Los ordenadores instalan la aplicación desde \\$env:COMPUTERNAME\$recurso\setup.exe"
 
 # ---------- 7. Variables para todo el servidor ----------
 # Las leen la web y la tarea diaria. La contraseña de WordPress se escribe aquí, no queda en ningún archivo.
@@ -319,10 +326,9 @@ icacls $carpetaDeca /grant "$($cuentaWeb):(OI)(CI)M" /Q | Out-Null
 $regla = "GPE Web (puerto $Puerto)"
 if (-not (Get-NetFirewallRule -DisplayName $regla -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule -DisplayName $regla -Direction Inbound -Protocol TCP -LocalPort $Puerto `
-        -Action Allow -Profile Domain, Private | Out-Null
+        -Action Allow -Profile Domain, Private -RemoteAddress LocalSubnet | Out-Null
 }
 Write-Host "Permisos y cortafuegos listos."
-
 # ---------- 9. Tarea diaria de borrado ----------
 
 Paso "9. Tarea diaria"
@@ -352,6 +358,5 @@ try {
 
 Write-Host ""
 Write-Host "Listo." -ForegroundColor Green
-Write-Host "  Web:                 $direccion"
-Write-Host "  Aplicación:          \\$env:COMPUTERNAME\$recurso\setup.exe"
+Write-Host "  Web:                 $direccion"if ($conEscritorio) { Write-Host "  Aplicación:          \\$env:COMPUTERNAME\$recurso\setup.exe" }
 Write-Host "  Registro de la tarea: C:\Windows\System32\config\systemprofile\AppData\Local\GPE\avisos.log"
