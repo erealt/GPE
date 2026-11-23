@@ -21,6 +21,7 @@ public class FormNoConformidad : Form
     public int IdGuardado { get; private set; }
 
     private Dictionary<string, List<OpcionLista>> listas = new();
+    private List<ProveedorDeLista> proveedores = new();
     private bool cargaCorrecta;
     private bool hayCambios;
 
@@ -37,7 +38,11 @@ public class FormNoConformidad : Form
     private readonly ComboBox cmbSeccion = new();
     private readonly ComboBox cmbTipo = new();
     private readonly TextBox txtCliente = new();
-    private readonly TextBox txtProveedor = new();
+    private readonly ComboBox cmbProveedor = new();
+    // Solo NC de un proveedor de la lista: cuenta para su nota de reclamaciones
+    private readonly ComboBox cmbSeguridad = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private const string SeguridadSi = "Sí, afecta";
+    private const string SeguridadNo = "No afecta";
 
     // Descripción y acción inmediata
     private readonly TextBox txtProblema = new();
@@ -74,6 +79,7 @@ public class FormNoConformidad : Form
 
     private readonly CamposFormulario campos = new();
     private Control campoTipo = null!;
+    private Control campoSeguridad = null!;
     private Control tarjetaIncidencia = null!;
 
     private readonly BarraFasesCalidad barraFases = new();
@@ -108,6 +114,7 @@ public class FormNoConformidad : Form
 
         // Las NC de auditoría se numeran por año o por fecha: el número cambia con ellas
         cmbOrigen.SelectedIndexChanged += (s, e) => ActualizarSecciones();
+        cmbProveedor.SelectedIndexChanged += (s, e) => ActualizarCampoSeguridad();
         cmbSeccion.SelectedIndexChanged += (s, e) => ActualizarNumero();
         dtpDetectado.ValueChanged += (s, e) => ActualizarNumero();
 
@@ -235,7 +242,7 @@ public class FormNoConformidad : Form
 
     private void PrepararControles()
     {
-        List<string> clientes = new(), proveedores = new();
+        List<string> clientes = new();
         try
         {
             listas = servicio.ObtenerListas();
@@ -272,7 +279,6 @@ public class FormNoConformidad : Form
         lblNumero.Margin = new Padding(0, 4, 0, 0);
 
         Sugerencias(txtCliente, clientes);
-        Sugerencias(txtProveedor, proveedores);
 
         Multilinea(txtProblema, 90, "Qué se ha detectado: producto, lote, cliente...");
         Multilinea(txtCausa, 70, "");
@@ -404,6 +410,37 @@ public class FormNoConformidad : Form
         combo.SelectedItem = opcion;
     }
 
+    // Proveedor: los de la lista de la pantalla Proveedores que están activos, más el que ya tuviera la NC
+    // (aunque esté de baja). Una NC antigua con el nombre escrito a mano lo conserva como opción aparte
+    // hasta que se elija su proveedor de la lista.
+    private void LlenarProveedores(int? proveedorId, string? escrito)
+    {
+        cmbProveedor.DropDownStyle = ComboBoxStyle.DropDownList;
+        // Al escribir, salta al que empieza así (con DropDownList, la fuente tiene que ir antes que el modo)
+        cmbProveedor.AutoCompleteSource = AutoCompleteSource.ListItems;
+        cmbProveedor.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        cmbProveedor.Items.Clear();
+        cmbProveedor.Items.Add(SinIndicar);
+        foreach (var p in proveedores)
+            if (!p.Baja || p.Id == proveedorId)
+                cmbProveedor.Items.Add(p);
+
+        object? elegido = proveedorId == null ? null : cmbProveedor.Items.OfType<ProveedorDeLista>().FirstOrDefault(p => p.Id == proveedorId);
+        if (elegido == null && escrito != null)
+            cmbProveedor.Items.Add(elegido = new ProveedorEscrito(escrito));
+        cmbProveedor.SelectedItem = elegido ?? SinIndicar;
+
+        int ancho = cmbProveedor.Items.Cast<object>()
+            .Max(o => TextRenderer.MeasureText(o.ToString(), cmbProveedor.Font).Width) + 25;
+        cmbProveedor.DropDownWidth = Math.Max(cmbProveedor.Width, Math.Min(ancho, 700));
+    }
+
+    // Nombre escrito a mano en una NC antigua, sin enlazar a la lista de proveedores
+    private sealed record ProveedorEscrito(string Nombre)
+    {
+        public override string ToString() => $"{Nombre}  (escrito a mano, sin enlazar)";
+    }
+
     private static string? Valor(ComboBox combo) =>
         combo.SelectedItem is OpcionLista opcion && opcion != SinIndicar ? opcion.Valor : null;
 
@@ -493,7 +530,7 @@ public class FormNoConformidad : Form
         rejilla.Controls.Add(campos.Campo("Origen", cmbOrigen), 1, 1);
         rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 2, 1);
         rejilla.Controls.Add(campos.Campo("Cliente", txtCliente), 0, 2);
-        rejilla.Controls.Add(campos.Campo("Proveedor", txtProveedor), 1, 2);
+        rejilla.Controls.Add(campos.Campo("Proveedor", cmbProveedor), 1, 2);
         // Al final de su fila, para que al ocultarse (no es NC) no deje un hueco en medio
         rejilla.Controls.Add(campoTipo = campos.Campo("Tipo de no conformidad", cmbTipo), 2, 2);
 
@@ -503,6 +540,15 @@ public class FormNoConformidad : Form
 
         rejilla.Controls.Add(campos.Campo("Responsable", cmbResponsable), 0, 4);
         rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 1, 4);
+        rejilla.Controls.Add(campoSeguridad = campos.Campo("¿Afecta a la seguridad alimentaria?", cmbSeguridad,
+            new Label
+            {
+                Text = "Cuenta para la nota de reclamaciones del proveedor.",
+                AutoSize = true,
+                Font = Tema.FuenteNota,
+                ForeColor = Tema.Suave,
+                Margin = new Padding(0, 4, 0, 0)
+            }), 2, 4);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -719,7 +765,15 @@ public class FormNoConformidad : Form
         LlenarLista(cmbCapitulo, ListaCalidad.CapituloNorma, nc?.CapituloNorma);
 
         txtCliente.Text = nc?.Cliente ?? "";
-        txtProveedor.Text = nc?.Proveedor ?? "";
+        LlenarProveedores(nc?.ProveedorId, nc?.Proveedor);
+        cmbSeguridad.Items.Clear();
+        cmbSeguridad.Items.AddRange(new object[] { SinIndicar.ToString()!, SeguridadSi, SeguridadNo });
+        cmbSeguridad.SelectedItem = nc?.SeguridadAlimentaria switch
+        {
+            true => SeguridadSi,
+            false => SeguridadNo,
+            null => SinIndicar.ToString()
+        };
         txtProblema.Text = nc?.Problema ?? "";
         txtCausa.Text = nc?.DescripcionCausa ?? "";
         PonerFecha(dtpPrevista, nc?.FechaPrevista);
@@ -768,11 +822,16 @@ public class FormNoConformidad : Form
     private void ActualizarSegunTipo()
     {
         campoTipo.Visible = TipoElegido == TipoRegistro.NoConformidad;
+        ActualizarCampoSeguridad();
         ActualizarSecciones();
         ActualizarNumero();
         ActualizarFases();
         tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
     }
+
+    // Solo se pregunta en una NC con un proveedor de la lista
+    private void ActualizarCampoSeguridad() =>
+        campoSeguridad.Visible = TipoElegido == TipoRegistro.NoConformidad && cmbProveedor.SelectedItem is ProveedorDeLista;
 
     // Fases
 
@@ -935,7 +994,19 @@ public class FormNoConformidad : Form
             FechaPrevista: LeerFecha(dtpPrevista),
             FechaFin: LeerFecha(dtpFin),
             Cliente: txtCliente.Text,
-            Proveedor: txtProveedor.Text,
+            Proveedor: cmbProveedor.SelectedItem switch
+            {
+                ProveedorDeLista p => p.Nombre,
+                ProveedorEscrito e => e.Nombre,
+                _ => null
+            },
+            ProveedorId: (cmbProveedor.SelectedItem as ProveedorDeLista)?.Id,
+            SeguridadAlimentaria: (cmbSeguridad.SelectedItem as string) switch
+            {
+                SeguridadSi => true,
+                SeguridadNo => false,
+                _ => null
+            },
             McPccBpm: Valor(cmbMcPccBpm),
             Parametro: Valor(cmbParametro),
             Operario: Valor(cmbOperario),
@@ -966,7 +1037,8 @@ public class FormNoConformidad : Form
                 [nameof(NoConformidad.Seccion)] = cmbSeccion,
                 [nameof(NoConformidad.Tipo)] = cmbTipo,
                 [nameof(NoConformidad.Cliente)] = txtCliente,
-                [nameof(NoConformidad.Proveedor)] = txtProveedor,
+                [nameof(NoConformidad.Proveedor)] = cmbProveedor,
+                [nameof(NoConformidad.SeguridadAlimentaria)] = cmbSeguridad,
                 [nameof(NoConformidad.Problema)] = txtProblema,
                 [nameof(NoConformidad.FechaPrevista)] = dtpPrevista,
                 [nameof(NoConformidad.FechaFin)] = dtpFin,
@@ -997,6 +1069,8 @@ public class FormNoConformidad : Form
         }
 
         var registro = NoConformidadServicio.Normalizar(leido);
+        bool leidaAntes = false;
+        string? evaluacionAntes = registro.ProveedorId is int idProveedor ? EvaluacionProveedor(idProveedor, out leidaAntes) : null;
 
         // El número lo pone el servicio
         try
@@ -1016,7 +1090,34 @@ public class FormNoConformidad : Form
         }
 
         hayCambios = false;
+        if (leidaAntes && registro.ProveedorId is int proveedorId)
+            AvisarSiEmpeoraEvaluacion(proveedorId, evaluacionAntes);
         DialogResult = DialogResult.OK;
+    }
+
+    // La evaluación del proveedor sale de sus NC: si al guardar pasa a pedir más controles, se avisa
+    private void AvisarSiEmpeoraEvaluacion(int proveedorId, string? antes)
+    {
+        string? despues = EvaluacionProveedor(proveedorId, out bool leida);
+        if (!leida || !ProveedorServicio.Empeora(antes, despues)) return;
+
+        string nombre = (cmbProveedor.SelectedItem as ProveedorDeLista)?.Nombre ?? "El proveedor";
+        string cambio = antes == null ? $"pasa a tener la evaluación {despues}" : $"pasa de la evaluación {antes} a la {despues}";
+        Mensajes.Aviso(this, "Cambia la evaluación del proveedor",
+            $"Con esta no conformidad, {nombre} {cambio}.");
+    }
+
+    // Si no se puede leer, no se avisa: el registro ya está guardado
+    private static string? EvaluacionProveedor(int proveedorId, out bool leida)
+    {
+        leida = false;
+        try
+        {
+            var evaluacion = new ProveedorServicio().EvaluacionActual(proveedorId);
+            leida = true;
+            return evaluacion;
+        }
+        catch (DbException) { return null; }
     }
 
     private void AvisarCambiosSinGuardar(object? sender, FormClosingEventArgs e)

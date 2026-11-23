@@ -101,8 +101,11 @@ public static class Sesion
     public static bool TieneRol(string rol) => Roles.Contains(rol);
 
     // Módulos del menú. Quien no tiene ningún rol puede consultar las devoluciones.
-    public static bool VeDevoluciones => Roles.Count == 0 || Roles.Overlaps(Rol.Devoluciones);
+    // Transporte solo ve el DeCA: con ese rol únicamente, no ve las devoluciones.
+    public static bool VeDevoluciones => Roles.Count == 0 || Roles.Overlaps(Rol.Devoluciones) && !SoloTransporte;
+    private static bool SoloTransporte => Roles.Count == 1 && TieneRol(Rol.Transporte);
     public static bool VeCalidad => TieneRol(Rol.Calidad);
+    public static bool VeDeca => TieneRol(Rol.Transporte);
 }
 
 // Nombres de la tabla ROL. Cada rol hace sus pasos; el resto solo consulta.

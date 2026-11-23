@@ -7,30 +7,36 @@ public class NoConformidadRepositorio
 {
     // Lectura
 
-    // En el mismo orden que el record NoConformidad
+    // En el mismo orden que el record NoConformidad. El proveedor: el nombre de la lista de proveedores
+    // si está enlazado, y si no, lo que se escribió a mano (NC antiguas).
     private const string SqlRegistros = @"
-            SELECT id, tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
-                   problema, descripcion_causa, responsable,
-                   fecha_prevista, fecha_fin, cliente, proveedor,
-                   mc_pcc_bpm, parametro, operario,
-                   capitulo_norma, analisis_causa_raiz,
-                   coste_economico, horas_mano_obra,
-                   porque_pregunta_1, porque_respuesta_1, porque_pregunta_2, porque_respuesta_2,
-                   porque_pregunta_3, porque_respuesta_3, porque_pregunta_4, porque_respuesta_4,
-                   porque_pregunta_5, porque_respuesta_5,
-                   causa_raiz, version
-            FROM NO_CONFORMIDAD";
+            SELECT n.id, n.tipo_registro, n.numero, n.fecha_detectado, n.origen, n.seccion, n.tipo,
+                   n.problema, n.descripcion_causa, n.responsable,
+                   n.fecha_prevista, n.fecha_fin, n.cliente, COALESCE(p.nombre, n.proveedor) AS proveedor,
+                   n.mc_pcc_bpm, n.parametro, n.operario,
+                   n.capitulo_norma, n.analisis_causa_raiz,
+                   n.coste_economico, n.horas_mano_obra,
+                   n.porque_pregunta_1, n.porque_respuesta_1, n.porque_pregunta_2, n.porque_respuesta_2,
+                   n.porque_pregunta_3, n.porque_respuesta_3, n.porque_pregunta_4, n.porque_respuesta_4,
+                   n.porque_pregunta_5, n.porque_respuesta_5,
+                   n.causa_raiz, n.version, n.proveedor_id, n.seguridad_alimentaria
+            FROM NO_CONFORMIDAD n
+            LEFT JOIN PROVEEDOR p ON p.id = n.proveedor_id";
 
     // Columnas de los 5 porqués, en orden: pregunta_1, respuesta_1, pregunta_2...
     private static readonly string[] ColumnasPorQue = Enumerable.Range(1, NoConformidad.NumeroPorQues)
         .SelectMany(n => new[] { $"porque_pregunta_{n}", $"porque_respuesta_{n}" }).ToArray();
 
     public List<NoConformidad> ObtenerRegistros() =>
-        LeerRegistros(SqlRegistros + " ORDER BY fecha_detectado DESC, id DESC;", null);
+        LeerRegistros(SqlRegistros + " ORDER BY n.fecha_detectado DESC, n.id DESC;", null);
+
+    // Los registros enlazados a un proveedor de la lista, los más recientes primero
+    public List<NoConformidad> ObtenerDeProveedor(int proveedorId) =>
+        LeerRegistros(SqlRegistros + " WHERE n.proveedor_id = @id ORDER BY n.fecha_detectado DESC, n.id DESC;", proveedorId);
 
     // Un registro con sus datos actuales, o null si ya no existe
     public NoConformidad? ObtenerRegistro(int id) =>
-        LeerRegistros(SqlRegistros + " WHERE id = @id;", id).FirstOrDefault();
+        LeerRegistros(SqlRegistros + " WHERE n.id = @id;", id).FirstOrDefault();
 
     private static List<NoConformidad> LeerRegistros(string sql, int? id)
     {
@@ -73,7 +79,9 @@ public class NoConformidadRepositorio
                 PorQues: Enumerable.Range(0, NoConformidad.NumeroPorQues)
                     .Select(i => new PorQue(Texto(21 + 2 * i), Texto(22 + 2 * i))).ToList(),
                 CausaRaiz: Texto(31),
-                Version: (byte[])lector[32]));
+                Version: (byte[])lector[32],
+                ProveedorId: lector.IsDBNull(33) ? null : lector.GetInt32(33),
+                SeguridadAlimentaria: lector.IsDBNull(34) ? null : lector.GetBoolean(34)));
         }
 
         return lista;
@@ -151,12 +159,10 @@ public class NoConformidadRepositorio
     }
 
     // Nombres ya usados, para sugerirlos al escribir. Los clientes incluyen los de devoluciones.
+    // (Los proveedores no: se eligen de la lista de proveedores, ProveedorRepositorio.ObtenerLista.)
     public List<string> ObtenerClientes() => LeerNombres(@"
             SELECT nombre FROM CLIENTE
             UNION SELECT cliente FROM NO_CONFORMIDAD WHERE cliente IS NOT NULL;");
-
-    public List<string> ObtenerProveedores() => LeerNombres(
-        "SELECT DISTINCT proveedor FROM NO_CONFORMIDAD WHERE proveedor IS NOT NULL;");
 
     private static List<string> LeerNombres(string sql)
     {
@@ -204,7 +210,7 @@ public class NoConformidadRepositorio
             INSERT INTO NO_CONFORMIDAD
                 (tipo_registro, numero, fecha_detectado, origen, seccion, tipo,
                  problema, descripcion_causa, responsable,
-                 fecha_prevista, fecha_fin, cliente, proveedor,
+                 fecha_prevista, fecha_fin, cliente, proveedor, proveedor_id, seguridad_alimentaria,
                  mc_pcc_bpm, parametro, operario,
                  capitulo_norma, analisis_causa_raiz,
                  coste_economico, horas_mano_obra,
@@ -215,7 +221,8 @@ public class NoConformidadRepositorio
             VALUES
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
                  @problema, @descripcion_causa, @responsable,
-                 @fecha_prevista, @fecha_fin, @cliente, @proveedor,
+                 @fecha_prevista, @fecha_fin, @cliente,
+                 CASE WHEN @proveedor_id IS NULL THEN @proveedor END, @proveedor_id, @seguridad_alimentaria,
                  @mc_pcc_bpm, @parametro, @operario,
                  @capitulo_norma, @analisis_causa_raiz,
                  @coste_economico, @horas_mano_obra,
@@ -259,7 +266,9 @@ public class NoConformidadRepositorio
                 problema = @problema, descripcion_causa = @descripcion_causa,
                 responsable = @responsable,
                 fecha_prevista = @fecha_prevista, fecha_fin = @fecha_fin,
-                cliente = @cliente, proveedor = @proveedor,
+                cliente = @cliente, proveedor_id = @proveedor_id, seguridad_alimentaria = @seguridad_alimentaria,
+                -- Enlazada a la lista: se guarda el nombre escrito a mano que tuviera antes (historia de las NC antiguas)
+                proveedor = CASE WHEN @proveedor_id IS NULL THEN @proveedor ELSE proveedor END,
                 mc_pcc_bpm = @mc_pcc_bpm, parametro = @parametro, operario = @operario,
                 capitulo_norma = @capitulo_norma, analisis_causa_raiz = @analisis_causa_raiz,
                 coste_economico = @coste_economico, horas_mano_obra = @horas_mano_obra,
@@ -427,6 +436,8 @@ public class NoConformidadRepositorio
         Valor("@fecha_fin", nc.FechaFin?.Date);
         Valor("@cliente", nc.Cliente);
         Valor("@proveedor", nc.Proveedor);
+        comando.Parameters.Add("@proveedor_id", System.Data.SqlDbType.Int).Value = (object?)nc.ProveedorId ?? DBNull.Value;
+        comando.Parameters.Add("@seguridad_alimentaria", System.Data.SqlDbType.Bit).Value = (object?)nc.SeguridadAlimentaria ?? DBNull.Value;
         Valor("@mc_pcc_bpm", nc.McPccBpm);
         Valor("@parametro", nc.Parametro);
         Valor("@operario", nc.Operario);

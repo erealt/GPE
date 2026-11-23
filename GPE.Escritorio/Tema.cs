@@ -6,6 +6,10 @@ namespace GPE.Escritorio;
 // Colores y fuentes comunes a todas las pantallas
 public static class Tema
 {
+    // Icono de la aplicación (gpe.ico) para la barra de tareas y las ventanas
+    public static readonly Icon Icono =
+        new(typeof(Tema).Assembly.GetManifestResourceStream("gpe.ico")!);
+
     public static readonly Color Fondo = Color.FromArgb(245, 246, 244);
     public static readonly Color Acento = Color.FromArgb(89, 0, 246);
     public static readonly Color AcentoSuave = Color.FromArgb(240, 236, 255);
@@ -72,6 +76,15 @@ public static class Tema
         EstadoRegistro.EnPlazo => (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70)),
         EstadoRegistro.FueraPlazo => (FondoError, Error),
         EstadoRegistro.SinPlazo => (AvisoFondo, Aviso),
+        _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
+    };
+
+    // Proveedores: evaluación A/B/C y riesgo BAJO/MEDIO/ALTO, de verde a rojo
+    public static (Color Fondo, Color Texto) ColorNotaProveedor(string nota) => nota switch
+    {
+        "A" or "BAJO" => (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70)),
+        "B" or "MEDIO" => (AvisoFondo, Aviso),
+        "C" or "D" or "ALTO" => (FondoError, Error),
         _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
     };
 

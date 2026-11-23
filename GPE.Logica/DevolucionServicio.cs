@@ -11,8 +11,12 @@ public class DevolucionServicio
     // Cada rol ve en la lista las devoluciones que esperan algo de él
     private static readonly Dictionary<string, int[]> FasesPorRol = new()
     {
-        // Las recién creadas y las que esperan el abono
-        [Rol.Administracion] = new[] { Fase.SolicitudRecibida, Fase.RevisadaAlmacen },
+        // Todas, para poder seguirlas (las de otros roles se abren en solo consulta)
+        [Rol.Administracion] = new[]
+        {
+            Fase.SolicitudRecibida, Fase.RecogidaSolicitada, Fase.MercanciaRecibida,
+            Fase.RevisadaAlmacen, Fase.AbonoRealizado
+        },
         // Las nuevas, para programar la recogida
         [Rol.Transporte] = new[] { Fase.SolicitudRecibida },
         // Las que tienen la recogida programada y las que ya han llegado sin revisar

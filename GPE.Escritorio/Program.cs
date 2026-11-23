@@ -15,13 +15,13 @@ static class Program
             if (e.ExceptionObject is Exception ex) MostrarErrorInesperado(ex);
         };
 
-        // Con "Salir" se vuelve a elegir usuario; al cerrar la ventana se acaba
+        // Con "Salir" se vuelve a la pantalla de entrar; al cerrar la ventana se acaba
         while (true)
         {
             // Sin usuario no se puede registrar el historial, así que no se entra
-            using (var seleccion = new FormSeleccionUsuario())
+            using (var entrar = new FormLogin())
             {
-                if (seleccion.ShowDialog() != DialogResult.OK) return;
+                if (entrar.ShowDialog() != DialogResult.OK) return;
             }
 
             // Avisos por correo que quedaron sin enviar (sin conexión, fallo del servidor...)

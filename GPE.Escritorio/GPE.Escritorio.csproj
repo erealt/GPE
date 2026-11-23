@@ -10,6 +10,13 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>gpe.ico</ApplicationIcon>
+    <AssemblyTitle>GPE</AssemblyTitle>
+    <Product>GPE</Product>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="gpe.ico" LogicalName="gpe.ico" />
+  </ItemGroup>
 
 </Project>

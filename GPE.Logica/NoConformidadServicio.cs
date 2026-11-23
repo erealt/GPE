@@ -37,13 +37,21 @@ public class NoConformidadServicio
 
     public NoConformidad? ObtenerRegistro(int id) => repositorio.ObtenerRegistro(id);
 
+    // Las NC, incidencias y mejoras enlazadas a un proveedor (para su ficha)
+    public List<NoConformidad> ObtenerDeProveedor(int proveedorId) => repositorio.ObtenerDeProveedor(proveedorId);
+
+    // De esas, las detectadas en los últimos 12 meses
+    public static int DelUltimoAno(IEnumerable<NoConformidad> registros) =>
+        registros.Count(nc => nc.FechaDetectado.Date > DateTime.Today.AddYears(-1));
+
     public List<AccionNc> ObtenerAcciones(int id) => repositorio.ObtenerAcciones(id);
 
     public Dictionary<string, List<OpcionLista>> ObtenerListas() => repositorio.ObtenerListas();
 
     public List<string> ObtenerClientes() => repositorio.ObtenerClientes();
 
-    public List<string> ObtenerProveedores() => repositorio.ObtenerProveedores();
+    // Los proveedores se eligen de la lista de la pantalla Proveedores: los mismos en los dos sitios
+    public List<ProveedorDeLista> ObtenerProveedores() => new ProveedorRepositorio().ObtenerLista();
 
     // Informe en PDF del registro tal como está guardado, y el nombre de archivo que se propone
     public (byte[] Pdf, string NombreArchivo) Informe(int id)
@@ -184,7 +192,9 @@ public class NoConformidadServicio
                     ? new PorQue(Limpio(p.Pregunta), Limpio(p.Respuesta))
                     : new PorQue(null, null))
                 .ToList(),
-            CausaRaiz = Limpio(nc.CausaRaiz)
+            CausaRaiz = Limpio(nc.CausaRaiz),
+            // Solo cuenta en las NC de un proveedor de la lista (para su nota de reclamaciones)
+            SeguridadAlimentaria = esNc && nc.ProveedorId != null ? nc.SeguridadAlimentaria : null
         };
     }
 
@@ -214,8 +224,12 @@ public class NoConformidadServicio
         // Origen R = reclamación de cliente, P = proveedor
         if (nc.Origen == "R" && nc.Cliente == null)
             Error(nameof(nc.Cliente), "En una reclamación de cliente, indica el cliente.");
-        if (nc.Origen == "P" && nc.Proveedor == null)
-            Error(nameof(nc.Proveedor), "Si el origen es un proveedor, indica cuál.");
+        // Una NC antigua puede tener el proveedor escrito a mano (sin enlazar): se deja guardar así
+        if (nc.Origen == "P" && nc.ProveedorId == null && nc.Proveedor == null)
+            Error(nameof(nc.Proveedor), "Si el origen es un proveedor, elige cuál.");
+        // Hace falta para la nota de reclamaciones del proveedor
+        if (esNc && nc.ProveedorId != null && nc.SeguridadAlimentaria == null)
+            Error(nameof(nc.SeguridadAlimentaria), "Indica si afecta a la seguridad alimentaria.");
 
         if (nc.Problema == "")
             Error(nameof(nc.Problema), "Describe el problema detectado.");

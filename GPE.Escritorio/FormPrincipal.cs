@@ -1,5 +1,7 @@
-using GPE.Datos;
+using System.Data.Common;
 using System.Drawing.Drawing2D;
+using GPE.Datos;
+using GPE.Logica;
 
 namespace GPE.Escritorio;
 
@@ -29,6 +31,7 @@ public class FormPrincipal : Form
     public FormPrincipal()
     {
         Text = "GPE";
+        Icon = Tema.Icono;
         Size = new Size(1400, 800);
         MinimumSize = new Size(1350, 650);
         StartPosition = FormStartPosition.CenterScreen;
@@ -46,6 +49,45 @@ public class FormPrincipal : Form
         Mostrar(modulos[0]);
 
         if (devoluciones != null) PrepararAvisoPendientes(devoluciones);
+        if (Sesion.VeCalidad) PrepararAvisoCertificados();
+    }
+
+    // Certificados de proveedores caducados o que caducan en 30 días: a quien ve Calidad le sale un recuadro pequeño
+    // abajo a la derecha cada vez que abre GPE. También se ven en la pantalla Proveedores.
+    // Si hay otra ventana abierta (el aviso de devoluciones, por ejemplo), se espera.
+    private bool avisoCertificadosPendiente;
+
+    private void PrepararAvisoCertificados()
+    {
+        avisoCertificadosPendiente = true;
+        Shown += (s, e) => MostrarAvisoCertificados();
+        Activated += (s, e) => { if (avisoCertificadosPendiente) BeginInvoke(MostrarAvisoCertificados); };
+    }
+
+    private void MostrarAvisoCertificados()
+    {
+        if (!avisoCertificadosPendiente || Application.OpenForms.Count > 1) return;
+        avisoCertificadosPendiente = false;
+
+        List<CertificadoPorCaducar> certificados;
+        try
+        {
+            certificados = new ProveedorServicio().ObtenerCertificadosPorCaducar();
+        }
+        catch (DbException)
+        {
+            return;
+        }
+        if (certificados.Count == 0) return;
+
+        var aviso = new FormAvisoEsquina("Certificados de proveedores", FormAvisoCertificados.Resumen(certificados) + ".");
+        aviso.VerPulsado += (s, e) =>
+        {
+            var moduloProveedores = modulos.First(m => m.Nombre == "Proveedores");
+            Mostrar(moduloProveedores);
+            ((ModuloProveedores)moduloProveedores.Contenido!).VerCertificados();
+        };
+        aviso.MostrarEn(this);
     }
 
     // Devoluciones se crea al arrancar para que el aviso de pendientes funcione sin entrar en el módulo
@@ -91,12 +133,23 @@ public class FormPrincipal : Form
                 "Cloro y organolépticos de los puntos de agua (MT-RG09).",
                 ModuloInicio.ResumenAgua,
                 () => new ModuloControlAgua()));
+
+            lista.Add(new Modulo("Análisis",
+                "Plan de análisis de producto y materias primas: parámetros, fechas y resultados.",
+                ModuloInicio.ResumenAnalisis,
+                () => new ModuloAnalisis()));
+
+            lista.Add(new Modulo("Proveedores",
+                "Evaluación de proveedores y riesgo de fraude de sus productos (CP-RG05).",
+                ModuloInicio.ResumenProveedores,
+                () => new ModuloProveedores()));
         }
 
-        lista.Add(new Modulo("DeCA",
-            "Documento de control del transporte, con su PDF y su código QR.",
-            ModuloInicio.ResumenDeca,
-            () => new ModuloDeca()));
+        if (Sesion.VeDeca)
+            lista.Add(new Modulo("DeCA",
+                "Documento de control del transporte, con su PDF y su código QR.",
+                ModuloInicio.ResumenDeca,
+                () => new ModuloDeca()));
 
         return lista;
     }
@@ -300,7 +353,7 @@ public class FormPrincipal : Form
             Text = Sesion.UsuarioActual?.Nombre ?? ""
         };
 
-        // Cierra la sesión y vuelve a la pantalla de elegir usuario
+        // Cierra la sesión y vuelve a la pantalla de entrar
         var btnSalir = Tema.BotonSecundario("Salir", 90);
         btnSalir.Dock = DockStyle.Fill;
         btnSalir.Click += (s, e) =>

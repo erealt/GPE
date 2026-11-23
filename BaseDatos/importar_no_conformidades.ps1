@@ -1,6 +1,9 @@
 ﻿<#
     Pasa la hoja INCIDENCIAS del Excel "INCIDENCIAS Y NO CONFORMIDADES - CALIDAD" (MT-RG09)
-    a las tablas NO_CONFORMIDAD y NC_ACCION. Se ejecuta una vez, después de no_conformidades.sql.
+    a las tablas NO_CONFORMIDAD y NC_ACCION. Se ejecuta una vez, después de no_conformidades.sql y causa_raiz.sql.
+    Es para el Excel con el formato de noviembre de 2026 (títulos agrupados en la fila 2, cabeceras en la 3,
+    columna CAUSA RAIZ). ESTADO, Año, Mes, Sem y Día son fórmulas y no se pasan: la aplicación los calcula.
+    La columna DESCRIPCIÓN DEL PROBLEMA es la antigua "Descripción causa" (mismo texto): va a descripcion_causa.
 #>
 param(
     [Parameter(Mandatory)] [int] $UsuarioId,     # usuario que figura como creador (y en el historial)
@@ -15,16 +18,19 @@ $ErrorActionPreference = 'Stop'
 $avisos = New-Object System.Collections.Generic.List[string]
 function Aviso($fila, $texto) { $avisos.Add("Fila ${fila}: $texto") }
 
-# Columnas de la hoja INCIDENCIAS (fila 2 = cabeceras, datos desde la fila 3)
+# Columnas de la hoja INCIDENCIAS (fila 3 = cabeceras, datos desde la fila 4)
 $COL = @{
     FechaDetectado = 1; Numero = 2; NcI = 3; Origen = 4; Seccion = 5; Tipo = 6; Problema = 7
-    DescripcionCausa = 8; AccionInmediata = 9; Responsable = 10; FechaPrevista = 11; FechaFin = 12
-    Cliente = 13; Proveedor = 14; McPccBpm = 15; Parametro = 16; Operario = 17; CapituloNorma = 18
-    AnalisisCausaRaiz = 19; AccionCorrectora = 20; ResponsableCorrectora = 21; Coste = 22
-    Horas = 23; Seguimiento = 24
+    DescripcionCausa = 8; AccionInmediata = 9; Responsable = 10; AnalisisCausaRaiz = 11; CausaRaiz = 12
+    AccionCorrectora = 13; ResponsableCorrectora = 14; Seguimiento = 15; FechaPrevista = 16; FechaFin = 17
+    Cliente = 19; Proveedor = 20; McPccBpm = 21; Parametro = 22; Operario = 23; CapituloNorma = 24
+    Coste = 25; Horas = 26
 }
-$PRIMERA_FILA = 3
-$ULTIMA_COLUMNA = 24
+$PRIMERA_FILA = 4
+$ULTIMA_COLUMNA = 26
+
+# CAUSA RAIZ: uno de los grupos de la hoja CAUSA RAIZ, igual que en la aplicación (GPE.Datos/CausasRaiz.cs)
+$CAUSAS_RAIZ = 'Personal', 'Equipos', 'Economía', 'Procesos', 'Alimentos'
 
 # Conversión de celdas
 
@@ -68,6 +74,31 @@ function TipoRegistro($v, $fila) {
         'MEJORA'        { return 'MEJORA' }
         default         { Aviso $fila "NC/I '$v' desconocido; se toma como INCIDENCIA."; return 'INCIDENCIA' }
     }
+}
+
+# Un grupo de la lista (sin mirar mayúsculas ni tildes); si no es ninguno, vacío y aviso
+function CausaRaiz($v, $fila) {
+    $t = Texto $v
+    if (-not $t) { return $null }
+    function SinTildes($s) { -join ($s.Normalize([Text.NormalizationForm]::FormD).ToCharArray() |
+        Where-Object { [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne 'NonSpacingMark' }) }
+    $grupo = $CAUSAS_RAIZ | Where-Object { (SinTildes $_) -eq (SinTildes $t) } | Select-Object -First 1
+    if (-not $grupo) { Aviso $fila "Causa raíz '$t' no es ninguno de los grupos ($($CAUSAS_RAIZ -join ', ')); se deja vacía." }
+    return $grupo
+}
+
+# Si el análisis está escrito como "¿Por qué...? Porque... ¿Por qué...? Porque...", se reparte en los 5 porqués
+# de la aplicación. Si es texto normal (o tiene más de 5 preguntas) devuelve $null y el texto se deja tal cual.
+function PorQues($texto, $fila) {
+    if (-not $texto -or $texto -notmatch '^¿\s*Por\s+qu[eé]') { return $null }
+    $pares = [regex]::Matches($texto, '(?s)(¿\s*Por\s+qu[eé][^?]*\?)\s*(.*?)\s*(?=¿\s*Por\s+qu[eé]|\z)')
+    if ($pares.Count -gt 5) {
+        Aviso $fila "el análisis de la causa raíz tiene $($pares.Count) porqués (máximo 5); se deja como texto."
+        return $null
+    }
+    return @($pares | ForEach-Object {
+        [pscustomobject]@{ Pregunta = $_.Groups[1].Value.Trim(); Respuesta = (Texto $_.Groups[2].Value) }
+    })
 }
 
 # Lectura del Excel
@@ -121,6 +152,7 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
         Operario = Texto $c.Operario
         CapituloNorma = Texto $c.CapituloNorma
         AnalisisCausaRaiz = Texto $c.AnalisisCausaRaiz
+        CausaRaiz = CausaRaiz $c.CausaRaiz $fila
         Coste = Numero $c.Coste $fila 'Coste'
         Horas = Numero $c.Horas $fila 'Horas'
         AccionInmediata = Texto $c.AccionInmediata
@@ -128,6 +160,9 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
         ResponsableCorrectora = Texto $c.ResponsableCorrectora
         Seguimiento = Texto $c.Seguimiento
     }
+    # Los porqués van a sus casillas y el texto ya no se repite en "Análisis de la causa raíz"
+    $r | Add-Member PorQues (PorQues $r.AnalisisCausaRaiz $fila)
+    if ($r.PorQues) { $r.AnalisisCausaRaiz = $null }
     if ($r.FechaFin -and $r.FechaFin -lt $r.FechaDetectado) {
         Aviso $fila "la fecha fin ($($r.FechaFin.ToString('dd/MM/yy'))) es anterior a la de detección; se importa igual."
     }
@@ -157,14 +192,20 @@ INSERT INTO NO_CONFORMIDAD
      problema, descripcion_causa, responsable,
      fecha_prevista, fecha_fin, cliente, proveedor,
      mc_pcc_bpm, parametro, operario,
-     capitulo_norma, analisis_causa_raiz,
+     capitulo_norma, analisis_causa_raiz, causa_raiz,
+     porque_pregunta_1, porque_respuesta_1, porque_pregunta_2, porque_respuesta_2,
+     porque_pregunta_3, porque_respuesta_3, porque_pregunta_4, porque_respuesta_4,
+     porque_pregunta_5, porque_respuesta_5,
      coste_economico, horas_mano_obra, creado_por)
 VALUES
     (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
      @problema, @descripcion_causa, @responsable,
      @fecha_prevista, @fecha_fin, @cliente, @proveedor,
      @mc_pcc_bpm, @parametro, @operario,
-     @capitulo_norma, @analisis_causa_raiz,
+     @capitulo_norma, @analisis_causa_raiz, @causa_raiz,
+     @porque_pregunta_1, @porque_respuesta_1, @porque_pregunta_2, @porque_respuesta_2,
+     @porque_pregunta_3, @porque_respuesta_3, @porque_pregunta_4, @porque_respuesta_4,
+     @porque_pregunta_5, @porque_respuesta_5,
      @coste_economico, @horas_mano_obra, @usuario);
 SELECT CAST(SCOPE_IDENTITY() AS INT);
 '@
@@ -218,6 +259,12 @@ try {
             [void]$p.AddWithValue('@operario', (Valor $r.Operario))
             [void]$p.AddWithValue('@capitulo_norma', (Valor $r.CapituloNorma))
             [void]$p.AddWithValue('@analisis_causa_raiz', (Valor $r.AnalisisCausaRaiz))
+            for ($k = 0; $k -lt 5; $k++) {
+                $pq = if ($r.PorQues) { $r.PorQues | Select-Object -Skip $k -First 1 }
+                [void]$p.AddWithValue("@porque_pregunta_$($k + 1)", (Valor $pq.Pregunta))
+                [void]$p.AddWithValue("@porque_respuesta_$($k + 1)", (Valor $pq.Respuesta))
+            }
+            [void]$p.AddWithValue('@causa_raiz', (Valor $r.CausaRaiz))
             [void]$p.Add('@coste_economico', [Data.SqlDbType]::Decimal); $p['@coste_economico'].Value = Valor $r.Coste
             [void]$p.Add('@horas_mano_obra', [Data.SqlDbType]::Decimal); $p['@horas_mano_obra'].Value = Valor $r.Horas
             [void]$p.AddWithValue('@usuario', $UsuarioId)

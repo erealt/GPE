@@ -50,6 +50,9 @@ public record PorQue(string? Pregunta, string? Respuesta)
 // DescripcionCausa y AnalisisCausaRaiz: textos libres de antes de los 5 porqués; ya no se piden.
 // PorQues: siempre 5 (null = todos vacíos). CausaRaiz: uno de los grupos de CausasRaiz.
 // Version: la ROWVERSION leída, para no pisar lo que otro haya guardado.
+// ProveedorId: el proveedor de la lista de proveedores. Con él, Proveedor es su nombre en la lista; sin él,
+// Proveedor es el nombre escrito a mano en las NC antiguas (o null).
+// SeguridadAlimentaria: si la NC de un proveedor afecta a la seguridad alimentaria (null = sin indicar, cuenta como no).
 public record NoConformidad(
     int Id,
     string TipoRegistro,
@@ -74,7 +77,9 @@ public record NoConformidad(
     decimal? HorasManoObra,
     IReadOnlyList<PorQue>? PorQues = null,
     string? CausaRaiz = null,
-    byte[]? Version = null)
+    byte[]? Version = null,
+    int? ProveedorId = null,
+    bool? SeguridadAlimentaria = null)
 {
     public const int NumeroPorQues = 5;
 }
