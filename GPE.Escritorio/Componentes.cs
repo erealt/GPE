@@ -49,9 +49,10 @@ public static class Componentes
         return (scroll, pila);
     }
 
-    public static Control Cabecera(string ruta, string titulo, string subtitulo)
+    // Sin subtítulo, la cabecera es más baja para no dejar hueco
+    public static Control Cabecera(string ruta, string titulo, string? subtitulo = null)
     {
-        var panel = new Panel { Dock = DockStyle.Fill, Height = 115, Margin = new Padding(0, 0, 0, 10) };
+        var panel = new Panel { Dock = DockStyle.Fill, Height = subtitulo == null ? 87 : 115, Margin = new Padding(0, 0, 0, 10) };
 
         var lblSubtitulo = new Label
         {
@@ -78,7 +79,7 @@ public static class Componentes
         };
 
         // El último añadido queda arriba
-        panel.Controls.Add(lblSubtitulo);
+        if (subtitulo != null) panel.Controls.Add(lblSubtitulo);
         panel.Controls.Add(lblTitulo);
         panel.Controls.Add(lblRuta);
         return panel;

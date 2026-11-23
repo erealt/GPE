@@ -14,7 +14,7 @@ public class ModuloInicio : UserControl
         var (scroll, pila) = Componentes.Pagina();
 
         string nombre = Sesion.UsuarioActual?.Nombre.Split(' ')[0] ?? "";
-        pila.Controls.Add(Componentes.Cabecera("INICIO", $"Hola, {nombre}", "¿Qué quieres hacer hoy?"));
+        pila.Controls.Add(Componentes.Cabecera("INICIO", $"Hola, {nombre}"));
 
         var tarjetas = new FlowLayoutPanel
         {
@@ -178,6 +178,18 @@ public class ModuloInicio : UserControl
         try
         {
             return new AguaServicio().ResumenHoy();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+    }
+
+    public static string? ResumenAnalisis()
+    {
+        try
+        {
+            return new AnalisisServicio().Resumen();
         }
         catch (DbException)
         {

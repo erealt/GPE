@@ -199,14 +199,14 @@ public class ProductosProveedor
                     : $"O × D = {ProveedorServicio.OcurrenciaPorDeteccion(x)}";
                 break;
             case ColumnaRiesgo:
-                string? riesgo = ProveedorServicio.RiesgoFraude(p, x);
+                string? riesgo = ProveedorServicio.RiesgoFraude(x);
                 e.Value = riesgo ?? CamposProveedor.SinNota;
                 celda.ToolTipText = riesgo == null
                     ? "Faltan las notas de fraude del producto"
-                    : $"Puntuación = {ProveedorServicio.Puntuacion(p, x)}";
+                    : $"Puntuación = {ProveedorServicio.Puntuacion(x)}";
                 break;
             case ColumnaActuacion:
-                e.Value = ProveedorServicio.Actuacion(ProveedorServicio.RiesgoFraude(p, x)) ?? CamposProveedor.SinNota;
+                e.Value = ProveedorServicio.Actuacion(ProveedorServicio.RiesgoFraude(x)) ?? CamposProveedor.SinNota;
                 break;
         }
     }
@@ -223,7 +223,7 @@ public class ProductosProveedor
             ColumnaEstado => x.Baja ? CamposProveedor.Baja : CamposProveedor.Activo,
             ColumnaMuestreo => ProveedorServicio.FrecuenciaMuestreo(p, x),
             ColumnaVulnerabilidad => ProveedorServicio.RiesgoVulnerabilidad(x),
-            ColumnaRiesgo => ProveedorServicio.RiesgoFraude(p, x),
+            ColumnaRiesgo => ProveedorServicio.RiesgoFraude(x),
             _ => null
         };
         if (texto == null) return;

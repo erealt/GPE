@@ -2,8 +2,11 @@
     Pasa la hoja PRODUCTOS del Excel "CP-RG05 - EVALUACIÓN PROVEEDORES Y FRAUDE" a PROVEEDOR y PROVEEDOR_PRODUCTO.
     Se ejecuta una vez, después de proveedores.sql y proveedor_ensayo_auditoria_rfa.sql.
 
-    En la hoja cada fila es un proveedor con uno de sus productos, y los datos del proveedor (columnas A-N,
-    HISTORIAL y P. SUBCONTRATADO) se repiten en cada fila. Solo se miran las filas de productos activos (las de
+    Se ejecuta después de proveedor_riesgo_por_producto.sql: RELACIÓN, HISTORIAL y P. SUBCONTRATADO son de cada
+    producto (se leen en cada fila, como el resto del riesgo de fraude).
+
+    En la hoja cada fila es un proveedor con uno de sus productos, y los datos del proveedor (columnas A-N)
+    se repiten en cada fila. Solo se miran las filas de productos activos (las de
     productos de baja ya no se actualizan), salvo que todos estén de baja. Cuando no son iguales en esas filas:
     - se guarda el de las filas con la fecha de revisión más reciente (las otras parecen no actualizadas);
       entre ellas, el que más se repite (si empatan, el de la fila más arriba), sin contar las celdas vacías;
@@ -13,9 +16,9 @@
     Las columnas calculadas (EVALUACIÓN, MUESTREO, O*D, RIESGO, PUNTUACIÓN, RIESGO FRAUDE, ACTUACIÓN) no se pasan:
     la app las calcula igual que el Excel.
     IMPACTO DEL PRODUCTO y RELACIÓN copian con fórmula el impacto y el estatus del proveedor, pero en algunas filas
-    se escribió otro valor a mano: ese valor se guarda (PROVEEDOR_PRODUCTO.impacto y PROVEEDOR.relacion) para que
-    las notas salgan como en el Excel. Si la celda tiene la fórmula o está vacía, se guarda el estatus / el impacto
-    del proveedor (en la app ya no hay "igual que...": cada uno tiene su número).
+    se escribió otro valor a mano: ese valor se guarda (PROVEEDOR_PRODUCTO.impacto y .relacion) para que
+    las notas salgan como en el Excel. Si la celda tiene la fórmula o está vacía, se guarda el impacto del proveedor
+    / el estatus de esa fila (en la app ya no hay "igual que...": cada uno tiene su número).
     Lo que no cabe en su columna (una nota con texto, una fecha mal escrita) se guarda en observaciones del producto.
 #>
 param(
@@ -150,19 +153,13 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
     }
     $prov.Baja = if ((Texto (Celda 'Baja')) -eq 'BAJA') { 'BAJA' } else { $null }
     $prov.Tipo = Texto (Celda 'Tipo')
-    foreach ($par in @(@('Impacto', 1, 3), @('Estatus', 0, 3), @('Reclamaciones', 0, 2), @('Historial', 0, 3), @('Subcontratado', 0, 3))) {
+    foreach ($par in @(@('Impacto', 1, 3), @('Estatus', 0, 3), @('Reclamaciones', 0, 2))) {
         $r = Nota (Celda $par[0]) $par[1] $par[2]
         if ($null -eq $r[0] -and $r[1]) { Aviso $fila "$($par[0]) '$($r[1])' no es una nota de $($par[1]) a $($par[2]); se deja vacía." }
         elseif ($r[1]) { Aviso $fila "$($par[0]) '$($r[1])': se guarda $($r[0])." }
         $prov[$par[0]] = if ($null -ne $r[0]) { [string]$r[0] } else { $null }
     }
     foreach ($campo in 'Certificados', 'Ensayo', 'Auditoria', 'Rfa') { $prov[$campo] = TextoOFecha (Celda $campo) }
-
-    # RELACIÓN escrita a mano y distinta del estatus de la fila ("MEDIA (2)" se guarda como 2)
-    $r = Nota (AMano 'Relacion') 0 3
-    if ($null -eq $r[0] -and $r[1]) { Aviso $fila "Relación '$($r[1])' no es una nota de 0 a 3; se deja como el estatus." }
-    elseif ($r[1]) { Aviso $fila "Relación '$($r[1])': se guarda $($r[0])." }
-    $prov.Relacion = if ($null -ne $r[0] -and [string]$r[0] -ne $prov.Estatus) { [string]$r[0] } else { $null }
 
     # Datos del producto
     $prod = [ordered]@{
@@ -189,7 +186,8 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
     foreach ($par in @(@('ControlRecepcion', 1, 3, 'CONTROL RECEPCIÓN'), @('ProdReclamaciones', 0, 2, 'RECLAMACIONES'),
                        @('PHistorial', 0, 3, 'P. HISTORIAL'), @('PMotivacion', 0, 3, 'P. MOTIVACIÓN ECONÓMICA'),
                        @('PFacilidad', 0, 3, 'P. FACILIDAD'), @('DOrigen', 0, 3, 'D. ORIGEN'),
-                       @('DCadena', 0, 3, 'D. CADENA SUMINISTRO'), @('DMedidas', 0, 3, 'D. MEDIDAS CONTROL'))) {
+                       @('DCadena', 0, 3, 'D. CADENA SUMINISTRO'), @('DMedidas', 0, 3, 'D. MEDIDAS CONTROL'),
+                       @('Historial', 0, 3, 'HISTORIAL'), @('Subcontratado', 0, 3, 'P. SUBCONTRATADO'))) {
         $r = Nota (Celda $par[0]) $par[1] $par[2]
         $prod[$par[0]] = $r[0]
         if ($r[1]) { $observaciones.Add("$($par[3]): $($r[1])") }
@@ -198,6 +196,11 @@ for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
     $r = Nota (AMano 'ImpactoProducto') 1 3
     if ($r[1]) { $observaciones.Add("IMPACTO DEL PRODUCTO: $($r[1])") }
     $prod.Impacto = if ($null -ne $r[0] -and [string]$r[0] -ne $prov.Impacto) { $r[0] } else { $null }
+
+    # RELACIÓN escrita a mano ("MEDIA (2)" se guarda como 2); con la fórmula, el estatus de esta fila
+    $r = Nota (AMano 'Relacion') 0 3
+    if ($r[1]) { $observaciones.Add("RELACIÓN: $($r[1])") }
+    $prod.Relacion = if ($null -ne $r[0]) { $r[0] } elseif ($null -ne $prov.Estatus) { [int]$prov.Estatus } else { $null }
 
     $prod.Observaciones = if ($observaciones.Count -gt 0) { $observaciones -join "`n" } else { $null }
 
@@ -211,7 +214,6 @@ $NOMBRES_CAMPO = [ordered]@{
     Nombre = 'Nombre'; FechaAlta = 'Fecha alta'; Baja = 'Baja'; Tipo = 'Tipo'; FechaRevision = 'Fecha revisión'
     Impacto = 'Impacto'; Estatus = 'Estatus'; Reclamaciones = 'Reclamaciones'
     Certificados = 'Certificados'; Ensayo = 'Ensayo trazabilidad'; Auditoria = 'Auditoría'; Rfa = 'RFA'
-    Relacion = 'Relación'; Historial = 'Historial'; Subcontratado = 'P. subcontratado'
 }
 
 # Valores de un dato en esas filas: sin las celdas vacías, salvo en BAJA (vacío = no está de baja)
@@ -311,13 +313,12 @@ try {
             $cmd = New-Object System.Data.SqlClient.SqlCommand(@'
 INSERT INTO PROVEEDOR (numero, nombre, fecha_alta, baja, tipo, fecha_revision, impacto, estatus, reclamaciones,
     certificados, ensayo_fecha, ensayo_no_aplica, ensayo_motivo, auditoria_fecha, auditoria_no_aplica, auditoria_motivo,
-    rfa_anio, relacion, historial, subcontratado, revisar, creado_por)
+    rfa_anio, revisar, creado_por)
 VALUES (@numero, @nombre, @alta, @baja, @tipo, @revision, @impacto, @estatus, @reclamaciones,
     @certificados, @ensayoFecha, @ensayoNoAplica, @ensayoMotivo, @auditoriaFecha, @auditoriaNoAplica, @auditoriaMotivo,
-    @rfa, @relacion, @historial, @subcontratado, @revisar, @usuario);
+    @rfa, @revisar, @usuario);
 SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tiene trigger
 '@, $bd, $transaccion)
-            if ($null -eq $d.Relacion) { $d.Relacion = $d.Estatus }   # con la fórmula: el estatus
             $p = $cmd.Parameters
             Valor $p '@numero' $pr.Numero $S::Int
             Valor $p '@nombre' $d.Nombre $S::NVarChar
@@ -325,8 +326,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tie
             Valor $p '@baja' ([bool]$d.Baja) $S::Bit
             Valor $p '@tipo' $d.Tipo $S::NVarChar
             Valor $p '@revision' $(if ($d.FechaRevision) { [DateTime]$d.FechaRevision }) $S::Date
-            foreach ($par in @(@('@impacto', 'Impacto'), @('@estatus', 'Estatus'), @('@reclamaciones', 'Reclamaciones'),
-                               @('@relacion', 'Relacion'), @('@historial', 'Historial'), @('@subcontratado', 'Subcontratado'))) {
+            foreach ($par in @(@('@impacto', 'Impacto'), @('@estatus', 'Estatus'), @('@reclamaciones', 'Reclamaciones'))) {
                 Valor $p $par[0] $(if ($null -ne $d[$par[1]]) { [byte]$d[$par[1]] }) $S::TinyInt
             }
             Valor $p '@certificados' $d.Certificados $S::NVarChar
@@ -356,11 +356,12 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);   -- OUTPUT no se puede usar: la tabla tie
 INSERT INTO PROVEEDOR_PRODUCTO (proveedor_id, codigo, descripcion, tipo_producto, fecha_alta, baja, alergenos, posibles_alergenos,
     fecha_revision, ficha_tecnica, analisis_quimicos, analisis_micro, analisis_alergenos,
     eurochoc_fecha, eurochoc_alcance, eurochoc_resultado, impacto, control_recepcion, reclamaciones, parametro,
-    p_historial, p_motivacion, p_facilidad, d_origen, d_cadena, d_medidas, medidas_preventivas, observaciones, creado_por)
+    p_historial, p_motivacion, p_facilidad, d_origen, d_cadena, d_medidas, relacion, historial, subcontratado,
+    medidas_preventivas, observaciones, creado_por)
 VALUES (@proveedor, @codigo, @descripcion, @tipo, @alta, @baja, @alergenos, @posibles,
     @revision, @ft, @quimicos, @micro, @analergenos,
     @efecha, @ealcance, @eresultado, @impacto, @control, @reclamaciones, @parametro,
-    @ph, @pm, @pf, @do, @dc, @dm, @medidas, @observaciones, @usuario);
+    @ph, @pm, @pf, @do, @dc, @dm, @relacion, @historial, @subcontratado, @medidas, @observaciones, @usuario);
 '@, $bd, $transaccion)
                 $p = $cmd.Parameters
                 Valor $p '@proveedor' $id $S::Int
@@ -381,7 +382,8 @@ VALUES (@proveedor, @codigo, @descripcion, @tipo, @alta, @baja, @alergenos, @pos
                 Valor $p '@eresultado' $x.EurochocResultado $S::NVarChar
                 foreach ($par in @(@('@impacto', 'Impacto'), @('@control', 'ControlRecepcion'), @('@reclamaciones', 'ProdReclamaciones'),
                                    @('@ph', 'PHistorial'), @('@pm', 'PMotivacion'), @('@pf', 'PFacilidad'),
-                                   @('@do', 'DOrigen'), @('@dc', 'DCadena'), @('@dm', 'DMedidas'))) {
+                                   @('@do', 'DOrigen'), @('@dc', 'DCadena'), @('@dm', 'DMedidas'),
+                                   @('@relacion', 'Relacion'), @('@historial', 'Historial'), @('@subcontratado', 'Subcontratado'))) {
                     Valor $p $par[0] $(if ($null -ne $x[$par[1]]) { [byte]$x[$par[1]] }) $S::TinyInt
                 }
                 Valor $p '@parametro' $x.Parametro $S::NVarChar

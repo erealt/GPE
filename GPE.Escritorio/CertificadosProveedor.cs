@@ -4,12 +4,15 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Tarjeta "Certificados" de la ficha del proveedor: cada certificado con su fecha de caducidad y una etiqueta
+// Tarjeta de los certificados (columna CERTIFICADOS del Excel) en la ficha del proveedor: cada certificado con su fecha de caducidad y una etiqueta
 // verde (vigente), naranja (caduca en 30 días o menos) o roja (caducado). Se añaden y se cambian en
 // FormCertificadoProveedor, que guarda al momento.
 public class CertificadosProveedor
 {
     private const int ColumnaEstado = 2;
+    // En el Excel, CERTIFICADOS va en el segundo apartado "DATOS SOBRE PROVEEDOR" (columnas K-N).
+    // FormProveedor añade debajo ensayo trazabilidad, auditoría y RFA.
+    private const string Titulo = "Datos sobre proveedor";
 
     private readonly ProveedorServicio servicio = new();
     private readonly Proveedor proveedor;
@@ -24,7 +27,7 @@ public class CertificadosProveedor
         this.proveedor = proveedor;
         // Un certificado necesita el proveedor guardado
         Tarjeta = proveedor.Id == 0
-            ? Componentes.Tarjeta("Certificados", "Guarda el proveedor para poder añadirle sus certificados.")
+            ? Componentes.Tarjeta(Titulo, "Guarda el proveedor para poder añadirle sus certificados.")
             : CrearTarjeta();
     }
 
@@ -35,7 +38,7 @@ public class CertificadosProveedor
         var btnAnadir = Tema.BotonPrincipal("+  Añadir certificado", 210);
         btnAnadir.Margin = Padding.Empty;
         btnAnadir.Click += (s, e) => Abrir(null);
-        var tarjeta = Componentes.Tarjeta("Certificados", "", btnAnadir, lblSubtitulo);
+        var tarjeta = Componentes.Tarjeta(Titulo, "", btnAnadir, lblSubtitulo);
 
         ConfigurarGrid();
         try

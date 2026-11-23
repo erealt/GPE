@@ -4,8 +4,8 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Ficha de un producto de un proveedor, nuevo o ya guardado. El muestreo y el riesgo de fraude se calculan
-// con las notas del producto y las del proveedor (las que hay escritas en su ficha).
+// Ficha de un producto de un proveedor, nuevo o ya guardado. El muestreo se calcula con las notas del producto y
+// el estatus del proveedor; el riesgo de fraude, solo con las del producto (como en cada fila del Excel).
 public class FormProductoProveedor : Form
 {
     private readonly ProveedorServicio servicio = new();
@@ -35,6 +35,7 @@ public class FormProductoProveedor : Form
     private readonly ComboBox cmbControl = CamposProveedor.ComboNota(1, 3);
     private readonly ComboBox cmbReclamaciones = CamposProveedor.ComboNota(0, 2);
     private readonly TextBox txtParametro = CamposProveedor.Multilinea();
+    private readonly Label lblEstatusProducto = new();
     private readonly Label lblMuestreo = new();
     private readonly Label lblFaltaMuestreo = new();
     private readonly Label lblAlcance = new();
@@ -45,6 +46,9 @@ public class FormProductoProveedor : Form
     private readonly ComboBox cmbDOrigen = CamposProveedor.ComboNota(0, 3);
     private readonly ComboBox cmbDCadena = CamposProveedor.ComboNota(0, 3);
     private readonly ComboBox cmbDMedidas = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbRelacion = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbHistorial = CamposProveedor.ComboNota(0, 3);
+    private readonly ComboBox cmbSubcontratado = CamposProveedor.ComboNota(0, 3);
     private readonly TextBox txtMedidas = CamposProveedor.Multilinea();
     private readonly Label lblOxD = new();
     private readonly Label lblVulnerabilidad = new();
@@ -64,7 +68,9 @@ public class FormProductoProveedor : Form
         bool nuevo = producto == null;
         original = producto ?? new ProductoProveedor(0, proveedor.Id, null, null, null, DateTime.Today, false, null, null,
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null) with { Impacto = proveedor.Impacto };   // nuevo: empieza con el impacto del proveedor
+            null, null, null, null, null, null)
+            // Nuevo: empieza con el impacto del proveedor y, de relación, su estatus (como la fórmula del Excel)
+            with { Impacto = proveedor.Impacto, Relacion = proveedor.Estatus };
         cmbImpacto = CamposProveedor.ComboNota(1, 3);
         cmbTipo = CamposProveedor.ComboTipo(TipoProductoProveedor.Todos, original.TipoProducto);
 
@@ -85,9 +91,12 @@ public class FormProductoProveedor : Form
                 string.Join("  ·  ", new[] { original.Codigo, original.TipoProducto, original.Baja ? CamposProveedor.DeBaja : CamposProveedor.Activo }.OfType<string>())));
 
         pila.Controls.Add(CamposProveedor.Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos));
-        pila.Controls.Add(CamposProveedor.Marcada(TarjetaDocumentacion(), EstiloProveedores.RayaProductos));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaEurochoc(), EstiloProveedores.RayaProductos));
         pila.Controls.Add(CamposProveedor.Marcada(TarjetaMuestreo(), EstiloProveedores.RayaEvaluacion));
         pila.Controls.Add(CamposProveedor.Marcada(TarjetaFraude(), EstiloProveedores.RayaRiesgo));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaRiesgoProveedor(), EstiloProveedores.RayaRiesgo));
+        pila.Controls.Add(CamposProveedor.Marcada(TarjetaMitigacion(), EstiloProveedores.RayaRiesgo));
+        // No es un apartado del Excel: guarda lo que al pasar el Excel no cabía en su columna
         var observaciones = Componentes.Tarjeta("Observaciones");
         txtObservaciones.Dock = DockStyle.Top;
         txtObservaciones.Height = 80;
@@ -121,73 +130,104 @@ public class FormProductoProveedor : Form
 
     // Tarjetas
 
+    // Cada tarjeta es un apartado de la hoja PRODUCTOS del Excel (fila 1), con sus columnas y en su orden
+
+    // DATOS SOBRE PRODUCTOS (columnas O-Z)
     private Control TarjetaDatos()
     {
-        var tarjeta = Componentes.Tarjeta("Datos del producto");
+        var tarjeta = Componentes.Tarjeta("Datos sobre productos");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Código", txtCodigo));
         CamposProveedor.Ancho(rejilla, campos.Campo("Descripción", txtDescripcion), 2);
-        rejilla.Controls.Add(campos.Campo("Estado", cmbEstado));
         rejilla.Controls.Add(campos.Campo("Tipo producto", cmbTipo));
-        rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
-        rejilla.Controls.Add(campos.Campo("Fecha revisión", dtpRevision));
-        rejilla.Controls.Add(CamposProveedor.Hueco());
+        rejilla.Controls.Add(campos.Campo("Alta", dtpAlta));
+        rejilla.Controls.Add(campos.Campo("Estado producto", cmbEstado));
         CamposProveedor.Ancho(rejilla, campos.Campo("Alérgenos", txtAlergenos), 2);
         CamposProveedor.Ancho(rejilla, campos.Campo("Posibles alérgenos", txtPosibles), 2);
+        rejilla.Controls.Add(campos.Campo("Revisión", dtpRevision));
+        rejilla.Controls.Add(CamposProveedor.Hueco());
+        rejilla.Controls.Add(campos.Campo("FT (año)", txtFicha));
+        rejilla.Controls.Add(campos.Campo("A. químicos / Declaración conformidad", txtQuimicos));
+        rejilla.Controls.Add(campos.Campo("A. micro. / Ensayo migración", txtMicro));
+        rejilla.Controls.Add(campos.Campo("A. alérgenos / Formaldehído", txtAnalisisAlergenos));
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
 
-    private Control TarjetaDocumentacion()
+    // ANALISIS DE EUROCHOC (columnas AA-AC)
+    private Control TarjetaEurochoc()
     {
-        var tarjeta = Componentes.Tarjeta("Documentación y análisis",
-            "Se puede escribir una fecha, un año o una explicación.");
+        var tarjeta = Componentes.Tarjeta("Análisis de Eurochoc");
         var rejilla = Componentes.Rejilla(4);
-        rejilla.Controls.Add(campos.Campo("Año ficha técnica", txtFicha));
-        rejilla.Controls.Add(campos.Campo("Análisis químicos / Decl. conformidad", txtQuimicos));
-        rejilla.Controls.Add(campos.Campo("Análisis micro / Ensayo migración", txtMicro));
-        rejilla.Controls.Add(campos.Campo("Análisis alérgenos / Formaldehído", txtAnalisisAlergenos));
-        rejilla.Controls.Add(campos.Campo("Fecha análisis Eurochoc", dtpEurochoc));
-        CamposProveedor.Ancho(rejilla, campos.Campo("Alcance Eurochoc", txtEurochocAlcance), 3);
-        CamposProveedor.Ancho(rejilla, campos.Campo("Resultado Eurochoc", txtEurochocResultado), 4);
+        rejilla.Controls.Add(campos.Campo("Fecha", dtpEurochoc));
+        CamposProveedor.Ancho(rejilla, campos.Campo("Alcance", txtEurochocAlcance), 3);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Resultado", txtEurochocResultado), 4);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
 
+    // EVALUACIÓN DE LA FRECUENCIA Y EL ALCANCE DEL MUESTREO... (columnas AD-AJ)
     private Control TarjetaMuestreo()
     {
-        var tarjeta = Componentes.Tarjeta("Frecuencia de muestreo",
-            "Impacto + estatus del proveedor + control recepción + reclamaciones: 1-3 A, 4-6 B, 7-9 C y 10-12 D.");
+        var tarjeta = Componentes.Tarjeta(
+            "Evaluación de la frecuencia y el alcance del muestreo de verificación de MMPP, M. Aux. y productos terminados",
+            "Frecuencia muestreo: impacto + estatus + control recepción + reclamaciones; 1-3 A, 4-6 B, 7-9 C y 10-12 D.");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Impacto del producto", cmbImpacto));
+        // En el Excel es una fórmula: el estatus del proveedor
+        rejilla.Controls.Add(CamposProveedor.DatoTexto("Estatus del producto", lblEstatusProducto));
         rejilla.Controls.Add(campos.Campo("Control recepción", cmbControl));
         rejilla.Controls.Add(campos.Campo("Reclamaciones", cmbReclamaciones));
         // Las columnas calculadas del Excel, con su nombre. No se escriben: salen de las notas.
         rejilla.Controls.Add(CamposProveedor.DatoNota("Frecuencia muestreo", lblMuestreo, lblFaltaMuestreo));
-        CamposProveedor.Ancho(rejilla, CamposProveedor.DatoTexto("Alcance muestreo", lblAlcance, 900), 4);
+        CamposProveedor.Ancho(rejilla, CamposProveedor.DatoTexto("Alcance muestreo", lblAlcance, 900), 3);
         CamposProveedor.Ancho(rejilla, campos.Campo("Parámetro", txtParametro), 4);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
 
+    // ANÁLISIS DE LA VULNERABILIDAD - FRAUDE ALIMENTARIO (columnas AK-AR)
     private Control TarjetaFraude()
     {
-        var tarjeta = Componentes.Tarjeta("Vulnerabilidad al fraude",
-            "O × D: la ocurrencia (P.) más alta por la detección (D.) más alta. "
-            + "Puntuación: O × D por el riesgo del proveedor; 1-6 BAJO, 7-12 MEDIO y 13-27 ALTO.");
+        var tarjeta = Componentes.Tarjeta("Análisis de la vulnerabilidad - Fraude alimentario",
+            "O * D: la ocurrencia (P.) más alta por la detección (D.) más alta.");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("P. historial", cmbPHistorial));
         rejilla.Controls.Add(campos.Campo("P. motivación económica", cmbPMotivacion));
         rejilla.Controls.Add(campos.Campo("P. facilidad", cmbPFacilidad));
-        rejilla.Controls.Add(CamposProveedor.DatoTexto("O × D", lblOxD));
+        rejilla.Controls.Add(CamposProveedor.DatoTexto("O * D", lblOxD));
         rejilla.Controls.Add(campos.Campo("D. origen", cmbDOrigen));
         rejilla.Controls.Add(campos.Campo("D. cadena suministro", cmbDCadena));
         rejilla.Controls.Add(campos.Campo("D. medidas control", cmbDMedidas));
-        rejilla.Controls.Add(CamposProveedor.DatoNota("Riesgo (vulnerabilidad)", lblVulnerabilidad));
+        rejilla.Controls.Add(CamposProveedor.DatoNota("Riesgo", lblVulnerabilidad));
+        tarjeta.Controls.Add(rejilla);
+        return tarjeta;
+    }
+
+    // RIESGO DEL PROVEEDOR PARA COMETER FRAUDE (columnas AS-AW)
+    private Control TarjetaRiesgoProveedor()
+    {
+        var tarjeta = Componentes.Tarjeta("Riesgo del proveedor para cometer fraude",
+            "Puntuación: O * D por el valor más alto de los tres; 1-6 BAJO, 7-12 MEDIO y 13-27 ALTO.");
+        var rejilla = Componentes.Rejilla(4);
+        rejilla.Controls.Add(campos.Campo("Relación", cmbRelacion));
+        rejilla.Controls.Add(campos.Campo("Historial", cmbHistorial));
+        rejilla.Controls.Add(campos.Campo("P. subcontratado", cmbSubcontratado));
+        rejilla.Controls.Add(CamposProveedor.Hueco());
         rejilla.Controls.Add(CamposProveedor.DatoTexto("Puntuación", lblPuntuacion));
         rejilla.Controls.Add(CamposProveedor.DatoNota("Riesgo fraude", lblRiesgo, lblFaltaRiesgo));
-        CamposProveedor.Ancho(rejilla, CamposProveedor.DatoTexto("Actuación control", lblActuacion, 600), 2);
-        CamposProveedor.Ancho(rejilla, campos.Campo("Medidas preventivas", txtMedidas), 4);
+        tarjeta.Controls.Add(rejilla);
+        return tarjeta;
+    }
+
+    // PLAN DE MITIGACIÓN (columnas AX-AY)
+    private Control TarjetaMitigacion()
+    {
+        var tarjeta = Componentes.Tarjeta("Plan de mitigación",
+            "Actuación control: sale del riesgo fraude (ALTO, dos lotes aleatorios al año; MEDIO, un lote al año; BAJO, sin análisis).");
+        var rejilla = Componentes.Rejilla(4);
+        CamposProveedor.Ancho(rejilla, CamposProveedor.DatoTexto("Actuación control", lblActuacion, 900), 4);
+        CamposProveedor.Ancho(rejilla, campos.Campo("Medidas preventivas de control", txtMedidas), 4);
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
@@ -221,6 +261,9 @@ public class FormProductoProveedor : Form
         CamposProveedor.PonerNota(cmbDOrigen, x.DOrigen);
         CamposProveedor.PonerNota(cmbDCadena, x.DCadena);
         CamposProveedor.PonerNota(cmbDMedidas, x.DMedidas);
+        CamposProveedor.PonerNota(cmbRelacion, x.Relacion);
+        CamposProveedor.PonerNota(cmbHistorial, x.Historial);
+        CamposProveedor.PonerNota(cmbSubcontratado, x.Subcontratado);
         txtMedidas.Text = x.MedidasPreventivas ?? "";
         txtObservaciones.Text = x.Observaciones ?? "";
     }
@@ -252,6 +295,9 @@ public class FormProductoProveedor : Form
         DOrigen = CamposProveedor.LeerNota(cmbDOrigen),
         DCadena = CamposProveedor.LeerNota(cmbDCadena),
         DMedidas = CamposProveedor.LeerNota(cmbDMedidas),
+        Relacion = CamposProveedor.LeerNota(cmbRelacion),
+        Historial = CamposProveedor.LeerNota(cmbHistorial),
+        Subcontratado = CamposProveedor.LeerNota(cmbSubcontratado),
         MedidasPreventivas = txtMedidas.Text,
         Observaciones = txtObservaciones.Text
     };
@@ -260,6 +306,7 @@ public class FormProductoProveedor : Form
     private void ActualizarNotas()
     {
         var x = Leer();
+        lblEstatusProducto.Text = proveedor.Estatus?.ToString() ?? CamposProveedor.SinNota;
 
         string? muestreo = ProveedorServicio.FrecuenciaMuestreo(proveedor, x);
         CamposProveedor.PintarNota(lblMuestreo, muestreo);
@@ -269,11 +316,11 @@ public class FormProductoProveedor : Form
 
         lblOxD.Text = ProveedorServicio.OcurrenciaPorDeteccion(x).ToString();
         CamposProveedor.PintarNota(lblVulnerabilidad, ProveedorServicio.RiesgoVulnerabilidad(x));
-        lblPuntuacion.Text = ProveedorServicio.Puntuacion(proveedor, x).ToString();
+        lblPuntuacion.Text = ProveedorServicio.Puntuacion(x).ToString();
 
-        string? riesgo = ProveedorServicio.RiesgoFraude(proveedor, x);
+        string? riesgo = ProveedorServicio.RiesgoFraude(x);
         CamposProveedor.PintarNota(lblRiesgo, riesgo);
-        lblFaltaRiesgo.Text = riesgo == null ? "Faltan las notas de ocurrencia y detección, o el riesgo del proveedor" : "";
+        lblFaltaRiesgo.Text = riesgo == null ? "Faltan las notas de ocurrencia y detección, o la relación, el historial o el P. subcontratado" : "";
         lblFaltaRiesgo.Visible = riesgo == null;
         lblActuacion.Text = ProveedorServicio.Actuacion(riesgo) ?? CamposProveedor.SinNota;
     }

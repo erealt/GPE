@@ -4,8 +4,9 @@ using GPE.Logica;
 
 namespace GPE.Escritorio;
 
-// Ficha de un proveedor, nuevo o ya guardado. Pestaña "Datos del proveedor": sus datos, su evaluación y su riesgo
-// de fraude; las notas se recalculan al cambiar algo. Pestaña "Productos": ProductosProveedor.
+// Ficha de un proveedor, nuevo o ya guardado. Pestaña "Datos del proveedor": sus datos, evaluación y certificados;
+// la evaluación se recalcula al cambiar algo. Pestaña "Productos": ProductosProveedor (el riesgo de fraude es de
+// cada producto).
 public class FormProveedor : Form
 {
     private readonly ProveedorServicio servicio = new();
@@ -33,9 +34,6 @@ public class FormProveedor : Form
     private readonly ComboBox cmbEstatus = CamposProveedor.ComboNota(0, 3);
     private readonly Label lblReclamaciones = new();
     private byte notaReclamaciones;   // sale de sus NC; con un proveedor nuevo, 0
-    private readonly ComboBox cmbRelacion = CamposProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbHistorial = CamposProveedor.ComboNota(0, 3);
-    private readonly ComboBox cmbSubcontratado = CamposProveedor.ComboNota(0, 3);
 
     private readonly Label lblEvaluacion = new();
 
@@ -54,7 +52,7 @@ public class FormProveedor : Form
     {
         bool nuevo = proveedor == null;
         original = proveedor?.Proveedor ?? new Proveedor(0, SiguienteNumero(), "", DateTime.Today, false, null, null,
-            null, null, null, null, null, false, null, null, false, null, null, null, null, null, null, null);
+            null, null, null, null, null, false, null, null, false, null, null, null, null);
         actual = original;
         notaReclamaciones = original.Reclamaciones ?? 0;   // PrepararNc la vuelve a sacar con sus NC
         cmbTipo = CamposProveedor.ComboTipo(TipoProveedor.Todos, original.Tipo);
@@ -90,9 +88,8 @@ public class FormProveedor : Form
         var tarjetasDatos = new Control[]
         {
             CamposProveedor.Marcada(TarjetaDatos(), EstiloProveedores.RayaDatos),
-            CamposProveedor.Marcada(certificados.Tarjeta, EstiloProveedores.RayaDatos),
             CamposProveedor.Marcada(TarjetaEvaluacion(), EstiloProveedores.RayaEvaluacion),
-            CamposProveedor.Marcada(TarjetaRiesgo(), EstiloProveedores.RayaRiesgo)
+            CamposProveedor.Marcada(TarjetaCertificados(), EstiloProveedores.RayaDatos)
         };
         var tarjetaProductos = CamposProveedor.Marcada(productos.Tarjeta, EstiloProveedores.RayaProductos);
         pila.Controls.Add(CrearPestanas(tarjetasDatos, tarjetaProductos, scroll));
@@ -248,24 +245,35 @@ public class FormProveedor : Form
 
     // Tarjetas con los campos
 
+    // Cada tarjeta es un apartado de la hoja PRODUCTOS del Excel (fila 1), con sus columnas y en su orden
+
+    // DATOS SOBRE PROVEEDOR (columnas A-F)
     private Control TarjetaDatos()
     {
-        var tarjeta = Componentes.Tarjeta("Datos del proveedor");
+        var tarjeta = Componentes.Tarjeta("Datos sobre proveedor");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Nº", txtNumero));
         CamposProveedor.Ancho(rejilla, campos.Campo("Nombre", txtNombre), 2);
+        rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
         rejilla.Controls.Add(campos.Campo("Estado", cmbEstado));
         rejilla.Controls.Add(campos.Campo("Tipo", cmbTipo));
-        rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
         rejilla.Controls.Add(campos.Campo("Fecha revisión", dtpRevision));
-        rejilla.Controls.Add(CamposProveedor.Hueco());
+        tarjeta.Controls.Add(rejilla);
+        return tarjeta;
+    }
+
+    // DATOS SOBRE PROVEEDOR (columnas K-N): debajo de los certificados, ensayo trazabilidad, auditoría y RFA
+    private Control TarjetaCertificados()
+    {
+        var rejilla = Componentes.Rejilla(4);
+        rejilla.Margin = new Padding(0, 20, 0, 0);
         rejilla.Controls.Add(campos.Campo("Ensayo trazabilidad", dtpEnsayo,
             NoAplica(dtpEnsayo, chkEnsayoNoAplica, txtEnsayoMotivo)));
         rejilla.Controls.Add(campos.Campo("Auditoría", dtpAuditoria,
             NoAplica(dtpAuditoria, chkAuditoriaNoAplica, txtAuditoriaMotivo)));
-        rejilla.Controls.Add(campos.Campo("RFA (año)", txtRfa));
-        tarjeta.Controls.Add(rejilla);
-        return tarjeta;
+        rejilla.Controls.Add(campos.Campo("RFA", txtRfa));
+        certificados.Tarjeta.Controls.Add(rejilla);
+        return certificados.Tarjeta;
     }
 
     // Debajo de la fecha: casilla "No aplica" y, si se marca, el motivo. Con "No aplica" no se puede poner fecha.
@@ -292,10 +300,10 @@ public class FormProveedor : Form
         return panel;
     }
 
-    // Evaluación de frecuencia de revisión del proveedor
+    // EVALUACIÓN DE FRECUENCIA DE REVISIÓN DE PROVEEDORES (columnas G-J)
     private Control TarjetaEvaluacion()
     {
-        var tarjeta = Componentes.Tarjeta("Evaluación del proveedor",
+        var tarjeta = Componentes.Tarjeta("Evaluación de frecuencia de revisión de proveedores",
             "Impacto + estatus + reclamaciones: de 1 a 3 es A, de 4 a 6 es B y de 7 a 9 es C.");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Impacto", cmbImpacto));
@@ -312,19 +320,6 @@ public class FormProveedor : Form
         dato.Controls.Add(lblEvaluacion);
         rejilla.Controls.Add(dato);
 
-        tarjeta.Controls.Add(rejilla);
-        return tarjeta;
-    }
-
-    // Riesgo del proveedor para cometer fraude: multiplica el riesgo de cada producto
-    private Control TarjetaRiesgo()
-    {
-        var tarjeta = Componentes.Tarjeta("Riesgo del proveedor para cometer fraude",
-            "El valor más alto de los tres multiplica el O × D de cada producto para sacar su riesgo de fraude.");
-        var rejilla = Componentes.Rejilla(4);
-        rejilla.Controls.Add(campos.Campo("Relación", cmbRelacion));
-        rejilla.Controls.Add(campos.Campo("Historial", cmbHistorial));
-        rejilla.Controls.Add(campos.Campo("P. subcontratado", cmbSubcontratado));
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
     }
@@ -346,9 +341,6 @@ public class FormProveedor : Form
         txtRfa.Text = p.RfaAnio?.ToString() ?? "";
         CamposProveedor.PonerNota(cmbImpacto, p.Impacto);
         CamposProveedor.PonerNota(cmbEstatus, p.Estatus);
-        CamposProveedor.PonerNota(cmbRelacion, p.Relacion);
-        CamposProveedor.PonerNota(cmbHistorial, p.Historial);
-        CamposProveedor.PonerNota(cmbSubcontratado, p.Subcontratado);
     }
 
     // Lo que hay escrito. El Nº y el año de RFA, si no son un número, quedan vacíos (Guardar lo marca como error).
@@ -369,10 +361,7 @@ public class FormProveedor : Form
         RfaAnio = short.TryParse(txtRfa.Text.Trim(), out short anio) ? anio : null,
         Impacto = CamposProveedor.LeerNota(cmbImpacto),
         Estatus = CamposProveedor.LeerNota(cmbEstatus),
-        Reclamaciones = notaReclamaciones,
-        Relacion = CamposProveedor.LeerNota(cmbRelacion),
-        Historial = CamposProveedor.LeerNota(cmbHistorial),
-        Subcontratado = CamposProveedor.LeerNota(cmbSubcontratado)
+        Reclamaciones = notaReclamaciones
     };
 
     // Evaluación, recuadros de arriba y notas de los productos con lo que hay escrito

@@ -26,6 +26,7 @@ CREATE TABLE PROVEEDOR (
     rfa NVARCHAR(500) NULL,
     -- RELACIÓN: en el Excel es el estatus, salvo en los proveedores donde se escribió otro valor a mano.
     -- proveedor_relacion_impacto.sql rellena las vacías con el estatus: ya no hay "igual que el estatus".
+    -- proveedor_riesgo_por_producto.sql pasa relacion, historial y subcontratado a PROVEEDOR_PRODUCTO.
     relacion TINYINT NULL,
     historial TINYINT NULL,
     subcontratado TINYINT NULL,
