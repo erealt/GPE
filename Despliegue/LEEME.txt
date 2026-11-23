@@ -25,13 +25,13 @@ A. EN EL ORDENADOR DE DESARROLLO
 A1. Tener en main todo lo que se va a probar (la rama web juntada en main) y sin cambios
     a medias.
 
-A2. Saber el nombre del servidor. En el servidor: botón Inicio, escribir "Acerca de", y mirar
-    "Nombre del dispositivo". Tiene que ser ese mismo nombre, no la IP: la aplicación de
-    escritorio se instala y se actualiza desde \\ESE-NOMBRE\GPE.
+A2. El servidor es servereurochoc (el mismo donde ya está la web del DeCA de prueba).
+    Se usa el nombre, no la IP: la aplicación de escritorio se instala y se actualiza
+    desde \\servereurochoc\GPE.
 
-A3. Preparar el paquete (PowerShell normal, en la carpeta del proyecto), cambiando el nombre:
+A3. Preparar el paquete (PowerShell normal, en la carpeta del proyecto):
 
-      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor NOMBRE-DEL-SERVIDOR
+      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor servereurochoc
 
     Tarda unos minutos. Termina con "Paquete listo en ...\Despliegue\paquete".
     Hace: publica la web y la tarea, hace una copia de miGPE, crea la contraseña del usuario
@@ -67,20 +67,28 @@ B1. SQL Server
 B2. Ejecutar el script
     1. Abrir PowerShell como administrador (botón Inicio, escribir PowerShell, clic derecho,
        Ejecutar como administrador).
-    2. Escribir (cambiando la carpeta si se copió en otro sitio):
+    2. LA PRIMERA VEZ escribir (cambiando la carpeta si se copió en otro sitio):
 
          cd C:\Instalacion-GPE
-         powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1
+         powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -ReemplazarBaseDatos
+
+       -ReemplazarBaseDatos cambia la base GPE del DeCA de prueba que ya hay en servereurochoc
+       por la copia de miGPE. Antes guarda la que había (GPE-antes-FECHA.bak, en la carpeta de
+       copias de SQL Server).
+
+       En las actualizaciones (apartado D), SIN -ReemplazarBaseDatos: si se pone, se pierde
+       lo que haya hecho calidad.
 
     3. Va diciendo lo que hace. Pregunta el usuario y la contraseña de aplicación de WordPress
        (la contraseña no se ve al escribirla; se puede pegar con clic derecho).
 
-    La primera vez se parará en el paso 4 diciendo que falta el Hosting Bundle de .NET 10:
+    En servereurochoc ya debería estar el Hosting Bundle (lo instaló la web del DeCA). Si aun
+    así se para en el paso 4 diciendo que falta el Hosting Bundle de .NET 10:
       a. Descargarlo de https://dotnet.microsoft.com/download/dotnet/10.0
          (columna "ASP.NET Core Runtime", enlace "Hosting Bundle" de Windows).
       b. Instalarlo (doble clic, Siguiente).
-      c. Cerrar PowerShell, abrir otro como administrador y volver a ejecutar el script.
-         Lo que ya hizo (base de datos, SQL Server) no se repite.
+      c. Cerrar PowerShell, abrir otro como administrador y volver a ejecutar el script
+         SIN -ReemplazarBaseDatos (la base ya se cambió la primera vez).
 
     Al terminar dice la dirección de la web y la de la aplicación.
 
@@ -174,7 +182,8 @@ QUÉ DEJA INSTALADO
 
 - Base de datos GPE en SQL Server (puerto 1433), con el usuario de SQL gpe_app (el que usa la
   aplicación de escritorio) y el permiso de la web (IIS APPPOOL\GPE).
-- La web en C:\GPE\Web, sitio "GPE Web" de IIS (puerto 80).
+- La web en C:\GPE\Web, sitio "GPE Web" de IIS (puerto 80). Si estaba el sitio "GPE DeCA" de
+  la primera instalación, se le cambia el nombre.
 - La aplicación de escritorio en C:\GPE\Escritorio, compartida como \\SERVIDOR\GPE (solo lectura).
 - Las copias de los PDF del DeCA en C:\GPE\DeCA.
 - GPE.Avisos en C:\GPE\Avisos y la tarea programada "GPE - Borrado DeCA", cada día a las 3:00.

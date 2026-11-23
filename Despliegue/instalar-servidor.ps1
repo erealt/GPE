@@ -6,12 +6,14 @@
 # y la base de datos que ya existe NO se toca.
 #
 # Opcionales:
+#   -ReemplazarBaseDatos       la base GPE que ya hay se guarda en una copia y se cambia por la del paquete
 #   -InstanciaSql SQLEXPRESS   solo si en el servidor hay más de una instancia de SQL Server
 #   -UsuarioWeb 1              id del usuario a cuyo nombre se guardan los DeCA hechos desde la web
 #   -Puerto 80                 puerto de la web
 #   -Carpeta C:\GPE            dónde se instala todo
 
 param(
+    [switch]$ReemplazarBaseDatos,
     [string]$InstanciaSql = "",
     [int]$UsuarioWeb = 1,
     [int]$Puerto = 80,
@@ -112,8 +114,22 @@ Write-Host "SQL Server listo (puerto 1433 abierto en el cortafuegos)."
 # ---------- 2. Base de datos ----------
 
 Paso "2. Base de datos $base"
-if (-not ((Sql $sql "SELECT DB_ID('$base')") -is [DBNull])) {
-    Write-Host "Ya existe: no se toca (se conservan los datos de las pruebas)."
+$existe = -not ((Sql $sql "SELECT DB_ID('$base')") -is [DBNull])
+if ($existe -and $ReemplazarBaseDatos) {
+    # Se comprueba antes de quitar nada que este SQL Server puede abrir la copia
+    if ((Sql $sql "SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS int)") -lt 17) {
+        throw "Este SQL Server es más antiguo que SQL Server 2025 y no puede abrir la copia. No se ha cambiado nada. Mira 'SI ALGO FALLA' en LEEME.txt."
+    }
+    # Antes de cambiarla se guarda la que había, por si hace falta recuperar algo
+    $carpetaCopias = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(400))"
+    $anterior = Join-Path $carpetaCopias ("GPE-antes-" + (Get-Date -Format "yyyyMMdd-HHmm") + ".bak")
+    Write-Host "Guardando la base $base que había en $anterior ..."
+    [void](Sql $sql "BACKUP DATABASE [$base] TO DISK = N'$anterior' WITH COPY_ONLY, INIT, CHECKSUM")
+    [void](Sql $sql "ALTER DATABASE [$base] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [$base];")
+    $existe = $false
+}
+if ($existe) {
+    Write-Host "Ya existe: no se toca (se conservan sus datos). Para cambiarla por la del paquete: -ReemplazarBaseDatos"
 } else {
     $version = Sql $sql "SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS int)"
     if ($version -lt 17) {
@@ -269,6 +285,12 @@ Write-Host "Variables puestas."
 Paso "8. Sitio en IIS"
 if (-not (Test-Path "IIS:\AppPools\$grupo")) { New-WebAppPool $grupo | Out-Null }
 Set-ItemProperty "IIS:\AppPools\$grupo" managedRuntimeVersion ""   # .NET 10 no usa el .NET antiguo de IIS
+
+# La primera instalación (solo DeCA) lo llamó "GPE DeCA"
+if ((Test-Path "IIS:\Sites\GPE DeCA") -and -not (Test-Path "IIS:\Sites\$sitio")) {
+    Rename-Item "IIS:\Sites\GPE DeCA" $sitio
+    Write-Host "El sitio 'GPE DeCA' pasa a llamarse '$sitio'."
+}
 
 if (Test-Path "IIS:\Sites\$sitio") {
     Write-Host "Ya existe."
