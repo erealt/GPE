@@ -6,6 +6,10 @@ namespace GPE.Escritorio;
 // Colores y fuentes comunes a todas las pantallas
 public static class Tema
 {
+    // Icono de la aplicación (gpe.ico) para la barra de tareas y las ventanas
+    public static readonly Icon Icono =
+        new(typeof(Tema).Assembly.GetManifestResourceStream("gpe.ico")!);
+
     public static readonly Color Fondo = Color.FromArgb(245, 246, 244);
     public static readonly Color Acento = Color.FromArgb(89, 0, 246);
     public static readonly Color AcentoSuave = Color.FromArgb(240, 236, 255);

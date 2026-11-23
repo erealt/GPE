@@ -31,6 +31,7 @@ public class FormPrincipal : Form
     public FormPrincipal()
     {
         Text = "GPE";
+        Icon = Tema.Icono;
         Size = new Size(1400, 800);
         MinimumSize = new Size(1350, 650);
         StartPosition = FormStartPosition.CenterScreen;

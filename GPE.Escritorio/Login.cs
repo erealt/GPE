@@ -18,6 +18,7 @@ public class FormLogin : Form
     public FormLogin()
     {
         Text = "GPE - Entrar";
+        Icon = Tema.Icono;
         ClientSize = new Size(420, 330);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
