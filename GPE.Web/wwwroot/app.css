@@ -448,6 +448,32 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
     .panel-casilla .estado { height: 44px; font-size: 13.5px; white-space: normal; }
 }
 
+/* ---------- Control de agua (/agua): la lista de tomas del mes del escritorio ---------- */
+
+.agua-mes { display: flex; align-items: center; gap: 8px; }
+.agua-mes strong { min-width: 150px; text-align: center; }
+.agua-filtros select { min-width: 240px; }
+.sin-saltos { white-space: nowrap; }
+.agua-comentario { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agua-fecha-hora { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.agua-fecha-hora input { width: 100%; }
+.panel-casilla select { height: 48px; font-size: 16px; }
+.borrar { border-color: var(--error); color: var(--error); }
+.agua-grafica { padding: 14px 16px; margin-bottom: 16px; }
+.grafica-cloro { width: 100%; height: auto; display: block; }
+.grafica-cloro text { font-size: 11px; fill: var(--suave); }
+.grafica-cloro .rejilla-linea { stroke: var(--linea); }
+.grafica-cloro .limite { stroke: var(--error); stroke-dasharray: 6 4; }
+.grafica-cloro .linea-cloro { fill: none; stroke: var(--acento); stroke-width: 2; }
+.grafica-cloro .punto { fill: var(--acento); }
+.grafica-cloro .punto.fuera { fill: var(--error); }
+
+@media (max-width: 600px) {
+    .agua-mes { width: 100%; }
+    .agua-mes strong { flex: 1; min-width: 0; }
+    .agua-filtros label, .agua-filtros select { width: 100%; min-width: 0; }
+}
+
 /* ---------- Errores de Blazor ---------- */
 
 .blazor-error-boundary { background: var(--error); color: white; padding: 1rem; }

@@ -1,0 +1,478 @@
+@page "/agua"
+@layout LayoutTrabajadores
+@inject NavigationManager Navegacion
+@using System.Globalization
+
+<PageTitle>Control de agua</PageTitle>
+
+@* El control de agua del escritorio (ModuloControlAgua) para la tablet y el móvil: las tomas de un mes,
+   la más reciente arriba, con el mismo filtro de punto y la misma gráfica del cloro. Cada toma se
+   apunta o se corrige en el panel de abajo y se guarda al momento. *@
+
+<div class="cabecera">
+    <div>
+        <h1>Control de agua</h1>
+        <p class="suave">Cloro y organolépticos de los puntos de agua (MT-RG09).</p>
+    </div>
+    <button class="principal" disabled="@(tomas.Count == 0)" @onclick="NuevaToma">+ Nueva toma</button>
+</div>
+
+<div class="tarjeta filtros agua-filtros">
+    <div class="agua-mes">
+        <button class="secundario" @onclick="() => CambiarMes(-1)">◀</button>
+        <strong>@NombreMes</strong>
+        <button class="secundario" disabled="@(mes.AddMonths(1) > DateTime.Today)" @onclick="() => CambiarMes(1)">▶</button>
+        <button class="secundario" disabled="@(mes == EsteMes)" @onclick="IrAEsteMes">Este mes</button>
+    </div>
+    <label>
+        Punto de agua
+        <select @bind="punto">
+            <option value="0">Todos</option>
+            @foreach (var t in Puntos())
+            {
+                <option value="@t.Id">@t.Nombre</option>
+            }
+        </select>
+    </label>
+    <button class="secundario" @onclick="() => verGrafica = !verGrafica">@(verGrafica ? "Ocultar gráfica" : "Ver gráfica")</button>
+</div>
+
+@if (error != null)
+{
+    <div class="aviso error">@error</div>
+}
+else if (controles == null)
+{
+    <p class="suave">Cargando...</p>
+}
+else
+{
+    var visibles = Visibles();
+    int fuera = visibles.Count(c => AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma));
+    <p class="contador @(fuera > 0 ? "fuera-plazo" : "suave")">
+        @(visibles.Count == 1 ? "1 toma" : $"{visibles.Count} tomas")@(fuera > 0 ? $" · {fuera} fuera del límite" : "")
+    </p>
+
+    @if (verGrafica)
+    {
+        <div class="tarjeta agua-grafica">
+            @Grafica(visibles)
+        </div>
+    }
+
+    @if (visibles.Count == 0)
+    {
+        <div class="tarjeta vacio">
+            @(punto == 0 ? "No hay tomas de agua apuntadas en este mes." : "Este punto no tiene tomas en este mes.")
+        </div>
+    }
+    else
+    {
+        <div class="tarjeta tabla">
+            <table>
+                <thead>
+                    <tr>
+                        <th>FECHA</th>
+                        <th>HORA</th>
+                        <th>PUNTO DE AGUA</th>
+                        <th class="num">CLORO (ppm)</th>
+                        <th>SABOR</th>
+                        <th>OLOR</th>
+                        <th>COLOR</th>
+                        <th>TURBIDEZ</th>
+                        <th>COMENTARIO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var fila in visibles)
+                    {
+                        var c = fila.Control;
+                        <tr title="Apuntada por @c.CreadoPor" @onclick="() => Abrir(fila)">
+                            <td class="sin-saltos">@c.Fecha.ToString("ddd dd/MM", Es)</td>
+                            <td>@(c.Hora is TimeSpan h ? AguaServicio.Hora(h) : "")</td>
+                            <td>@fila.Toma.Nombre</td>
+                            <td class="num @(AguaServicio.FueraDeRango(c.Cloro, fila.Toma) ? "fuera-plazo" : "")"><strong>@(c.Cloro?.ToString("0.00", Es) ?? "—")</strong></td>
+                            <td>@SiNo(c.SaborOk)</td>
+                            <td>@SiNo(c.OlorOk)</td>
+                            <td>@SiNo(c.ColorOk)</td>
+                            <td>@SiNo(c.TurbidezOk)</td>
+                            <td class="agua-comentario">@PrimeraLinea(c.Comentario)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@if (editando != null)
+{
+    <div class="fondo-panel" @onclick="CerrarPanel"></div>
+    <div class="panel-casilla">
+        <div class="panel-titulo">
+            <strong>@(editando.Id == 0 ? "Nueva toma" : "Corregir toma")</strong>
+            <button class="quitar" @onclick="CerrarPanel">✕</button>
+        </div>
+
+        @if (panelError != null)
+        {
+            <p class="error-campo">@panelError</p>
+        }
+
+        <div class="campo">
+            <label>
+                Punto de agua
+                <select @bind="tomaId" disabled="@guardando">
+                    <option value="0">Elige el punto...</option>
+                    @foreach (var t in PuntosPanel())
+                    {
+                        <option value="@t.Id">@t.Nombre</option>
+                    }
+                </select>
+            </label>
+        </div>
+        <div class="agua-fecha-hora">
+            <div class="campo">
+                <label>
+                    Fecha
+                    <input type="date" max="@DateTime.Today.ToString("yyyy-MM-dd")" @bind="fechaToma" disabled="@guardando" />
+                </label>
+            </div>
+            <div class="campo">
+                <label>
+                    Hora
+                    <input type="time" @bind="horaToma" disabled="@guardando" />
+                </label>
+            </div>
+        </div>
+        <div class="campo">
+            <label>
+                Cloro (ppm)
+                <input inputmode="decimal" placeholder="Por ejemplo 0,55" @bind="cloroTexto" disabled="@guardando" />
+            </label>
+        </div>
+
+        <p class="etiqueta-campo">Organolépticos (pulsa para cambiar)</p>
+        <div class="estados agua-estados">
+            <button class="estado @(saborOk ? "ok" : "no")" disabled="@guardando" @onclick="() => saborOk = !saborOk">Sabor: @SiNo(saborOk)</button>
+            <button class="estado @(olorOk ? "ok" : "no")" disabled="@guardando" @onclick="() => olorOk = !olorOk">Olor: @SiNo(olorOk)</button>
+            <button class="estado @(colorOk ? "ok" : "no")" disabled="@guardando" @onclick="() => colorOk = !colorOk">Color: @SiNo(colorOk)</button>
+            <button class="estado @(turbidezOk ? "ok" : "no")" disabled="@guardando" @onclick="() => turbidezOk = !turbidezOk">Turbidez: @SiNo(turbidezOk)</button>
+        </div>
+
+        <div class="campo">
+            <textarea rows="2" placeholder="Comentario (opcional)" maxlength="@AguaServicio.LargoComentario" @bind="comentario" disabled="@guardando"></textarea>
+        </div>
+
+        <div class="acciones">
+            @if (editando.Id != 0)
+            {
+                <button class="secundario @(confirmarBorrar ? "borrar" : "")" disabled="@guardando" @onclick="Borrar">
+                    @(confirmarBorrar ? "Sí, borrarla" : "Borrar")
+                </button>
+            }
+            <button class="principal" disabled="@guardando" @onclick="Guardar">@(guardando ? "Guardando..." : "Guardar")</button>
+        </div>
+        @if (editando.Id != 0)
+        {
+            <p class="pequeno suave">Apuntada por @editando.CreadoPor</p>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
+
+    private static readonly CultureInfo Es = new("es-ES");
+    private static DateTime EsteMes => new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private readonly AguaServicio servicio = new();
+    private Usuario? usuario;        // lo que apunte queda a su nombre
+
+    private List<AguaToma> tomas = new();            // los puntos activos
+    private List<ControlAguaConToma>? controles;     // las tomas del mes
+    private DateTime mes = EsteMes;
+    private int punto;                               // filtro: 0 = todos
+    private bool verGrafica;
+    private string? error;
+
+    // Panel de la toma que se apunta (Id 0) o se corrige
+    private ControlAgua? editando;
+    private int tomaId;
+    private DateTime fechaToma;
+    private TimeOnly? horaToma;
+    private string? cloroTexto;
+    private bool saborOk, olorOk, colorOk, turbidezOk;
+    private string? comentario;
+    private string? panelError;
+    private bool guardando;
+    private bool confirmarBorrar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
+        {
+            Navegacion.NavigateTo("acciones/entrar?volver=%2Fagua");
+            return;
+        }
+        // Como el control diario: solo Calidad y Administración
+        if (!TrabajadorActual.VeControl(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+        usuario = TrabajadorActual.Usuario(sesion);
+        Cargar(recargarTomas: true);
+    }
+
+    private void Cargar(bool recargarTomas = false)
+    {
+        try
+        {
+            if (recargarTomas)
+                tomas = servicio.ObtenerTomas();
+            controles = servicio.ObtenerMes(mes);
+            error = null;
+        }
+        catch (DbException ex)
+        {
+            error = "No se ha podido leer el control de agua. Comprueba la conexión y recarga la página. " + ex.Message;
+        }
+    }
+
+    // "Noviembre 2026"
+    private string NombreMes
+    {
+        get
+        {
+            string nombre = mes.ToString("MMMM yyyy", Es);
+            return char.ToUpper(nombre[0], Es) + nombre[1..];
+        }
+    }
+
+    private void CambiarMes(int meses)
+    {
+        mes = mes.AddMonths(meses);
+        Cargar();
+    }
+
+    private void IrAEsteMes()
+    {
+        mes = EsteMes;
+        Cargar();
+    }
+
+    // Los puntos activos y los dados de baja que salgan en el mes
+    private List<AguaToma> Puntos()
+    {
+        var puntos = tomas.ToList();
+        foreach (var toma in (controles ?? new()).Select(c => c.Toma).DistinctBy(t => t.Id))
+            if (!puntos.Any(p => p.Id == toma.Id))
+                puntos.Add(toma);
+        return puntos;
+    }
+
+    // Para apuntar, los activos; al corregir una de un punto dado de baja, también ese
+    private List<AguaToma> PuntosPanel()
+    {
+        var puntos = tomas.ToList();
+        if (editando != null && editando.Id != 0 && !puntos.Any(p => p.Id == editando.TomaId))
+            puntos.AddRange(Puntos().Where(p => p.Id == editando.TomaId));
+        return puntos;
+    }
+
+    // La más reciente arriba
+    private List<ControlAguaConToma> Visibles() => (controles ?? new())
+        .Where(c => punto == 0 || c.Toma.Id == punto)
+        .OrderByDescending(c => c.Control.Fecha).ThenByDescending(c => c.Control.Hora).ThenByDescending(c => c.Control.Id)
+        .ToList();
+
+    private static string SiNo(bool ok) => ok ? "Sí" : "No";
+
+    private static string? PrimeraLinea(string? texto) => texto?.Split('\n')[0];
+
+    // Panel
+
+    // De hoy, a la hora de ahora, todo "Sí" y, si hay un punto elegido en el filtro, ese
+    private void NuevaToma()
+    {
+        var ahora = DateTime.Now;
+        Rellenar(new ControlAgua(0, DateTime.Today, tomas.Any(t => t.Id == punto) ? punto : 0, null,
+            true, true, true, true, null, new TimeSpan(ahora.Hour, ahora.Minute, 0)));
+    }
+
+    private void Abrir(ControlAguaConToma fila) => Rellenar(fila.Control);
+
+    private void Rellenar(ControlAgua control)
+    {
+        editando = control;
+        tomaId = control.TomaId;
+        fechaToma = control.Fecha;
+        horaToma = control.Hora is TimeSpan h ? TimeOnly.FromTimeSpan(h) : null;
+        cloroTexto = control.Cloro?.ToString("0.00", Es);
+        saborOk = control.SaborOk;
+        olorOk = control.OlorOk;
+        colorOk = control.ColorOk;
+        turbidezOk = control.TurbidezOk;
+        comentario = control.Comentario;
+        panelError = null;
+        confirmarBorrar = false;
+    }
+
+    private void CerrarPanel()
+    {
+        if (!guardando) editando = null;
+    }
+
+    private async Task Guardar()
+    {
+        decimal? cloro = null;
+        string texto = (cloroTexto ?? "").Trim().Replace('.', ',');
+        if (texto != "")
+        {
+            if (!decimal.TryParse(texto, NumberStyles.Number, Es, out var numero))
+            {
+                panelError = "El cloro tiene que ser un número, por ejemplo 0,55.";
+                return;
+            }
+            cloro = numero;
+        }
+
+        var control = editando! with
+        {
+            TomaId = tomaId,
+            Fecha = fechaToma,
+            Hora = horaToma?.ToTimeSpan(),
+            Cloro = cloro,
+            SaborOk = saborOk,
+            OlorOk = olorOk,
+            ColorOk = colorOk,
+            TurbidezOk = turbidezOk,
+            Comentario = comentario
+        };
+
+        await Hacer(() => servicio.Guardar(control));
+
+        // Guardada en otro mes: se va a ese mes para verla
+        var mesToma = new DateTime(control.Fecha.Year, control.Fecha.Month, 1);
+        if (editando == null && mesToma != mes)
+        {
+            mes = mesToma;
+            Cargar();
+        }
+    }
+
+    private async Task Borrar()
+    {
+        if (!confirmarBorrar)
+        {
+            confirmarBorrar = true;
+            return;
+        }
+        var control = editando!;
+        await Hacer(() => servicio.Borrar(control));
+    }
+
+    // Guarda o borra a nombre de quien ha entrado; si sale bien cierra el panel y vuelve a leer el mes
+    private async Task Hacer(Action accion)
+    {
+        guardando = true;
+        panelError = null;
+        await Task.Yield();   // para que se vean los botones desactivados mientras tanto
+
+        try
+        {
+            using (Sesion.Como(usuario!))
+                accion();
+            editando = null;
+            Cargar();
+        }
+        catch (ReglaNegocioException ex)
+        {
+            panelError = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            panelError = "No se ha podido guardar. Prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+            confirmarBorrar = false;
+        }
+    }
+
+    // Gráfica: el cloro de cada toma del mes, como "Ver gráfica" del escritorio. Con un punto elegido,
+    // unidas con una línea; con todos, solo los puntos. En rojo, las que se salen del límite.
+
+    private const double Ancho = 700, Alto = 260, Izq = 44, Der = 12, Arr = 12, Abj = 28;
+
+    private RenderFragment Grafica(List<ControlAguaConToma> visibles) => __builder =>
+    {
+        var conCloro = visibles.Where(c => c.Control.Cloro != null)
+            .OrderBy(c => c.Control.Fecha).ThenBy(c => c.Control.Hora).ThenBy(c => c.Control.Id).ToList();
+        int dias = DateTime.DaysInMonth(mes.Year, mes.Month);
+
+        // Límites: los del punto elegido, o los de todos si son iguales (el mismo para todos)
+        var limites = (punto == 0 ? Puntos() : Puntos().Where(t => t.Id == punto))
+            .Select(t => (t.CloroMin, t.CloroMax)).Distinct().ToList();
+        var (min, max) = limites.Count == 1 ? limites[0] : (null, null);
+
+        double tope = (double)new[] { conCloro.Select(c => c.Control.Cloro!.Value).DefaultIfEmpty(0).Max(), max ?? 0, 1m }.Max();
+        tope = Math.Ceiling(tope * 1.1 * 4) / 4;   // de 0,25 en 0,25
+        double paso = tope <= 1 ? 0.25 : tope <= 2.5 ? 0.5 : 1;
+
+        double X(ControlAgua c) => Izq + ((c.Fecha.Day - 1) + (c.Hora?.TotalHours ?? 12) / 24) / dias * (Ancho - Izq - Der);
+        double XDia(int dia) => Izq + (dia - 0.5) / dias * (Ancho - Izq - Der);
+        double Y(double v) => Arr + (1 - v / tope) * (Alto - Arr - Abj);
+        string N(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+        <svg viewBox="0 0 @N(Ancho) @N(Alto)" class="grafica-cloro" role="img" aria-label="Cloro del mes">
+            @for (double v = 0; v <= tope + 0.001; v += paso)
+            {
+                <line x1="@N(Izq)" x2="@N(Ancho - Der)" y1="@N(Y(v))" y2="@N(Y(v))" class="rejilla-linea" />
+                @Texto(Izq - 6, Y(v) + 4, "end", v.ToString("0.00", Es))
+            }
+            @for (int d = 1; d <= dias; d++)
+            {
+                if (d == 1 || d % 5 == 0)
+                {
+                    @Texto(XDia(d), Alto - 8, "middle", d.ToString())
+                }
+            }
+            @if (min is decimal lmin)
+            {
+                <line x1="@N(Izq)" x2="@N(Ancho - Der)" y1="@N(Y((double)lmin))" y2="@N(Y((double)lmin))" class="limite" />
+            }
+            @if (max is decimal lmax)
+            {
+                <line x1="@N(Izq)" x2="@N(Ancho - Der)" y1="@N(Y((double)lmax))" y2="@N(Y((double)lmax))" class="limite" />
+            }
+            @if (punto != 0 && conCloro.Count > 1)
+            {
+                <polyline class="linea-cloro" points="@string.Join(" ", conCloro.Select(c => N(X(c.Control)) + "," + N(Y((double)c.Control.Cloro!.Value))))" />
+            }
+            @foreach (var c in conCloro)
+            {
+                bool fueraLimite = AguaServicio.FueraDeRango(c.Control.Cloro, c.Toma);
+                <circle cx="@N(X(c.Control))" cy="@N(Y((double)c.Control.Cloro!.Value))" r="5" class="@(fueraLimite ? "punto fuera" : "punto")">
+                    <title>@c.Control.Fecha.ToString("ddd dd/MM", Es)@(c.Control.Hora is TimeSpan h ? " " + AguaServicio.Hora(h) : "") · @c.Toma.Nombre · @AguaServicio.Ppm(c.Control.Cloro!.Value)</title>
+                </circle>
+            }
+        </svg>
+        @if (conCloro.Count == 0)
+        {
+            <p class="suave pequeno">No hay tomas con cloro en este mes.</p>
+        }
+        else
+        {
+            <p class="suave pequeno">Cloro (ppm) por día del mes. Pasa el ratón por un punto para ver el dato.@(min == null && max == null ? " Sin límite puesto todavía." : "")</p>
+        }
+    };
+
+    // Un <text> de SVG: en Razor "<text>" es una etiqueta especial que no se pinta, así que va escrito
+    private static MarkupString Texto(double x, double y, string ancla, string texto) => new(
+        $"<text x=\"{x.ToString("0.#", CultureInfo.InvariantCulture)}\" y=\"{y.ToString("0.#", CultureInfo.InvariantCulture)}\" " +
+        $"text-anchor=\"{ancla}\">{System.Net.WebUtility.HtmlEncode(texto)}</text>");
+}

@@ -22,7 +22,7 @@
                 <div class="menu-usuario">
                     <span class="suave">@TrabajadorActual.Nombre(context.User)</span>
                     @* Recarga entera: salir no es una página de Blazor *@
-                    <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir" + (Seccion == "control" ? "?volver=%2Fcontrol" : ""), forceLoad: true)'>Salir</button>
+                    <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir" + (Seccion is "control" or "agua" ? "?volver=%2F" + Seccion : ""), forceLoad: true)'>Salir</button>
                 </div>
 
                 @if (TrabajadorActual.VeAcciones(context.User))
@@ -32,6 +32,7 @@
                 @if (TrabajadorActual.VeControl(context.User))
                 {
                     <a class="@Activo("control")" href="control" @onclick="CerrarEnMovil">Control diario</a>
+                    <a class="@Activo("agua")" href="agua" @onclick="CerrarEnMovil">Control de agua</a>
                 }
                 @if (TrabajadorActual.VeDeca(context.User))
                 {
@@ -70,7 +71,7 @@
 @code {
     private bool menuAlternado;
 
-    // "acciones", "control" o "deca" según la página (la de entrar con ?volver=/control cuenta como control)
+    // "acciones", "control", "agua" o "deca" según la página (la de entrar con ?volver=/control cuenta como control)
     private string Seccion
     {
         get
@@ -78,6 +79,8 @@
             string ruta = Navegacion.ToBaseRelativePath(Navegacion.Uri);
             if (ruta.StartsWith("control") || ruta.Contains("volver=%2Fcontrol", StringComparison.OrdinalIgnoreCase))
                 return "control";
+            if (ruta.StartsWith("agua") || ruta.Contains("volver=%2Fagua", StringComparison.OrdinalIgnoreCase))
+                return "agua";
             if (ruta.StartsWith("acciones"))
                 return "acciones";
             return "deca";
@@ -87,6 +90,7 @@
     private string Modulo => Seccion switch
     {
         "control" => "Control diario",
+        "agua" => "Control de agua",
         "acciones" => "Mis acciones",
         _ => "DeCA"
     };

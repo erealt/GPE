@@ -84,7 +84,7 @@ app.MapPost("/acciones/iniciar-sesion", async (HttpContext http) =>
     await http.SignInAsync(principal, new AuthenticationProperties { IsPersistent = true });
 
     // Si iba a una página que no le toca, a la suya
-    bool puede = volver == "/control" ? TrabajadorActual.VeControl(principal) : TrabajadorActual.VeAcciones(principal);
+    bool puede = volver is "/control" or "/agua" ? TrabajadorActual.VeControl(principal) : TrabajadorActual.VeAcciones(principal);
     return Results.Redirect(puede ? volver : TrabajadorActual.Inicio(principal));
 }).DisableAntiforgery();
 
@@ -98,7 +98,7 @@ app.MapGet("/acciones/salir", async (HttpContext http, string? volver) =>
 app.Run();
 
 // Página a la que se vuelve después de entrar: solo las de la web con login (nunca otra dirección)
-static string Volver(string? volver) => volver == "/control" ? "/control" : "/acciones";
+static string Volver(string? volver) => volver is "/control" or "/agua" ? volver : "/acciones";
 
 static IResult Archivo(int id, HttpContext http, Func<GPE.Datos.DecaGuardado, string?> nombre, string tipo)
 {

@@ -2,14 +2,16 @@
 @layout LayoutTrabajadores
 @inject NavigationManager Navegacion
 
-<PageTitle>Entrar · @(EsControl ? "Control diario" : "Mis acciones")</PageTitle>
+<PageTitle>Entrar · @(Volver == "/control" ? "Control diario" : Volver == "/agua" ? "Control de agua" : "Mis acciones")</PageTitle>
 
 @* Formulario normal (no de Blazor): lo recibe /acciones/iniciar-sesion en Program.cs, que pone la cookie.
-   Sirve para "Mis acciones" y para el control diario (?volver=/control). *@
+   Sirve para "Mis acciones", el control diario (?volver=/control) y el de agua (?volver=/agua). *@
 <div class="tarjeta entrar">
     <h1>Entrar</h1>
     <p class="suave pequeno">
-        @(EsControl ? "Para pasar el control diario de calidad." : "Para ver las acciones de calidad que tienes asignadas.")
+        @(Volver == "/control" ? "Para pasar el control diario de calidad."
+          : Volver == "/agua" ? "Para apuntar el control de agua."
+          : "Para ver las acciones de calidad que tienes asignadas.")
     </p>
 
     @if (Error == "clave")
@@ -22,9 +24,9 @@
     }
 
     <form method="post" action="acciones/iniciar-sesion">
-        @if (EsControl)
+        @if (EsCalidad)
         {
-            <input type="hidden" name="volver" value="/control" />
+            <input type="hidden" name="volver" value="@Volver" />
         }
         <div class="campo">
             <label>
@@ -49,15 +51,16 @@
     [SupplyParameterFromQuery] private string? Usuario { get; set; }
     [SupplyParameterFromQuery] private string? Volver { get; set; }
 
-    private bool EsControl => Volver == "/control";
+    // Las de Calidad: después de entrar se vuelve a ellas
+    private bool EsCalidad => Volver is "/control" or "/agua";
 
     // Si ya ha entrado, directamente a donde iba
     protected override async Task OnInitializedAsync()
     {
         var sesion = (await EstadoSesion).User;
         if (TrabajadorActual.HaEntrado(sesion))
-            Navegacion.NavigateTo(EsControl && TrabajadorActual.VeControl(sesion)
-                ? "control"
+            Navegacion.NavigateTo(EsCalidad && TrabajadorActual.VeControl(sesion)
+                ? Volver!.TrimStart('/')
                 : TrabajadorActual.Inicio(sesion).TrimStart('/'));
     }
 }
