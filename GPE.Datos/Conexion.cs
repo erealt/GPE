@@ -5,10 +5,20 @@ namespace GPE.Datos;
 // Conexión a SQL Server común a todos los repositorios
 internal static class Conexion
 {
-    // La variable de entorno GPE_CONEXION permite usar otra base de datos (p. ej. una de pruebas)
+    // Por orden: la variable de entorno GPE_CONEXION (servidor y pruebas), el archivo conexion.txt junto
+    // al programa (lo lleva la aplicación instalada con ClickOnce) y, si no hay ninguno, la base local
     private static readonly string CadenaConexion =
         Environment.GetEnvironmentVariable("GPE_CONEXION")
+        ?? LeerArchivo()
         ?? "Server=localhost;Database=miGPE;Integrated Security=True;TrustServerCertificate=True;";
+
+    private static string? LeerArchivo()
+    {
+        string ruta = Path.Combine(AppContext.BaseDirectory, "conexion.txt");
+        if (!File.Exists(ruta)) return null;
+        string texto = File.ReadAllText(ruta).Trim();
+        return texto == "" ? null : texto;
+    }
 
     // Los triggers de historial leen el usuario de SESSION_CONTEXT(N'usuario_id').
     public static SqlConnection Abrir()

@@ -1,100 +1,183 @@
-﻿INSTALAR LA WEB DEL DeCA EN EL SERVIDOR
-=======================================
+﻿INSTALAR GPE EN EL SERVIDOR (pruebas de calidad)
+================================================
 
-Esta carpeta lleva todo lo necesario:
-  Web\                   la web del DeCA
-  Avisos\                el programa que cada día borra los PDF de más de un año
-  BaseDatos\             los scripts de la base de datos
+Se instala en el servidor:
+  - La base de datos GPE: copia de la base del ordenador de desarrollo (miGPE), con sus datos
+    y sus usuarios.
+  - La web (acciones, control diario, agua y DeCA) en IIS.
+  - La aplicación de escritorio, en una carpeta compartida \\SERVIDOR\GPE desde la que cada
+    ordenador la instala. Se actualiza sola al abrirla.
+  - La tarea diaria que borra los PDF del DeCA de más de un año.
+
+El paquete lleva:
+  Web\                   la web
+  Avisos\                el programa de la tarea diaria
+  Escritorio\            la aplicación de escritorio (ClickOnce)
+  BaseDatos\             GPE.bak (la copia de la base de datos) y los scripts
+  gpe_app.txt            contraseña del usuario de SQL de la aplicación (el script la usa y la borra)
   instalar-servidor.ps1  hace la instalación
   LEEME.txt              esta guía
 
 
-ANTES DE EMPEZAR
-----------------
-- Entrar al servidor con un usuario administrador (por Escritorio remoto desde uno de los
-  ordenadores de administrador).
-- Tener a mano el usuario y la contraseña de aplicación de WordPress (las mismas que en el
-  ordenador de desarrollo: GPE_WP_USUARIO y GPE_WP_CLAVE).
-- El servidor necesita Internet para subir los PDF a eurochoc.es.
+A. EN EL ORDENADOR DE DESARROLLO
+================================
+
+A1. Tener en main todo lo que se va a probar (la rama web juntada en main) y sin cambios
+    a medias.
+
+A2. Saber el nombre del servidor. En el servidor: botón Inicio, escribir "Acerca de", y mirar
+    "Nombre del dispositivo". Tiene que ser ese mismo nombre, no la IP: la aplicación de
+    escritorio se instala y se actualiza desde \\ESE-NOMBRE\GPE.
+
+A3. Preparar el paquete (PowerShell normal, en la carpeta del proyecto), cambiando el nombre:
+
+      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor NOMBRE-DEL-SERVIDOR
+
+    Tarda unos minutos. Termina con "Paquete listo en ...\Despliegue\paquete".
+    Hace: publica la web y la tarea, hace una copia de miGPE, crea la contraseña del usuario
+    de SQL y publica la aplicación de escritorio ya apuntando a ese servidor.
+
+A4. Copiar la carpeta Despliegue\paquete entera al servidor, por ejemplo a C:\Instalacion-GPE
+    (USB, carpeta compartida o copiar y pegar por Escritorio remoto).
+    gpe_app.txt lleva una contraseña: no dejar la carpeta en un sitio al que entre más gente.
 
 
-PASO 1. Copiar esta carpeta al servidor
----------------------------------------
-Por ejemplo a C:\Instalacion-DeCA (USB, carpeta compartida o copiar y pegar por Escritorio remoto).
+B. EN EL SERVIDOR
+=================
+
+Entrar con un usuario administrador. El servidor necesita Internet (para subir los PDF del
+DeCA a eurochoc.es). Tener a mano el usuario y la contraseña de aplicación de WordPress
+(los mismos que GPE_WP_USUARIO y GPE_WP_CLAVE del ordenador de desarrollo).
+
+B1. SQL Server
+    Si el servidor ya tiene SQL Server, mirar la versión: tiene que ser 2025 o más nuevo,
+    porque la copia de la base de datos viene de un SQL Server 2025. Si es más antiguo,
+    ver "La versión de SQL Server es más antigua" en SI ALGO FALLA.
+
+    Si no tiene SQL Server, instalar SQL Server 2025 Express (gratis):
+      a. Descargarlo de https://www.microsoft.com/sql-server/sql-server-downloads
+         (apartado "Express", "Descargar ahora").
+      b. Abrirlo y elegir "Básica". Aceptar y esperar a que termine.
+      c. Instalarlo con el MISMO usuario administrador con el que se va a ejecutar el script
+         (ese usuario queda como administrador de SQL Server).
+
+    No hace falta tocar nada más de SQL Server: el script activa el puerto 1433 y la
+    entrada con usuario de SQL.
+
+B2. Ejecutar el script
+    1. Abrir PowerShell como administrador (botón Inicio, escribir PowerShell, clic derecho,
+       Ejecutar como administrador).
+    2. Escribir (cambiando la carpeta si se copió en otro sitio):
+
+         cd C:\Instalacion-GPE
+         powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1
+
+    3. Va diciendo lo que hace. Pregunta el usuario y la contraseña de aplicación de WordPress
+       (la contraseña no se ve al escribirla; se puede pegar con clic derecho).
+
+    La primera vez se parará en el paso 4 diciendo que falta el Hosting Bundle de .NET 10:
+      a. Descargarlo de https://dotnet.microsoft.com/download/dotnet/10.0
+         (columna "ASP.NET Core Runtime", enlace "Hosting Bundle" de Windows).
+      b. Instalarlo (doble clic, Siguiente).
+      c. Cerrar PowerShell, abrir otro como administrador y volver a ejecutar el script.
+         Lo que ya hizo (base de datos, SQL Server) no se repite.
+
+    Al terminar dice la dirección de la web y la de la aplicación.
+
+B3. Comprobar en el servidor
+    - Abrir http://localhost/ en el navegador: tiene que salir la pantalla para entrar.
 
 
-PASO 2. Base de datos
----------------------
-Solo si la base de datos GPE no existe todavía o no tiene lo último del DeCA.
-En SQL Server Management Studio, en la base de datos GPE:
-  - Base nueva: ejecutar los scripts de BaseDatos en el orden del README (apartado 1),
-    empezando por crear_tablas.sql.
-  - Base que ya existe: ejecutar deca_normativa.sql (se puede ejecutar más de una vez).
-Comprobar que existe el usuario con id 1 en la tabla USUARIO: los DeCA hechos desde la web
-se guardan a su nombre.
+C. EN LOS ORDENADORES DE CALIDAD
+================================
+
+C1. Instalar la aplicación de escritorio
+    1. Abrir el Explorador de archivos y escribir arriba, en la barra de la ruta:
+         \\NOMBRE-DEL-SERVIDOR\GPE
+       Si pide usuario y contraseña, poner un usuario del servidor y marcar "Recordar".
+    2. Doble clic en setup.exe y aceptar. Se abre GPE y queda en el menú Inicio.
+    3. Si tiene McAfee: lo bloqueará y la aplicación no se abrirá. En McAfee, Elementos en
+       cuarentena, restaurar GPE.Escritorio.dll y marcarlo como seguro. Pasa con cada
+       versión nueva.
+
+C2. Entrar
+    Los usuarios son los de la base de datos copiada, todos con la contraseña Prueba1234:
+      calidad      rol Calidad
+      admin        Administración (todo)
+      trabajador   rol Trabajador (solo web: sus acciones)
+      almacen, transporte, estela
+    La aplicación todavía no permite cambiar contraseñas.
+
+C3. La web
+    Desde el navegador del ordenador, la tablet o el móvil (conectados a la red de la empresa):
+      http://NOMBRE-DEL-SERVIDOR/
+    Si en el móvil o la tablet no abre con el nombre, usar la IP del servidor
+    (en el servidor: PowerShell, ipconfig, "Dirección IPv4"): http://192.168.X.X/
+    - Calidad ve el control diario y el agua.
+    - Trabajador ve sus acciones.
+    - Administración ve todo.
 
 
-PASO 3. Ejecutar el script
---------------------------
-1. Abrir PowerShell como administrador (botón Inicio, escribir PowerShell, clic derecho,
-   Ejecutar como administrador).
-2. Escribir (cambiando la carpeta si se copió en otro sitio):
+D. ACTUALIZAR MÁS ADELANTE
+==========================
 
-     cd C:\Instalacion-DeCA
-     powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1
+En el ordenador de desarrollo, volver a preparar el paquete con el MISMO nombre de servidor
+(paso A3), copiarlo al servidor y volver a ejecutar instalar-servidor.ps1 (paso B2).
+  - La base de datos del servidor NO se toca: se conserva lo que haya hecho calidad.
+    Si una versión nueva trae un script en BaseDatos, hay que ejecutarlo a mano en el
+    servidor (en SQL Server Management Studio, sobre la base GPE).
+  - En WordPress pulsar Intro para dejar lo que había.
+  - Los ordenadores se actualizan solos al abrir GPE (preguntan si se instala la versión nueva).
+  - McAfee volverá a bloquearla (ver C1).
 
-3. Va diciendo lo que hace. Pregunta el usuario y la contraseña de aplicación de WordPress
-   (la contraseña no se ve al escribirla; se puede pegar con clic derecho).
-
-La primera vez se parará en el paso 2 diciendo que falta el Hosting Bundle de .NET 10:
-  a. Descargarlo de https://dotnet.microsoft.com/download/dotnet/10.0
-     (columna "ASP.NET Core Runtime", enlace "Hosting Bundle" de Windows).
-  b. Instalarlo (doble clic, Siguiente).
-  c. Cerrar PowerShell, abrir otro como administrador y volver a ejecutar el script.
-
-Si la base de datos NO está en este servidor, el script se ejecuta así (Carlos sabe los datos):
-
-     powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -Conexion "Server=NOMBRE-DEL-SERVIDOR-SQL;Database=GPE;User Id=USUARIO;Password=CLAVE;TrustServerCertificate=True;"
-
-
-PASO 4. Comprobar
------------------
-Al terminar, el script dice la dirección de la web, por ejemplo http://SERVIDOR01/
-Desde OTRO ordenador de la fábrica:
-  1. Abrir esa dirección: tiene que salir la lista de DeCA.
-  2. Crear un DeCA de prueba y guardarlo.
-  3. Pulsar "Generar PDF y QR" y luego "Ver PDF".
-  4. Escanear el QR con el móvil: tiene que abrir el PDF.
-  5. Borrar el DeCA de prueba de la base de datos si no se quiere guardar.
+Para preparar el paquete hace falta el certificado "GPE Eurochoc" del ordenador de desarrollo
+(se creó la primera vez, dura 10 años). Si se prepara desde otro ordenador, los ordenadores
+de calidad no se actualizarán y habrá que desinstalar GPE e instalarla de nuevo.
 
 
 SI ALGO FALLA
--------------
-- "HTTP Error 500.19" o "500.30": falta el Hosting Bundle o se instaló antes que IIS.
+=============
+
+- "No hay SQL Server en este servidor": instalar SQL Server Express (B1).
+
+- "Tu usuario de Windows no es administrador (sysadmin) de SQL Server": ejecutar el script
+  con el usuario que instaló SQL Server.
+
+- La versión de SQL Server es más antigua (2019, 2022...): la copia GPE.bak no se puede abrir.
+  Hacerlo así:
+    1. En el ordenador de desarrollo, en SQL Server Management Studio: clic derecho en miGPE,
+       Tareas, "Exportar aplicación de capa de datos". Guardar el archivo .bacpac.
+    2. Llevarlo al servidor. En Management Studio del servidor: clic derecho en "Bases de
+       datos", "Importar aplicación de capa de datos", elegir el .bacpac y llamar a la base GPE.
+    3. Volver a ejecutar el script: verá que GPE ya existe y hará el resto.
+
+- "HTTP Error 500.19" o "500.30" en la web: falta el Hosting Bundle o se instaló antes que IIS.
   Volver a instalar el Hosting Bundle (opción Reparar) y ejecutar: iisreset
-- "No se pudo cargar" o error de base de datos: falta el permiso de la web en SQL Server.
-  El script lo intenta dar; si no puede, muestra el texto para ejecutarlo en Management Studio.
-- Desde otro ordenador no se abre pero en el servidor sí: el cortafuegos. El script abre el
-  puerto para redes de dominio y privadas; si la red del servidor es "Pública", avisar a Carlos.
-- Falla al subir el PDF: revisar el usuario y la contraseña de WordPress (volver a ejecutar
-  el script y escribirlas de nuevo).
 
+- La web o la aplicación dicen que no pueden conectar con la base de datos:
+    * Desde el servidor sí y desde otros ordenadores no: el cortafuegos. El script abre los
+      puertos 80 y 1433 para redes de dominio y privadas; si la red del servidor está como
+      "Pública", cambiarla a privada.
+    * Volver a ejecutar el script: da otra vez los permisos.
 
-ACTUALIZAR LA WEB MÁS ADELANTE
-------------------------------
-En el ordenador de desarrollo, preparar un paquete nuevo:
+- La aplicación no se abre en un ordenador: McAfee (ver C1).
 
-     powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1
+- "No se puede encontrar \\SERVIDOR\GPE" en los ordenadores: el nombre del servidor no es el
+  mismo que se usó en A3, o el ordenador no ve el servidor en la red.
 
-Copiarlo al servidor y volver a ejecutar instalar-servidor.ps1. Mantiene las variables
-(pulsar Intro cuando pregunte por WordPress) y no borra los PDF guardados.
+- En el registro de la tarea diaria sale "ERROR: Falta configurar GPE_SMTP_USUARIO...": es
+  normal, en el servidor no hay correo. El borrado de los PDF se hace igual.
 
 
 QUÉ DEJA INSTALADO
-------------------
-- La web en C:\GPE\Web, sitio "GPE DeCA" de IIS (puerto 80).
-- Las copias de los PDF en C:\GPE\DeCA.
+==================
+
+- Base de datos GPE en SQL Server (puerto 1433), con el usuario de SQL gpe_app (el que usa la
+  aplicación de escritorio) y el permiso de la web (IIS APPPOOL\GPE).
+- La web en C:\GPE\Web, sitio "GPE Web" de IIS (puerto 80).
+- La aplicación de escritorio en C:\GPE\Escritorio, compartida como \\SERVIDOR\GPE (solo lectura).
+- Las copias de los PDF del DeCA en C:\GPE\DeCA.
 - GPE.Avisos en C:\GPE\Avisos y la tarea programada "GPE - Borrado DeCA", cada día a las 3:00.
   Su registro: C:\Windows\System32\config\systemprofile\AppData\Local\GPE\avisos.log
-- Variables del servidor: GPE_DECA_CARPETA, GPE_WP_USUARIO, GPE_WP_CLAVE (y GPE_CONEXION si
-  se usó -Conexion).
+- Variables del servidor: GPE_CONEXION, GPE_DECA_CARPETA, GPE_WP_USUARIO, GPE_WP_CLAVE.
+- Reglas del cortafuegos: "GPE Web (puerto 80)" y "GPE SQL Server (1433)".

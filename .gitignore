@@ -13,3 +13,6 @@ appsettings.*.json
 .claude/
 # Paquete para el servidor (se genera con Despliegue/preparar-paquete.ps1)
 Despliegue/paquete/
+
+# Conexión con contraseña que se genera al preparar el paquete
+GPE.Escritorio/conexion.txt

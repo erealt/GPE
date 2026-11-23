@@ -19,4 +19,9 @@
     <EmbeddedResource Include="gpe.ico" LogicalName="gpe.ico" />
   </ItemGroup>
 
+  <!-- Conexión a la base de datos del servidor. Solo existe mientras Despliegue\preparar-paquete.ps1 publica -->
+  <ItemGroup Condition="Exists('conexion.txt')">
+    <Content Include="conexion.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
