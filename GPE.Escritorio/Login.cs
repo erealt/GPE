@@ -89,6 +89,16 @@ public class FormLogin : Form
             return;
         }
 
+        // Los trabajadores solo usan la web (sus acciones), no el programa
+        if (Sesion.SoloWeb)
+        {
+            Sesion.Roles = new();
+            lblError.Text = "Este usuario es de trabajador: entra desde la web, en el móvil.";
+            txtClave.Clear();
+            txtClave.Focus();
+            return;
+        }
+
         if (Sesion.Roles.Count == 0)
             Mensajes.Informacion(this, "Sin permisos",
                 $"{usuario.Nombre} no tiene ningún rol asignado: podrá consultar las devoluciones, pero no hacer ningún paso.");

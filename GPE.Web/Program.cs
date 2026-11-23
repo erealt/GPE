@@ -81,6 +81,11 @@ app.MapPost("/acciones/iniciar-sesion", async (HttpContext http) =>
          .. roles.Select(r => new Claim(ClaimTypes.Role, r))],
         CookieAuthenticationDefaults.AuthenticationScheme);
     var principal = new ClaimsPrincipal(identidad);
+
+    // Almacén, Transporte o sin rol: no hay ninguna página para ellos en la web
+    if (!TrabajadorActual.VeAlgo(principal))
+        return Results.Redirect("/acciones/entrar?error=sinweb&usuario=" + Uri.EscapeDataString(usuario.Trim()) + conVolver);
+
     await http.SignInAsync(principal, new AuthenticationProperties { IsPersistent = true });
 
     // Si iba a una página que no le toca, a la suya
