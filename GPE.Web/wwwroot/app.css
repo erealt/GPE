@@ -360,6 +360,13 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
 .accion-trabajador > button { margin-top: 6px; }
 .etiqueta.roja { background: var(--fondo-error); color: var(--error); }
 .etiqueta.gris { background: var(--cabecera-tabla); color: var(--suave); }
+.accion-trabajador .pequeno.suave { margin: 0 0 12px; }
+.accion-tuya { font-weight: 600; }
+.separador-accion { border: 0; border-top: 1px solid var(--borde); margin: 14px 0; }
+.ver-fotos { margin: 2px 0 4px; }
+.fotos-accion { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 4px 0; }
+.fotos-accion img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1px solid var(--borde); display: block; }
+.accion-hecha .accion-texto { margin-bottom: 0; }
 
 
 

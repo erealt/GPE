@@ -7,7 +7,15 @@ public class TrabajadorWebServicio
 {
     private readonly TrabajadorWebRepositorio repositorio = new();
 
+    // La pestaña "Hechas" enseña las del último mes
+    public const int DiasHechas = 30;
+
     public List<AccionTrabajador> ObtenerPendientes(string persona) => repositorio.ObtenerPendientes(persona);
+
+    public List<AccionHecha> ObtenerHechas(string persona) => repositorio.ObtenerHechas(persona, DiasHechas);
+
+    public (string NombreArchivo, byte[] Contenido)? ObtenerFoto(int fotoId, string persona) =>
+        repositorio.ObtenerFoto(fotoId, persona);
 
     public void MarcarHecha(int accionId, string persona, string? comentario)
     {
