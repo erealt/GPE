@@ -117,50 +117,76 @@ Write-Host "SQL Server listo (puerto 1433 abierto en el cortafuegos)."
 
 Paso "2. Base de datos $base"
 $existe = -not ((Sql $sql "SELECT DB_ID('$base')") -is [DBNull])
-if ($existe -and $ReemplazarBaseDatos) {
-    # Se comprueba antes de quitar nada que este SQL Server puede abrir la copia
-    if ((Sql $sql "SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS int)") -lt 17) {
-        throw "Este SQL Server es más antiguo que SQL Server 2025 y no puede abrir la copia. No se ha cambiado nada. Mira 'SI ALGO FALLA' en LEEME.txt."
-    }
-    # Antes de cambiarla se guarda la que había, por si hace falta recuperar algo
-    $carpetaCopias = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(400))"
-    $anterior = Join-Path $carpetaCopias ("GPE-antes-" + (Get-Date -Format "yyyyMMdd-HHmm") + ".bak")
-    Write-Host "Guardando la base $base que había en $anterior ..."
-    [void](Sql $sql "BACKUP DATABASE [$base] TO DISK = N'$anterior' WITH COPY_ONLY, INIT, CHECKSUM")
-    [void](Sql $sql "ALTER DATABASE [$base] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [$base];")
-    $existe = $false
-}
-if ($existe) {
+if ($existe -and -not $ReemplazarBaseDatos) {
     Write-Host "Ya existe: no se toca (se conservan sus datos). Para cambiarla por la del paquete: -ReemplazarBaseDatos"
 } else {
+    # La copia se carga primero con otro nombre. Solo si sale bien se quita la que había y se le
+    # pone el nombre GPE: si algo falla a medias, la base que había sigue igual.
+    $nueva = "${base}_nueva"
+    if (-not ((Sql $sql "SELECT DB_ID('$nueva')") -is [DBNull])) {
+        [void](Sql $sql "ALTER DATABASE [$nueva] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [$nueva];")
+    }
     $version = Sql $sql "SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS int)"
-    if ($version -lt 17) {
-        throw "Este SQL Server es más antiguo (versión $version) que el del ordenador de desarrollo (17 = SQL Server 2025) y no puede abrir la copia. Mira 'SI ALGO FALLA' en LEEME.txt."
-    }
-    # SQL Server lee la copia con su propia cuenta: se deja en su carpeta de copias
-    $carpetaCopias = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(400))"
-    $copia = Join-Path $carpetaCopias "GPE-instalacion.bak"
-    Copy-Item (Join-Path $PSScriptRoot "BaseDatos\GPE.bak") $copia -Force
-    $datos = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(400))"
-    $registro = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(400))"
+    $bak = Join-Path $PSScriptRoot "BaseDatos\GPE.bak"
+    $bacpac = Join-Path $PSScriptRoot "BaseDatos\GPE.bacpac"
+    $sqlPackage = Join-Path $PSScriptRoot "SqlPackage\SqlPackage.exe"
 
-    # Los nombres internos de los archivos vienen dentro de la copia
-    $conexion = New-Object System.Data.SqlClient.SqlConnection("Server=$sql;Database=master;Integrated Security=True;TrustServerCertificate=True;")
-    $conexion.Open()
-    $comando = $conexion.CreateCommand()
-    $comando.CommandText = "RESTORE FILELISTONLY FROM DISK = N'$copia'"
-    $lector = $comando.ExecuteReader()
-    $mover = @()
-    while ($lector.Read()) {
-        $carpetaDestino = if ($lector["Type"] -eq "L") { $registro } else { $datos }
-        $extension = if ($lector["Type"] -eq "L") { "_log.ldf" } else { ".mdf" }
-        $mover += "MOVE N'$($lector["LogicalName"])' TO N'$(Join-Path $carpetaDestino ($base + $extension))'"
-    }
-    $lector.Close(); $conexion.Close()
+    if ($version -ge 17 -and (Test-Path $bak)) {
+        # Mismo SQL Server que el ordenador de desarrollo (2025): se restaura la copia .bak.
+        # SQL Server lee la copia con su propia cuenta: se deja en su carpeta de copias
+        $carpetaCopias = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(400))"
+        $copia = Join-Path $carpetaCopias "GPE-instalacion.bak"
+        Copy-Item $bak $copia -Force
+        $datos = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(400))"
+        $registro = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(400))"
 
-    Write-Host "Restaurando la copia de la base de datos..."
-    [void](Sql $sql "RESTORE DATABASE [$base] FROM DISK = N'$copia' WITH $($mover -join ', '), RECOVERY")
-    Remove-Item $copia -Force
+        # Los nombres internos de los archivos vienen dentro de la copia
+        $conexion = New-Object System.Data.SqlClient.SqlConnection("Server=$sql;Database=master;Integrated Security=True;TrustServerCertificate=True;")
+        $conexion.Open()
+        $comando = $conexion.CreateCommand()
+        $comando.CommandText = "RESTORE FILELISTONLY FROM DISK = N'$copia'"
+        $lector = $comando.ExecuteReader()
+        $mover = @()
+        while ($lector.Read()) {
+            $carpetaDestino = if ($lector["Type"] -eq "L") { $registro } else { $datos }
+            $extension = if ($lector["Type"] -eq "L") { "_log.ldf" } else { ".mdf" }
+            $mover += "MOVE N'$($lector["LogicalName"])' TO N'$(Join-Path $carpetaDestino ($nueva + $extension))'"
+        }
+        $lector.Close(); $conexion.Close()
+
+        Write-Host "Restaurando la copia de la base de datos..."
+        [void](Sql $sql "RESTORE DATABASE [$nueva] FROM DISK = N'$copia' WITH $($mover -join ', '), RECOVERY")
+        Remove-Item $copia -Force
+    } else {
+        # SQL Server más antiguo que el del ordenador de desarrollo: el .bak no se puede abrir.
+        # Se importa el .bacpac (estructura y datos), que vale para cualquier versión.
+        if (-not (Test-Path $bacpac) -or -not (Test-Path $sqlPackage)) {
+            throw "Este SQL Server (versión $version) no puede abrir GPE.bak y en el paquete no están GPE.bacpac y SqlPackage. Vuelve a preparar el paquete. No se ha cambiado nada."
+        }
+        $framework = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Release
+        if ($framework -lt 461808) {
+            throw "Para importar la base hace falta .NET Framework 4.7.2 o más nuevo en el servidor. No se ha cambiado nada."
+        }
+        Write-Host "Este SQL Server es más antiguo que el del ordenador de desarrollo: se importa GPE.bacpac (tarda unos minutos)..."
+        & $sqlPackage /Action:Import /SourceFile:$bacpac /TargetServerName:$sql /TargetDatabaseName:$nueva `
+            /TargetTrustServerCertificate:True /Quiet:True
+        if ($LASTEXITCODE -ne 0) {
+            if (-not ((Sql $sql "SELECT DB_ID('$nueva')") -is [DBNull])) {
+                [void](Sql $sql "ALTER DATABASE [$nueva] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [$nueva];")
+            }
+            throw "No se pudo importar GPE.bacpac (mira el mensaje de arriba). La base $base no se ha tocado."
+        }
+    }
+
+    if ($existe) {
+        # Antes de quitarla se guarda la que había, por si hace falta recuperar algo
+        $carpetaCopias = Sql $sql "SELECT CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(400))"
+        $anterior = Join-Path $carpetaCopias ("GPE-antes-" + (Get-Date -Format "yyyyMMdd-HHmm") + ".bak")
+        Write-Host "Guardando la base $base que había en $anterior ..."
+        [void](Sql $sql "BACKUP DATABASE [$base] TO DISK = N'$anterior' WITH COPY_ONLY, INIT, CHECKSUM")
+        [void](Sql $sql "ALTER DATABASE [$base] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [$base];")
+    }
+    [void](Sql $sql "ALTER DATABASE [$nueva] MODIFY NAME = [$base];")
     Write-Host "Base de datos $base creada con la copia del ordenador de desarrollo."
 }
 
@@ -200,10 +226,10 @@ Write-Host "Permisos dados a gpe_app y a la web."
 Paso "3. IIS"
 Write-Host "Comprobando IIS (si no está, tarda unos minutos)..."
 if (Get-Command Install-WindowsFeature -ErrorAction SilentlyContinue) {
-    Install-WindowsFeature Web-Server, Web-Mgmt-Console, Web-Scripting-Tools | Out-Null       # Windows Server
+    Install-WindowsFeature Web-Server, Web-WebSockets, Web-Mgmt-Console, Web-Scripting-Tools | Out-Null   # Windows Server
 } else {
     Enable-WindowsOptionalFeature -Online -All -NoRestart -FeatureName IIS-WebServerRole, IIS-WebServer, `
-        IIS-ManagementConsole, IIS-ManagementScriptingTools | Out-Null                         # Windows 10/11
+        IIS-WebSockets, IIS-ManagementConsole, IIS-ManagementScriptingTools | Out-Null         # Windows 10/11
 }
 Write-Host "Instalado."
 
@@ -358,5 +384,6 @@ try {
 
 Write-Host ""
 Write-Host "Listo." -ForegroundColor Green
-Write-Host "  Web:                 $direccion"if ($conEscritorio) { Write-Host "  Aplicación:          \\$env:COMPUTERNAME\$recurso\setup.exe" }
+Write-Host "  Web:                 $direccion"
+if ($conEscritorio) { Write-Host "  Aplicación:          \\$env:COMPUTERNAME\$recurso\setup.exe" }
 Write-Host "  Registro de la tarea: C:\Windows\System32\config\systemprofile\AppData\Local\GPE\avisos.log"

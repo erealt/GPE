@@ -13,12 +13,15 @@
 #        paquete). Sin esto, va en el paquete y el instalador crea \\SERVIDOR\GPE.
 #   -SoloEscritorio      solo publica la aplicación en -Instalacion (para actualizarla sin ir al servidor)
 #   -BaseLocal miGPE     base de datos local que se copia al servidor
+#   -CopiarEn            carpeta donde se copian los archivos, si desde este ordenador no se entra
+#                        por la ruta de -Instalacion (p. ej. -Instalacion por IP y -CopiarEn por nombre)
 
 param(
     [Parameter(Mandatory)] [string]$Servidor,
     [string]$Instalacion = "",
     [switch]$SoloEscritorio,
-    [string]$BaseLocal = "miGPE"
+    [string]$BaseLocal = "miGPE",
+    [string]$CopiarEn = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,6 +102,28 @@ if (-not $SoloEscritorio) {
     $nombreVersion = @{ 15 = "2019"; 16 = "2022"; 17 = "2025" }[[int]$version]
     Write-Host "Copia hecha (BaseDatos\GPE.bak). Para restaurarla, el servidor necesita SQL Server $nombreVersion o más nuevo."
 
+    # Además, la base en formato .bacpac (estructura y datos): vale para un SQL Server más antiguo
+    # que el de este ordenador, que no puede abrir el .bak. La importa SqlPackage, que va en el paquete.
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    $vs = & $vswhere -latest -prerelease -property installationPath | Select-Object -First 1
+    $carpetaDac = Join-Path $vs "Common7\IDE\Extensions\Microsoft\SQLDB\DAC"
+    if (-not (Test-Path (Join-Path $carpetaDac "SqlPackage.exe"))) { throw "No encuentro SqlPackage en $carpetaDac (viene con Visual Studio)." }
+    Write-Host "Exportando $BaseLocal a GPE.bacpac..."
+    # El nivel de compatibilidad viaja en el .bacpac: el de SQL Server 2025 (170) no lo aceptan versiones
+    # anteriores. Mientras se exporta se pone 130 (SQL Server 2016 o más nuevo; la aplicación usa
+    # STRING_SPLIT, que lo necesita) y después se deja como estaba.
+    $compatibilidad = Sql "SELECT compatibility_level FROM sys.databases WHERE name = N'$BaseLocal'"
+    Sql "ALTER DATABASE [$BaseLocal] SET COMPATIBILITY_LEVEL = 130" | Out-Null
+    try {
+        & (Join-Path $carpetaDac "SqlPackage.exe") /Action:Export /SourceServerName:localhost /SourceDatabaseName:$BaseLocal `
+            /SourceTrustServerCertificate:True "/TargetFile:$(Join-Path $paquete 'BaseDatos\GPE.bacpac')" /Quiet:True
+        if ($LASTEXITCODE -ne 0) { throw "No se pudo exportar $BaseLocal a GPE.bacpac." }
+    } finally {
+        Sql "ALTER DATABASE [$BaseLocal] SET COMPATIBILITY_LEVEL = $compatibilidad" | Out-Null
+    }
+    Copy-Item $carpetaDac (Join-Path $paquete "SqlPackage") -Recurse
+    Write-Host "Copia hecha también en BaseDatos\GPE.bacpac (para cualquier versión de SQL Server)."
+
     # El instalador crea el usuario gpe_app con esta contraseña
     Set-Content (Join-Path $paquete "gpe_app.txt") $clave -NoNewline
 }
@@ -137,7 +162,7 @@ try {
 
     # Solo va lo de ClickOnce: el instalador, Application Files y el manifiesto. El manifiesto
     # se copia el último: mientras no cambia, los ordenadores siguen con la versión anterior.
-    $destino = if ($Instalacion) { $Instalacion } else { Join-Path $paquete "Escritorio" }
+    $destino = if ($CopiarEn) { $CopiarEn.Trim().TrimEnd('\') } elseif ($Instalacion) { $Instalacion } else { Join-Path $paquete "Escritorio" }
     New-Item -ItemType Directory $destino -Force | Out-Null
     foreach ($parte in "Application Files", "setup.exe", "GPE.Escritorio.application") {
         Copy-Item (Join-Path $temporal $parte) $destino -Recurse -Force

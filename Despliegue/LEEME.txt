@@ -8,7 +8,8 @@ Qué se hace:
     ordenador de desarrollo), con sus datos y sus usuarios.
   - SQL Server: se abre para que los ordenadores de la red entren con el usuario gpe_app.
   - La web (acciones, control diario, agua y DeCA): se actualiza.
-  - La aplicación de escritorio: se publica en \\servereurochoc\DATOS\GPE. Cada ordenador la
+  - La aplicación de escritorio: se publica en \\192.168.2.249\DATOS\GPE\GPE.Escritorio
+    (por la IP: no todos los ordenadores reconocen el nombre del servidor). Cada ordenador la
     instala desde ahí y se actualiza sola al abrirla. Ya lleva dentro la conexión a la base
     de datos del servidor.
   - La tarea diaria que borra los PDF del DeCA de más de un año.
@@ -30,12 +31,12 @@ A1. Tener en main todo lo que se va a probar (la rama web juntada en main) y sin
 
 A2. Preparar (PowerShell normal, en la carpeta del proyecto):
 
-      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor servereurochoc -Instalacion \\servereurochoc\DATOS\GPE
+      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor 192.168.2.249 -Instalacion \\192.168.2.249\DATOS\GPE\GPE.Escritorio -CopiarEn \\servereurochoc\DATOS\GPE\GPE.Escritorio
 
     Tarda unos minutos. Hace:
       - publica la web y la tarea en Despliegue\paquete;
       - hace la copia de miGPE (BaseDatos\GPE.bak);
-      - publica la aplicación de escritorio directamente en \\servereurochoc\DATOS\GPE.
+      - publica la aplicación de escritorio directamente en \\192.168.2.249\DATOS\GPE\GPE.Escritorio.
     Termina con "Paquete listo en ...\Despliegue\paquete".
 
     Hasta terminar el apartado B, que nadie instale la aplicación: todavía no podría
@@ -61,11 +62,12 @@ Entrar con un usuario administrador (Escritorio remoto). Tener a mano el usuario
 contraseña de aplicación de WordPress (los mismos que GPE_WP_USUARIO y GPE_WP_CLAVE del
 ordenador de desarrollo).
 
-B1. Mirar la versión de SQL Server
-    Tiene que ser SQL Server 2025, porque la copia viene de un SQL Server 2025.
-    Para verlo: botón Inicio, escribir "Aplicaciones instaladas" y buscar "SQL Server".
-    Si es más antigua (2019, 2022...), ver "La versión de SQL Server es más antigua" en
-    SI ALGO FALLA. El script lo comprueba también y, si no vale, se para sin tocar nada.
+B1. SQL Server
+    En servereurochoc hay dos: SQLEXPRESSBIZ (de otro programa, NO tocarla) y MSSQLSERVER,
+    que es la de GPE. Por eso el script se ejecuta con -InstanciaSql MSSQLSERVER.
+    Es más antigua que la del ordenador de desarrollo (2025): el script lo ve y, en vez de
+    la copia .bak, importa GPE.bacpac con SqlPackage (los dos van en el paquete). Tarda unos
+    minutos más. Necesita .NET Framework 4.7.2, que ya viene en Windows Server.
 
 B2. Ejecutar el script
     1. Abrir PowerShell como administrador (botón Inicio, escribir PowerShell, clic derecho,
@@ -73,10 +75,12 @@ B2. Ejecutar el script
     2. Escribir (cambiando la carpeta si se copió en otro sitio):
 
          cd C:\Instalacion-GPE
-         powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -ReemplazarBaseDatos
+         powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -ReemplazarBaseDatos -InstanciaSql MSSQLSERVER
 
        -ReemplazarBaseDatos cambia la base GPE del DeCA de prueba por la copia de miGPE.
-       Antes guarda la que había (GPE-antes-FECHA.bak, en la carpeta de copias de SQL Server).
+       Primero carga la copia como GPE_nueva; solo si sale bien guarda la que había
+       (GPE-antes-FECHA.bak, en la carpeta de copias de SQL Server), la quita y cambia el
+       nombre de GPE_nueva a GPE. Si falla, la GPE que había sigue igual.
        SOLO ESTA PRIMERA VEZ. Si hay que repetir el script, o en las actualizaciones
        (apartado D), sin -ReemplazarBaseDatos: si se pone, se pierde lo que haya hecho calidad.
 
@@ -88,7 +92,8 @@ B2. Ejecutar el script
     servidor con el usuario que instaló SQL Server y repetir.
 
 B3. Comprobar en el servidor
-    Abrir http://localhost/ en el navegador: tiene que salir la pantalla para entrar.
+    Abrir http://localhost/acciones/entrar en el navegador: tiene que salir la pantalla para
+    entrar. (http://localhost/ a secas abre la lista del DeCA, sin usuario.)
 
 
 C. EN LOS ORDENADORES DE CALIDAD
@@ -96,7 +101,7 @@ C. EN LOS ORDENADORES DE CALIDAD
 
 C1. Instalar la aplicación de escritorio
     1. Abrir el Explorador de archivos y escribir arriba, en la barra de la ruta:
-         \\servereurochoc\DATOS\GPE
+         \\192.168.2.249\DATOS\GPE\GPE.Escritorio      (o Z:\GPE\GPE.Escritorio)
     2. Doble clic en setup.exe y aceptar. Se abre GPE y queda en el menú Inicio.
     3. Si tiene McAfee: lo bloqueará y la aplicación no se abrirá. En McAfee, Elementos en
        cuarentena, restaurar GPE.Escritorio.dll y marcarlo como seguro. Pasa con cada
@@ -111,8 +116,11 @@ C2. Entrar
     La aplicación todavía no permite cambiar contraseñas.
 
 C3. La web
-    - En los ordenadores:  http://servereurochoc/
-    - En el móvil y la tablet, conectados a la wifi de la empresa:  http://192.168.2.249/
+    La dirección para entrar con usuario es /acciones/entrar (la dirección sin nada detrás
+    abre la lista del DeCA):
+    - En los ordenadores:  http://servereurochoc/acciones/entrar
+    - En el móvil y la tablet, conectados a la wifi de la empresa:
+        http://192.168.2.249/acciones/entrar
       (los móviles no entienden los nombres de la red de Windows).
       Conviene guardar la dirección como favorito o "Añadir a pantalla de inicio".
     - Calidad ve el control diario y el agua.
@@ -125,12 +133,13 @@ D. ACTUALIZAR MÁS ADELANTE
 
 Solo la aplicación de escritorio (no hace falta ir al servidor):
 
-      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor servereurochoc -Instalacion \\servereurochoc\DATOS\GPE -SoloEscritorio
+      powershell -ExecutionPolicy Bypass -File Despliegue\preparar-paquete.ps1 -Servidor 192.168.2.249 -Instalacion \\192.168.2.249\DATOS\GPE\GPE.Escritorio -CopiarEn \\servereurochoc\DATOS\GPE\GPE.Escritorio -SoloEscritorio
 
   Los ordenadores se actualizan al abrir GPE. McAfee volverá a bloquearla (ver C1).
 
-La web o todo: el comando de A2, copiar el paquete al servidor y ejecutar instalar-servidor.ps1
-SIN -ReemplazarBaseDatos.
+La web o todo: el comando de A2, copiar el paquete al servidor y ejecutar, SIN -ReemplazarBaseDatos:
+
+      powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -InstanciaSql MSSQLSERVER
   - La base de datos del servidor NO se toca: se conserva lo que haya hecho calidad.
     Si una versión nueva trae un script en BaseDatos, hay que ejecutarlo a mano en el
     servidor (en SQL Server Management Studio, sobre la base GPE).
@@ -145,14 +154,10 @@ desinstalar GPE, instalarla de nuevo y volver a ejecutar instalar-servidor.ps1.
 SI ALGO FALLA
 =============
 
-- La versión de SQL Server es más antigua (2019, 2022...): la copia GPE.bak no se puede abrir.
-  Hacerlo así:
-    1. En el ordenador de desarrollo, en SQL Server Management Studio: clic derecho en miGPE,
-       Tareas, "Exportar aplicación de capa de datos". Guardar el archivo .bacpac.
-    2. En el servidor, en Management Studio: borrar la base GPE (clic derecho, Eliminar)
-       después de hacer una copia de seguridad de ella. Luego clic derecho en "Bases de datos",
-       "Importar aplicación de capa de datos", elegir el .bacpac y llamar a la base GPE.
-    3. Ejecutar el script SIN -ReemplazarBaseDatos: verá que GPE ya existe y hará el resto.
+- "No se pudo importar GPE.bacpac": la GPE que había no se ha tocado. Copiar el mensaje que
+  sale encima y revisarlo en el ordenador de desarrollo antes de repetir.
+
+- "Hay varias instancias de SQL Server": falta -InstanciaSql MSSQLSERVER (con el guion).
 
 - "HTTP Error 500.19" o "500.30" en la web: falta el Hosting Bundle o se instaló antes que IIS.
   Volver a instalar el Hosting Bundle (opción Reparar) y ejecutar: iisreset
@@ -178,7 +183,8 @@ QUÉ DEJA INSTALADO
 - Base de datos GPE en SQL Server (puerto 1433), con el usuario de SQL gpe_app (el que usa la
   aplicación de escritorio) y el permiso de la web (IIS APPPOOL\GPE).
 - La web en C:\GPE\Web, sitio "GPE Web" de IIS (puerto 80). El sitio "GPE DeCA" de la primera
-  instalación pasa a llamarse así.- La aplicación de escritorio en \\servereurochoc\DATOS\GPE.
+  instalación pasa a llamarse así.
+- La aplicación de escritorio en \\192.168.2.249\DATOS\GPE\GPE.Escritorio.
 - Las copias de los PDF del DeCA en C:\GPE\DeCA.
 - GPE.Avisos en C:\GPE\Avisos y la tarea programada "GPE - Borrado DeCA", cada día a las 3:00.
   Su registro: C:\Windows\System32\config\systemprofile\AppData\Local\GPE\avisos.log
