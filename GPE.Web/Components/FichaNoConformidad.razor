@@ -1,0 +1,625 @@
+@* Ficha nueva de incidencia, no conformidad o acción de mejora para la web: las mismas fases y campos
+   que FormNoConformidad del escritorio (registro, clasificación, fotos, acción inmediata, análisis con
+   los 5 porqués, corrección y cierre), con las mismas reglas del servicio. *@
+
+<div class="ficha-nc">
+    <div class="ficha-fases">
+        @foreach (var (fase, i) in Fases().Select((f, i) => (f, i)))
+        {
+            <span class="ficha-fase @(fase.Hecha ? "hecha" : "")">
+                @(fase.Hecha ? "✓ " : "")@(i + 1). @TextoFase(fase.Fase)@(fase.Opcional && !fase.Hecha ? " (opcional)" : "")
+            </span>
+        }
+    </div>
+
+    @* 1. Registro *@
+    <section class="ficha-tarjeta">
+        <h3>1. Registro</h3>
+        <p class="suave pequeno">Qué es, cuándo se detectó, de dónde viene y quién se encarga</p>
+
+        <div class="campo">
+            <span class="etiqueta-campo">Tipo de registro</span>
+            <div class="opciones">
+                @foreach (var tipo in TipoRegistro.Todos)
+                {
+                    <label class="opcion">
+                        <input type="radio" name="tipo-registro" checked="@(f.Tipo == tipo)" disabled="@guardando"
+                               @onchange="() => CambiarTipo(tipo)" />
+                        @TipoRegistro.Nombre(tipo)
+                    </label>
+                }
+            </div>
+            @if (Error(nameof(NoConformidad.TipoRegistro)) is string errorTipo)
+            {
+                <span class="error-campo">@errorTipo</span>
+            }
+        </div>
+
+        <div class="rejilla-ficha">
+            <Campo Etiqueta="Nº">
+                <input value="@(numeroPrevisto ?? "Sin número")" readonly />
+                <span class="pequeno suave">@(numeroPrevisto == null ? "Las acciones de mejora no llevan número." : "Automático: se asigna al guardar.")</span>
+            </Campo>
+            <Campo Etiqueta="Fecha detectado" Error="@Error(nameof(NoConformidad.FechaDetectado))">
+                <input type="date" max="@Hoy" @bind="f.FechaDetectado" @bind:after="ActualizarNumero" disabled="@guardando" />
+            </Campo>
+            <Campo Etiqueta="Origen" Error="@Error(nameof(NoConformidad.Origen))">
+                <select @bind="f.Origen" @bind:after="CambiarOrigen" disabled="@guardando">
+                    @Opciones(ListaCalidad.Origen, f.Origen)
+                </select>
+            </Campo>
+            <Campo Etiqueta="Sección" Error="@Error(nameof(NoConformidad.Seccion))">
+                <select @bind="f.Seccion" @bind:after="ActualizarNumero" disabled="@guardando">
+                    @Opciones(ListaCalidad.Seccion, f.Seccion,
+                        NoConformidadServicio.SoloSeccionesAuditoria(f.Origen) ? o => NoConformidadServicio.SeccionesAuditoria.Contains(o.Valor) : null)
+                </select>
+            </Campo>
+            <Campo Etiqueta="Cliente" Error="@Error(nameof(NoConformidad.Cliente))">
+                <input list="clientes-nc" maxlength="150" @bind="f.Cliente" disabled="@guardando" />
+                <datalist id="clientes-nc">
+                    @foreach (var cliente in clientes)
+                    {
+                        <option value="@cliente"></option>
+                    }
+                </datalist>
+            </Campo>
+            <Campo Etiqueta="Proveedor" Error="@Error(nameof(NoConformidad.Proveedor))">
+                <select @bind="f.ProveedorId" disabled="@guardando">
+                    <option value="">—</option>
+                    @foreach (var p in proveedores.Where(p => !p.Baja))
+                    {
+                        <option value="@p.Id">@p.Nombre</option>
+                    }
+                </select>
+            </Campo>
+            @if (f.Tipo == TipoRegistro.NoConformidad)
+            {
+                <Campo Etiqueta="Tipo de no conformidad" Error="@Error(nameof(NoConformidad.Tipo))">
+                    <select @bind="f.TipoNc" disabled="@guardando">
+                        @Opciones(ListaCalidad.Tipo, f.TipoNc)
+                    </select>
+                </Campo>
+            }
+        </div>
+
+        <Campo Etiqueta="Problema" Error="@Error(nameof(NoConformidad.Problema))">
+            <textarea rows="4" placeholder="Qué se ha detectado: producto, lote, cliente..." @bind="f.Problema" @bind:event="oninput" disabled="@guardando"></textarea>
+        </Campo>
+
+        <div class="rejilla-ficha">
+            <Campo Etiqueta="Fecha prevista" Error="@Error(nameof(NoConformidad.FechaPrevista))">
+                <input type="date" @bind="f.FechaPrevista" disabled="@guardando" />
+            </Campo>
+            @if (f.Tipo == TipoRegistro.NoConformidad && f.ProveedorId != null)
+            {
+                <Campo Etiqueta="¿Afecta a la seguridad alimentaria?" Error="@Error(nameof(NoConformidad.SeguridadAlimentaria))">
+                    <select @bind="f.Seguridad" disabled="@guardando">
+                        <option value="">—</option>
+                        <option value="si">Sí, afecta</option>
+                        <option value="no">No afecta</option>
+                    </select>
+                    <span class="pequeno suave">Cuenta para la nota de reclamaciones del proveedor.</span>
+                </Campo>
+            }
+        </div>
+    </section>
+
+    @if (f.Tipo == TipoRegistro.Incidencia)
+    {
+        <section class="ficha-tarjeta">
+            <h3>Clasificación de la incidencia</h3>
+            <p class="suave pequeno">Solo para incidencias. MC/PCC/BPM únicamente si afecta a un MC, un PCC o a las buenas prácticas</p>
+            <div class="rejilla-ficha">
+                <Campo Etiqueta="MC / PCC / BPM">
+                    <select @bind="f.McPccBpm" disabled="@guardando">@Opciones(ListaCalidad.McPccBpm, f.McPccBpm)</select>
+                </Campo>
+                <Campo Etiqueta="Parámetro">
+                    <select @bind="f.Parametro" disabled="@guardando">@Opciones(ListaCalidad.Parametro, f.Parametro)</select>
+                </Campo>
+                <Campo Etiqueta="Operario causante">
+                    <select @bind="f.Operario" disabled="@guardando">@Opciones(ListaCalidad.Operario, f.Operario)</select>
+                </Campo>
+            </div>
+        </section>
+    }
+
+    <section class="ficha-tarjeta">
+        <h3>Fotos</h3>
+        <p class="suave pequeno">Fotos del problema. Van adjuntas en el correo a los responsables de las acciones nuevas.</p>
+        @* "Hacer foto" abre la cámara trasera del móvil (capture); en el ordenador, como la galería.
+           La clave cambia tras cada selección para poder elegir otra vez la misma foto. *@
+        <div class="botones-foto" @key="selecciones">
+            <label class="principal boton-foto @(guardando || leyendoFotos ? "desactivado" : "")">
+                📷 Hacer foto
+                <InputFile accept="image/*" capture="environment" OnChange="AnadirFotos" disabled="@(guardando || leyendoFotos)" />
+            </label>
+            <label class="secundario boton-foto @(guardando || leyendoFotos ? "desactivado" : "")">
+                🖼 Elegir de la galería
+                <InputFile accept="image/*" multiple OnChange="AnadirFotos" disabled="@(guardando || leyendoFotos)" />
+            </label>
+        </div>
+        @if (errorFotos != null)
+        {
+            <p class="error-campo">@errorFotos</p>
+        }
+        @if (leyendoFotos)
+        {
+            <p class="suave pequeno">Cargando fotos...</p>
+        }
+        @foreach (var foto in fotos)
+        {
+            <div class="foto-subida">
+                <span>📷 @foto.NombreArchivo · @Tamano(foto.Contenido.Length)</span>
+                <button class="quitar" disabled="@guardando" @onclick="() => fotos.Remove(foto)">✕</button>
+            </div>
+        }
+    </section>
+
+    @* 2. Acción inmediata *@
+    <section class="ficha-tarjeta">
+        <h3>2. Acción inmediata</h3>
+        <p class="suave pequeno">Lo que se ha hecho en el momento para frenar el problema</p>
+        @ListaAcciones(ClaseAccion.Inmediata, "Todavía no hay acciones inmediatas.", "+ Añadir acción inmediata")
+    </section>
+
+    @* 3. Análisis de la causa *@
+    <section class="ficha-tarjeta">
+        <h3>3. Análisis de la causa</h3>
+        <p class="suave pequeno">Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega</p>
+        <span class="etiqueta-campo">5 porqués</span>
+        @for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+        {
+            var n = i;
+            <div class="porque">
+                <strong>@(n + 1).</strong>
+                <textarea rows="2" maxlength="1000" placeholder="@(n == 0 ? "¿Por qué ha pasado...?" : "¿Por qué...?")"
+                          @bind="f.Preguntas[n]" @bind:event="oninput" disabled="@guardando"></textarea>
+                <textarea rows="2" maxlength="1000" placeholder="Porque..."
+                          @bind="f.Respuestas[n]" @bind:event="oninput" disabled="@guardando"></textarea>
+            </div>
+        }
+        <div class="rejilla-ficha">
+            <Campo Etiqueta="Causa raíz">
+                <select @bind="f.CausaRaiz" disabled="@guardando">
+                    <option value="">—</option>
+                    @foreach (var grupo in CausasRaiz.Todas)
+                    {
+                        <option value="@grupo">@grupo</option>
+                    }
+                </select>
+            </Campo>
+            <Campo Etiqueta="Capítulo de la norma">
+                <select @bind="f.Capitulo" disabled="@guardando">@Opciones(ListaCalidad.CapituloNorma, f.Capitulo)</select>
+            </Campo>
+        </div>
+    </section>
+
+    @* 4. Acción correctora *@
+    <section class="ficha-tarjeta">
+        <h3>4. Acción correctora</h3>
+        <p class="suave pequeno">Para que no vuelva a pasar. La fase queda hecha cuando todas las acciones están hechas</p>
+        @ListaAcciones(ClaseAccion.Correctora, "Todavía no hay acciones correctoras.", "+ Añadir acción correctora")
+        <div class="rejilla-ficha">
+            <Campo Etiqueta="Coste económico (€)" Error="@(errorCoste ?? Error(nameof(NoConformidad.CosteEconomico)))">
+                <input inputmode="decimal" placeholder="Ej. 180,50" @bind="f.Coste" disabled="@guardando" />
+            </Campo>
+            <Campo Etiqueta="Horas de mano de obra" Error="@(errorHoras ?? Error(nameof(NoConformidad.HorasManoObra)))">
+                <input inputmode="decimal" placeholder="Ej. 1,5" @bind="f.Horas" disabled="@guardando" />
+            </Campo>
+        </div>
+    </section>
+
+    @* 5. Verificación y cierre *@
+    <section class="ficha-tarjeta">
+        <h3>5. Verificación y cierre</h3>
+        <p class="pequeno @(NoConformidadServicio.Estado(f.FechaPrevista, f.FechaFin) == EstadoRegistro.FueraPlazo ? "error-campo" : "suave")">@TextoEstado()</p>
+        @ListaAcciones(ClaseAccion.Seguimiento,
+            "Todavía no hay seguimientos. Añade uno cada vez que se compruebe si las acciones han funcionado.", "+ Añadir seguimiento")
+        <div class="rejilla-ficha">
+            <Campo Etiqueta="Fecha fin" Error="@Error(nameof(NoConformidad.FechaFin))">
+                <input type="date" max="@Hoy" @bind="f.FechaFin" disabled="@guardando" />
+            </Campo>
+        </div>
+    </section>
+
+    @if (errorGeneral != null)
+    {
+        <div class="aviso error">@errorGeneral</div>
+    }
+    @if (hayErrores)
+    {
+        <div class="aviso error">Revisa los campos marcados en rojo.</div>
+    }
+    <div class="acciones">
+        <button class="secundario" disabled="@guardando" @onclick="OnCancelar">Ahora no</button>
+        <button class="principal" disabled="@(guardando || leyendoFotos)" @onclick="Guardar">
+            @(guardando ? "Guardando..." : "Guardar registro")
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public NoConformidad Borrador { get; set; } = default!;
+    [Parameter, EditorRequired] public Usuario Usuario { get; set; } = default!;
+    // Al guardar: el id y el registro tal como se ha guardado
+    [Parameter] public EventCallback<(int Id, NoConformidad Registro, string? AvisoProveedor)> OnGuardado { get; set; }
+    [Parameter] public EventCallback OnCancelar { get; set; }
+
+    private readonly NoConformidadServicio servicio = new();
+    private static string Hoy => DateTime.Today.ToString("yyyy-MM-dd");
+
+    // Lo que se va escribiendo en la ficha
+    private sealed class Ficha
+    {
+        public string Tipo { get; set; } = TipoRegistro.Incidencia;
+        public DateTime FechaDetectado { get; set; } = DateTime.Today;
+        public string? Origen { get; set; }
+        public string? Seccion { get; set; }
+        public string? TipoNc { get; set; }
+        public string? Cliente { get; set; }
+        public int? ProveedorId { get; set; }
+        public string? Seguridad { get; set; }   // "si", "no" o vacío
+        public string Problema { get; set; } = "";
+        public DateTime? FechaPrevista { get; set; }
+        public DateTime? FechaFin { get; set; }
+        public string? McPccBpm { get; set; }
+        public string? Parametro { get; set; }
+        public string? Operario { get; set; }
+        public string?[] Preguntas { get; } = new string?[NoConformidad.NumeroPorQues];
+        public string?[] Respuestas { get; } = new string?[NoConformidad.NumeroPorQues];
+        public string? CausaRaiz { get; set; }
+        public string? Capitulo { get; set; }
+        public string? Coste { get; set; }
+        public string? Horas { get; set; }
+    }
+
+    // Una fila de las tablas de acciones del escritorio (TablaAcciones)
+    private sealed class FilaAccion
+    {
+        public required string Clase { get; init; }
+        public bool Hecha { get; set; }
+        public string Accion { get; set; } = "";
+        public DateTime? Fecha { get; set; }
+        public string? Responsable { get; set; }
+        public string? Prioridad { get; set; }
+        public string? Observaciones { get; set; }
+        public string? Error { get; set; }
+
+        public bool Vacia => !Hecha && string.IsNullOrWhiteSpace(Accion) && Fecha == null
+            && string.IsNullOrWhiteSpace(Responsable) && string.IsNullOrWhiteSpace(Prioridad) && string.IsNullOrWhiteSpace(Observaciones);
+
+        public AccionNc Leer() =>
+            NoConformidadServicio.NormalizarAccion(new AccionNc(0, Clase, Accion, Fecha, Responsable, Observaciones, Hecha, Prioridad));
+    }
+
+    private Ficha f = new();
+    private readonly List<FilaAccion> acciones = new();
+    private readonly List<ArchivoNuevo> fotos = new();
+
+    private Dictionary<string, List<OpcionLista>> listas = new();
+    private List<string> clientes = new();
+    private List<ProveedorDeLista> proveedores = new();
+    private string? numeroPrevisto;
+
+    private List<(string Campo, string Mensaje)> errores = new();
+    private string? errorCoste, errorHoras, errorGeneral, errorFotos;
+    private bool hayErrores;
+    private bool guardando, leyendoFotos;
+    private int selecciones;
+
+    protected override void OnInitialized()
+    {
+        var b = Borrador;
+        f = new Ficha
+        {
+            Tipo = b.TipoRegistro,
+            FechaDetectado = b.FechaDetectado,
+            Origen = b.Origen,
+            Seccion = b.Seccion,
+            TipoNc = b.Tipo,
+            Cliente = b.Cliente,
+            ProveedorId = b.ProveedorId,
+            Problema = b.Problema,
+            FechaPrevista = b.FechaPrevista,
+            McPccBpm = b.McPccBpm,
+            Parametro = b.Parametro,
+            Operario = b.Operario,
+            CausaRaiz = b.CausaRaiz,
+            Capitulo = b.CapituloNorma
+        };
+        try
+        {
+            listas = servicio.ObtenerListas();
+            clientes = servicio.ObtenerClientes();
+            proveedores = servicio.ObtenerProveedores();
+        }
+        catch (DbException ex)
+        {
+            errorGeneral = "No se han podido leer las listas de calidad. Comprueba la conexión. " + ex.Message;
+        }
+        ActualizarNumero();
+    }
+
+    // Opciones de un desplegable; si el valor ya no está en la lista, se añade para no perderlo (como el escritorio)
+    private RenderFragment Opciones(string lista, string? valor, Func<OpcionLista, bool>? filtro = null) => __builder =>
+    {
+        var opciones = (listas.GetValueOrDefault(lista) ?? new()).Where(o => filtro == null || filtro(o)).ToList();
+        <option value="">—</option>
+        @foreach (var o in opciones)
+        {
+            <option value="@o.Valor">@o</option>
+        }
+        @if (valor != null && !opciones.Any(o => o.Valor == valor))
+        {
+            <option value="@valor">@valor</option>
+        }
+    };
+
+    private RenderFragment ListaAcciones(string clase, string vacia, string anadir) => __builder =>
+    {
+        bool seguimiento = clase == ClaseAccion.Seguimiento;
+        var filas = acciones.Where(a => a.Clase == clase).ToList();
+        var personas = (listas.GetValueOrDefault(ListaCalidad.Persona) ?? new()).Select(o => o.Valor).ToList();
+        @if (filas.Count == 0)
+        {
+            <p class="suave pequeno">@vacia</p>
+        }
+        @foreach (var a in filas)
+        {
+            <div class="accion-nc @(a.Error != null ? "con-error" : "")">
+                <div class="accion-cabeza">
+                    @if (!seguimiento)
+                    {
+                        <label class="accion-hecha"><input type="checkbox" @bind="a.Hecha" disabled="@guardando" /> Hecha</label>
+                    }
+                    <button class="quitar" title="Quitar" disabled="@guardando" @onclick="() => acciones.Remove(a)">✕</button>
+                </div>
+                <textarea rows="2" maxlength="1000" placeholder="@(seguimiento ? "Comprobación" : "Acción")"
+                          @bind="a.Accion" @bind:event="oninput" disabled="@guardando"></textarea>
+                <div class="accion-datos">
+                    <label><span>Fecha</span><input type="date" @bind="a.Fecha" disabled="@guardando" /></label>
+                    <label>
+                        <span>Responsable</span>
+                        <select @bind="a.Responsable" disabled="@guardando">
+                            <option value=""></option>
+                            @foreach (var p in personas)
+                            {
+                                <option value="@p">@p</option>
+                            }
+                        </select>
+                    </label>
+                    @if (!seguimiento)
+                    {
+                        <label>
+                            <span>Prioridad</span>
+                            <select @bind="a.Prioridad" disabled="@guardando">
+                                <option value=""></option>
+                                @foreach (var p in PrioridadAccion.Todas)
+                                {
+                                    <option value="@p">@p</option>
+                                }
+                            </select>
+                        </label>
+                    }
+                </div>
+                <input placeholder="Observaciones" maxlength="1000" @bind="a.Observaciones" disabled="@guardando" />
+                @if (a.Error != null)
+                {
+                    <span class="error-campo">@a.Error</span>
+                }
+            </div>
+        }
+        <button class="secundario" disabled="@guardando" @onclick="() => AnadirAccion(clase)">@anadir</button>
+    };
+
+    private void AnadirAccion(string clase) =>
+        // Un seguimiento casi siempre se apunta el mismo día en que se hace
+        acciones.Add(new FilaAccion { Clase = clase, Fecha = clase == ClaseAccion.Seguimiento ? DateTime.Today : null });
+
+    private void CambiarTipo(string tipo)
+    {
+        f.Tipo = tipo;
+        ActualizarNumero();
+    }
+
+    // Con origen auditoría solo valen las secciones de auditoría
+    private void CambiarOrigen()
+    {
+        if (NoConformidadServicio.SoloSeccionesAuditoria(f.Origen) && !NoConformidadServicio.SeccionesAuditoria.Contains(f.Seccion))
+            f.Seccion = null;
+        ActualizarNumero();
+    }
+
+    // El número depende del tipo, la sección (auditorías) y la fecha
+    private void ActualizarNumero()
+    {
+        try
+        {
+            numeroPrevisto = servicio.NumeroPrevisto(Registro(null, null), null);
+        }
+        catch (DbException)
+        {
+            numeroPrevisto = "Se asigna al guardar";
+        }
+    }
+
+    private NoConformidad Registro(decimal? coste, decimal? horas)
+    {
+        var proveedor = proveedores.FirstOrDefault(p => p.Id == f.ProveedorId);
+        return Borrador with
+        {
+            TipoRegistro = f.Tipo,
+            FechaDetectado = f.FechaDetectado.Date,
+            Origen = f.Origen,
+            Seccion = f.Seccion,
+            Tipo = f.TipoNc,
+            Cliente = f.Cliente,
+            Proveedor = proveedor?.Nombre,
+            ProveedorId = proveedor?.Id,
+            SeguridadAlimentaria = f.Seguridad switch { "si" => true, "no" => false, _ => null },
+            Problema = f.Problema ?? "",
+            FechaPrevista = f.FechaPrevista,
+            FechaFin = f.FechaFin,
+            McPccBpm = f.McPccBpm,
+            Parametro = f.Parametro,
+            Operario = f.Operario,
+            PorQues = Enumerable.Range(0, NoConformidad.NumeroPorQues).Select(i => new PorQue(f.Preguntas[i], f.Respuestas[i])).ToList(),
+            CausaRaiz = f.CausaRaiz,
+            CapituloNorma = f.Capitulo,
+            CosteEconomico = coste,
+            HorasManoObra = horas
+        };
+    }
+
+    private List<EstadoFase> Fases() =>
+        NoConformidadServicio.Fases(Registro(null, null),
+            acciones.Where(a => !a.Vacia).Select(a => new AccionNc(0, a.Clase, a.Accion, null, null, null, a.Hecha)));
+
+    // Cortos, como en la barra de fases del escritorio
+    private static string TextoFase(string fase) => fase switch
+    {
+        FaseCalidad.Registro => "Registro",
+        FaseCalidad.AccionInmediata => "Acción inmediata",
+        FaseCalidad.Analisis => "Análisis",
+        FaseCalidad.Correccion => "Corrección",
+        FaseCalidad.Acciones => "Acciones de mejora",
+        _ => "Verificación y cierre"
+    };
+
+    private string TextoEstado()
+    {
+        string estado = NoConformidadServicio.Estado(f.FechaPrevista, f.FechaFin);
+        return estado switch
+        {
+            EstadoRegistro.Cerrada => "Estado: cerrada.",
+            EstadoRegistro.SinPlazo => "Estado: abierta, sin fecha prevista.",
+            EstadoRegistro.EnPlazo => $"Estado: en plazo, hasta el {f.FechaPrevista:dd/MM/yyyy}.",
+            _ => $"Estado: fuera de plazo desde el {f.FechaPrevista!.Value.AddDays(1):dd/MM/yyyy}."
+        };
+    }
+
+    private string? Error(string campo) =>
+        errores.Where(e => e.Campo == campo).Select(e => e.Mensaje).FirstOrDefault();
+
+    // "13.5" también vale: en español el punto se tomaría como separador de miles (como el escritorio)
+    private static decimal? Numero(string? texto, string mensaje, ref string? error)
+    {
+        texto = texto?.Trim() ?? "";
+        if (texto == "") return null;
+        if (!texto.Contains(',')) texto = texto.Replace('.', ',');
+        if (decimal.TryParse(texto, System.Globalization.NumberStyles.Number, new System.Globalization.CultureInfo("es-ES"), out var valor))
+            return Math.Round(valor, 2);
+        error = mensaje;
+        return null;
+    }
+
+    private async Task Guardar()
+    {
+        errorCoste = errorHoras = errorGeneral = null;
+        decimal? coste = Numero(f.Coste, "Escribe solo el importe, por ejemplo 180,50.", ref errorCoste);
+        decimal? horas = Numero(f.Horas, "Escribe solo las horas, por ejemplo 1,5 (45 minutos = 0,75).", ref errorHoras);
+
+        var registro = NoConformidadServicio.Normalizar(Registro(coste, horas));
+        errores = NoConformidadServicio.Errores(registro);
+
+        var leidas = new List<AccionNc>();
+        bool accionesMal = false;
+        foreach (var fila in acciones)
+        {
+            fila.Error = null;
+            if (fila.Vacia) continue;
+            var accion = fila.Leer();
+            if (NoConformidadServicio.ErrorAccion(accion, registro.FechaDetectado) is string error)
+            {
+                fila.Error = error;
+                accionesMal = true;
+            }
+            leidas.Add(accion);
+        }
+
+        hayErrores = errores.Count > 0 || errorCoste != null || errorHoras != null || accionesMal;
+        if (hayErrores) return;
+
+        guardando = true;
+        await Task.Yield();   // para que se vean los botones desactivados mientras tanto
+        try
+        {
+            string? antes = null;
+            bool leidaAntes = registro.ProveedorId is int idAntes && Evaluacion(idAntes, out antes);
+
+            int id;
+            using (Sesion.Como(Usuario))
+                id = servicio.Guardar(registro, leidas, fotos);
+
+            // La evaluación del proveedor sale de sus NC: si pasa a pedir más controles, se avisa
+            string? avisoProveedor = null;
+            if (leidaAntes && registro.ProveedorId is int idProveedor && Evaluacion(idProveedor, out var despues)
+                && ProveedorServicio.Empeora(antes, despues))
+            {
+                string cambio = antes == null ? $"pasa a tener la evaluación {despues}" : $"pasa de la evaluación {antes} a la {despues}";
+                avisoProveedor = $"Con esta no conformidad, {registro.Proveedor} {cambio}.";
+            }
+            await OnGuardado.InvokeAsync((id, registro, avisoProveedor));
+        }
+        catch (ReglaNegocioException ex)
+        {
+            errorGeneral = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            errorGeneral = "No se ha guardado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    // Si no se puede leer, no se avisa: el registro se guarda igual
+    private static bool Evaluacion(int proveedorId, out string? evaluacion)
+    {
+        try
+        {
+            evaluacion = new ProveedorServicio().EvaluacionActual(proveedorId);
+            return true;
+        }
+        catch (DbException)
+        {
+            evaluacion = null;
+            return false;
+        }
+    }
+
+    // Fotos: se leen al elegirlas (en el iPhone, Safari ya las pasa a JPG) y se guardan con el registro
+    private async Task AnadirFotos(InputFileChangeEventArgs e)
+    {
+        errorFotos = null;
+        leyendoFotos = true;
+        try
+        {
+            foreach (var archivo in e.GetMultipleFiles(20))
+            {
+                if (NoConformidadServicio.ErrorFoto(archivo.Name, archivo.Size) is string error)
+                {
+                    errorFotos = error;
+                    continue;
+                }
+                using var memoria = new MemoryStream();
+                await archivo.OpenReadStream(NoConformidadServicio.TamanoMaximoFoto).CopyToAsync(memoria);
+                fotos.Add(new ArchivoNuevo(archivo.Name, memoria.ToArray()));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            errorFotos = "No se ha podido cargar la foto. Prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            leyendoFotos = false;
+            selecciones++;
+        }
+    }
+
+    private static string Tamano(long bytes) =>
+        bytes < 1024 * 1024 ? $"{bytes / 1024} KB" : $"{bytes / (1024.0 * 1024):0.0} MB";
+}

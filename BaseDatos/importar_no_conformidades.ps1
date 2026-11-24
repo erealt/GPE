@@ -82,9 +82,16 @@ function CausaRaiz($v, $fila) {
     if (-not $t) { return $null }
     function SinTildes($s) { -join ($s.Normalize([Text.NormalizationForm]::FormD).ToCharArray() |
         Where-Object { [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne 'NonSpacingMark' }) }
-    $grupo = $CAUSAS_RAIZ | Where-Object { (SinTildes $_) -eq (SinTildes $t) } | Select-Object -First 1
-    if (-not $grupo) { Aviso $fila "Causa raíz '$t' no es ninguno de los grupos ($($CAUSAS_RAIZ -join ', ')); se deja vacía." }
-    return $grupo
+    # Calidad escribe "GRUPO - causa" (una o varias líneas): cuenta el grupo de delante del guion
+    $nombres = @($t -split "`n" | ForEach-Object { ($_ -split ' - ', 2)[0].Trim() } | Where-Object { $_ })
+    $grupos = @($nombres | ForEach-Object {
+        $n = $_; $CAUSAS_RAIZ | Where-Object { (SinTildes $_) -eq (SinTildes $n) } | Select-Object -First 1
+    } | Select-Object -Unique)
+    if ($grupos.Count -ne 1 -or $grupos.Count -ne @($nombres | Select-Object -Unique).Count) {
+        Aviso $fila "Causa raíz '$t' no es uno solo de los grupos ($($CAUSAS_RAIZ -join ', ')); se deja vacía."
+        return $null
+    }
+    return $grupos[0]
 }
 
 # Si el análisis está escrito como "¿Por qué...? Porque... ¿Por qué...? Porque...", se reparte en los 5 porqués

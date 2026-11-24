@@ -12,6 +12,10 @@
 {
     <div class="aviso error">@error</div>
 }
+@if (avisoGuardada != null)
+{
+    <div class="aviso bien">@avisoGuardada</div>
+}
 
 @if (plantilla == null)
 {
@@ -101,6 +105,18 @@ else
         </table>
     </div>
 
+    @if (ficha is var (fichaPunto, fichaMaquina, fichaBorrador))
+    {
+        <div class="fondo-panel"></div>
+        <div class="panel-casilla panel-ficha">
+            <div class="panel-titulo">
+                <strong>Registrar · @fichaPunto.Nombre · @fichaMaquina.Nombre</strong>
+                <button class="quitar" @onclick="() => ficha = null">✕</button>
+            </div>
+            <FichaNoConformidad Borrador="fichaBorrador" Usuario="usuario!" OnGuardado="IncidenciaGuardada" OnCancelar="() => ficha = null" />
+        </div>
+    }
+
     @if (panelPuntos.Count > 0)
     {
         <div class="fondo-panel" @onclick="CerrarPanel"></div>
@@ -145,9 +161,15 @@ else
                         @(guardando ? "Guardando..." : "Guardar")
                     </button>
                 </div>
-                @if (actual?.NumeroIncidencia != null)
+                @if (actual?.NoConformidadId != null)
                 {
-                    <p class="pequeno suave">Incidencia @actual.NumeroIncidencia</p>
+                    <p class="pequeno suave">Registrada: nº @(actual.NumeroIncidencia ?? "sin número")</p>
+                }
+                else if (actual?.Estado == EstadoCasilla.NoCorrecto)
+                {
+                    <button class="secundario ancho" disabled="@guardando" @onclick="() => AbrirIncidencia(punto, seccion)">
+                        Registrar incidencia o no conformidad
+                    </button>
                 }
             }
             else
@@ -326,7 +348,7 @@ else
 
     // Guardado
 
-    private Task GuardarUna(RutinaPunto p, RutinaSeccion s, ResultadoRutina? actual, string? estado)
+    private async Task GuardarUna(RutinaPunto p, RutinaSeccion s, ResultadoRutina? actual, string? estado)
     {
         decimal? valor = null;
         if (p.Numerico && !string.IsNullOrWhiteSpace(valorTexto))
@@ -335,7 +357,7 @@ else
                     new System.Globalization.CultureInfo("es-ES"), out var numero))
             {
                 panelError = "Escribe un número (por ejemplo 12,5).";
-                return Task.CompletedTask;
+                return;
             }
             valor = numero;
         }
@@ -345,7 +367,11 @@ else
             Valor = p.Numerico ? valor : null,
             Comentario = comentarioTexto
         };
-        return Guardar(new() { casilla });
+        // Al pasar a NO se abre en el momento la incidencia de la casilla
+        bool pasaANo = estado == EstadoCasilla.NoCorrecto && actual?.Estado != EstadoCasilla.NoCorrecto
+            && actual?.NoConformidadId == null;
+        if (await Guardar(new() { casilla }) && pasaANo)
+            AbrirIncidencia(p, s);
     }
 
     private Task Vaciar(RutinaPunto p, RutinaSeccion s) =>
@@ -371,18 +397,21 @@ else
     private ResultadoRutina Vacia(RutinaPunto p, RutinaSeccion s) =>
         new(p.Id, s.Id, null, null, null, Revision: revision);
 
-    private async Task Guardar(List<ResultadoRutina> casillas)
+    private async Task<bool> Guardar(List<ResultadoRutina> casillas)
     {
         guardando = true;
         panelError = null;
+        avisoGuardada = null;
         await Task.Yield();   // para que se vean los botones desactivados mientras tanto
 
+        bool guardado = false;
         try
         {
             using (Sesion.Como(usuario!))
                 foreach (var casilla in casillas)
                     servicio.GuardarCasilla(fecha, casilla, plantilla!);
             CerrarPanel();
+            guardado = true;
         }
         catch (ReglaNegocioException ex)
         {
@@ -397,6 +426,44 @@ else
             guardando = false;
         }
         Cargar();
+        return guardado;
+    }
+
+    // Registro de una casilla NO, como "Abrir incidencia…" del escritorio: la ficha entera en blanco
+    // con lo que ya se sabe de la casilla; al guardarla se apunta en la casilla.
+    private (RutinaPunto Punto, RutinaSeccion Maquina, NoConformidad Borrador)? ficha;
+    private string? avisoGuardada;
+
+    private void AbrirIncidencia(RutinaPunto p, RutinaSeccion s)
+    {
+        var casilla = Casilla(p, s);
+        var rev = revisiones.FirstOrDefault(r => r.Numero == revision);
+        if (casilla?.Estado != EstadoCasilla.NoCorrecto || rev == null) return;
+
+        CerrarPanel();
+        ficha = (p, s, RutinaServicio.BorradorIncidencia(fecha, rev, p, s, casilla));
+    }
+
+    private async Task IncidenciaGuardada((int Id, NoConformidad Registro, string? AvisoProveedor) guardado)
+    {
+        var (punto, maquina, _) = ficha!.Value;
+        string? sinApuntar = null;
+        try
+        {
+            using (Sesion.Como(usuario!))
+                servicio.Vincular(servicio.ObtenerRutina(fecha).Rutina.Id, revision, punto.Id, maquina.Id, guardado.Id);
+        }
+        catch (Exception ex) when (ex is ReglaNegocioException or DbException)
+        {
+            sinApuntar = "Se ha guardado, pero no se ha podido apuntar en la casilla. " + ex.Message;
+        }
+        ficha = null;
+        Cargar();
+        error ??= sinApuntar;
+        var numero = resultados.GetValueOrDefault((revision, punto.Id, maquina.Id))?.NumeroIncidencia;
+        avisoGuardada = $"{TipoRegistro.Nombre(guardado.Registro.TipoRegistro)} {numero} guardada: {punto.Nombre} en {maquina.Nombre}."
+            + (guardado.AvisoProveedor is string aviso ? " " + aviso : "");
+        await Task.CompletedTask;
     }
 
     // Presentación: mismos símbolos que el escritorio (OpcionesCasilla.Simbolo)

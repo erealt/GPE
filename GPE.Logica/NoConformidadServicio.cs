@@ -297,15 +297,19 @@ public class NoConformidadServicio
     public byte[] ObtenerContenidoFoto(int fotoId) => repositorio.ObtenerContenidoFoto(fotoId);
 
     // Error de una foto del disco que se va a añadir (null si se puede)
-    public static string? ErrorFoto(string ruta)
+    public static string? ErrorFoto(string ruta) => ErrorFoto(Path.GetFileName(ruta), () => new FileInfo(ruta).Length);
+
+    // Lo mismo para una foto subida desde la web (nombre y tamaño)
+    public static string? ErrorFoto(string nombre, long tamano) => ErrorFoto(nombre, () => tamano);
+
+    private static string? ErrorFoto(string nombre, Func<long> tamano)
     {
-        string nombre = Path.GetFileName(ruta);
-        if (Path.GetExtension(ruta).Equals(".heic", StringComparison.OrdinalIgnoreCase))
+        if (Path.GetExtension(nombre).Equals(".heic", StringComparison.OrdinalIgnoreCase))
             return $"\"{nombre}\" es una foto de iPhone en formato HEIC, que no se puede ver en GPE. " +
                    "En el iPhone, en Ajustes > Cámara > Formatos, elige \"Más compatible\" y las fotos saldrán en JPG.";
-        if (!EsFoto(ruta))
+        if (!EsFoto(nombre))
             return $"\"{nombre}\" no es una foto (se admiten {string.Join(", ", ExtensionesFoto)}).";
-        if (new FileInfo(ruta).Length > TamanoMaximoFoto)
+        if (tamano() > TamanoMaximoFoto)
             return $"\"{nombre}\" ocupa más de 10 MB.";
         return null;
     }
@@ -324,7 +328,21 @@ public class NoConformidadServicio
     // Crea o guarda el registro con sus acciones y fotos y devuelve su id. El número se calcula aquí.
     // fotosNuevas: rutas en el disco; fotosQuitadas: ids de NC_FOTO.
     public int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones,
-        IEnumerable<string>? fotosNuevas = null, IEnumerable<int>? fotosQuitadas = null)
+        IEnumerable<string>? fotosNuevas = null, IEnumerable<int>? fotosQuitadas = null) =>
+        Guardar(nc, acciones, () => LeerFotos(fotosNuevas), fotosQuitadas);
+
+    // Desde la web: las fotos ya vienen leídas
+    public int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones, IReadOnlyList<ArchivoNuevo> fotosNuevas) =>
+        Guardar(nc, acciones, () =>
+        {
+            foreach (var foto in fotosNuevas)
+                if (ErrorFoto(foto.NombreArchivo, foto.Contenido.LongLength) is string error)
+                    throw new ReglaNegocioException(error);
+            return fotosNuevas.ToList();
+        }, null);
+
+    private int Guardar(NoConformidad nc, IEnumerable<AccionNc> acciones,
+        Func<List<ArchivoNuevo>> leerFotos, IEnumerable<int>? fotosQuitadas)
     {
         nc = Normalizar(nc);
         var lista = acciones.Select(NormalizarAccion).ToList();
@@ -338,7 +356,7 @@ public class NoConformidadServicio
 
         if (Sesion.UsuarioActual is not Usuario usuario)
             throw new ReglaNegocioException("No hay ningún usuario elegido.");
-        var fotos = LeerFotos(fotosNuevas);
+        var fotos = leerFotos();
         var quitadas = fotosQuitadas?.ToList();
 
         var serie = Serie(nc);
