@@ -1,0 +1,92 @@
+@page "/almacen"
+@layout LayoutTrabajadores
+@inject NavigationManager Navegacion
+
+<PageTitle>Almacén</PageTitle>
+
+@* Las devoluciones del almacén, como su lista del escritorio: las que tienen la recogida programada
+   (falta que llegue) y las que ya han llegado y falta revisar. *@
+<div class="cabecera">
+    <div>
+        <h1>Almacén</h1>
+        <p class="suave">Devoluciones que esperan la mercancía o la revisión.</p>
+    </div>
+</div>
+
+@if (error != null)
+{
+    <div class="aviso error">@error</div>
+}
+
+@if (devoluciones == null)
+{
+    @if (error == null)
+    {
+        <p class="suave">Cargando...</p>
+    }
+}
+else if (devoluciones.Count == 0)
+{
+    <div class="tarjeta vacio">No hay ninguna devolución pendiente en el almacén.</div>
+}
+else
+{
+    @foreach (var (titulo, fase) in new[] { ("POR REVISAR", Fase.MercanciaRecibida), ("ESPERANDO LA MERCANCÍA", Fase.RecogidaSolicitada) })
+    {
+        var grupo = devoluciones.Where(d => d.Fase == fase).ToList();
+        if (grupo.Count == 0) continue;
+
+        <div class="etiqueta-dato grupo-almacen">@titulo (@grupo.Count)</div>
+        @foreach (var d in grupo)
+        {
+            <a class="tarjeta devolucion-almacen" href="almacen/@d.Id">
+                <div class="accion-cabecera">
+                    <span class="numero">@d.Numero</span>
+                    <span class="etiqueta @(fase == Fase.MercanciaRecibida ? "ambar" : "gris")">@d.Estado</span>
+                </div>
+                <div>@d.Cliente</div>
+                <p class="pequeno suave">
+                    @if (fase == Fase.MercanciaRecibida)
+                    {
+                        @($"Llegó el {d.FechaLlegada:dd/MM/yyyy}")
+                    }
+                    else
+                    {
+                        @(d.FechaRecogida == null ? "Recogida sin fecha" : $"Recogida prevista el {d.FechaRecogida:dd/MM/yyyy}")
+                    }
+                </p>
+            </a>
+        }
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
+
+    private List<DevolucionFila>? devoluciones;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
+        {
+            Navegacion.NavigateTo("acciones/entrar?volver=%2Falmacen");
+            return;
+        }
+        if (!TrabajadorActual.VeAlmacen(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+
+        try
+        {
+            devoluciones = new DevolucionServicio().ObtenerDevolucionesAlmacen();
+        }
+        catch (DbException ex)
+        {
+            error = "No se han podido cargar las devoluciones. Comprueba la conexión. " + ex.Message;
+        }
+    }
+}

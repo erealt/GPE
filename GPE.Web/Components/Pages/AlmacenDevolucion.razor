@@ -1,0 +1,393 @@
+@page "/almacen/{Id:int}"
+@layout LayoutTrabajadores
+@inject NavigationManager Navegacion
+
+<PageTitle>Almacén · @(devolucion?.Numero ?? "Devolución")</PageTitle>
+
+@* Lo mismo que FormAlmacen del escritorio: marcar la llegada con el recibo de la agencia y revisar la
+   mercancía (productos, observaciones y fotos). Solo el rol Almacén hace los pasos; los demás, consulta.
+   Deshacer la recepción o reabrir la revisión se sigue haciendo en el escritorio. *@
+<div class="ruta"><a href="almacen">ALMACÉN</a> / @devolucion?.Numero</div>
+
+@if (error != null)
+{
+    <div class="aviso error">@error</div>
+}
+
+@if (devolucion != null && usuario != null)
+{
+    <div class="ficha-nc ficha-almacen">
+    <h1>@(devolucion.Fase < Fase.MercanciaRecibida ? "Llegada de la mercancía" : "Revisión de la mercancía")</h1>
+    <p class="suave pequeno">@devolucion.Numero · @devolucion.Estado</p>
+
+    <section class="ficha-tarjeta">
+        <div class="datos-devolucion">
+            <div><span class="etiqueta-dato">CLIENTE</span><span>@devolucion.Cliente (@devolucion.CodigoCliente)</span></div>
+            <div><span class="etiqueta-dato">MOTIVO</span><span>@devolucion.Motivo</span></div>
+            <div><span class="etiqueta-dato">RECOGIDA PREVISTA</span><span>@Fecha(devolucion.FechaRecogida)</span></div>
+            <div><span class="etiqueta-dato">FECHA LLEGADA</span><span>@(devolucion.FechaLlegada == null ? "Pendiente" : Fecha(devolucion.FechaLlegada))</span></div>
+        </div>
+    </section>
+
+    @if (devolucion.Fase < Fase.MercanciaRecibida)
+    {
+        @* Paso 3: llegada *@
+        <section class="ficha-tarjeta">
+            <h3>La mercancía todavía no ha llegado</h3>
+            @if (!puedeEditar)
+            {
+                <p class="suave pequeno">Cuando llegue, el almacén la marcará como recibida. Solo consulta: lo hace el rol Almacén.</p>
+            }
+            else
+            {
+                <p class="suave pequeno">Cuando llegue, hazle una foto al recibo de la agencia y márcala como recibida.</p>
+
+                @if (yaHayRecibo)
+                {
+                    <p class="pequeno">Se usará el recibo de la agencia que ya estaba adjunto.</p>
+                }
+                else
+                {
+                    <span class="etiqueta-campo">Recibo de la agencia</span>
+                    @foreach (var r in reciboNuevo)
+                    {
+                        <div class="foto-subida">
+                            <span>📄 @r.NombreArchivo</span>
+                            <button class="quitar" disabled="@guardando" @onclick="() => reciboNuevo.Remove(r)">✕</button>
+                        </div>
+                    }
+                    <BotonesFoto Tipo="@TipoAdjunto.Recibo" Ocupado="guardando" OnElegidos="l => reciboNuevo.AddRange(l)" />
+                }
+
+                @if (confirmando)
+                {
+                    <div class="aviso">¿Confirmas que la mercancía de @devolucion.Numero ha llegado hoy al almacén?</div>
+                    <div class="acciones">
+                        <button class="secundario" disabled="@guardando" @onclick="() => confirmando = false">Cancelar</button>
+                        <button class="principal" disabled="@guardando" @onclick="MarcarRecibida">@(guardando ? "Guardando..." : "Confirmar")</button>
+                    </div>
+                }
+                else
+                {
+                    <button class="principal ancho boton-paso" disabled="@(!yaHayRecibo && reciboNuevo.Count == 0)"
+                            @onclick="() => confirmando = true">Marcar como recibida</button>
+                    @if (!yaHayRecibo && reciboNuevo.Count == 0)
+                    {
+                        <p class="suave pequeno">Primero añade el recibo de la agencia.</p>
+                    }
+                }
+            }
+        </section>
+    }
+    else
+    {
+        @* Paso 4: revisión *@
+        <section class="ficha-tarjeta">
+            <h3>Recibo de la agencia</h3>
+            <p class="suave pequeno">@(editable ? "Los cambios se guardan al momento. Toca un archivo para verlo." : "Toca un archivo para verlo.")</p>
+            <AdjuntosDevolucion DevolucionId="Id" Tipo="@TipoAdjunto.Recibo" Editable="editable" Usuario="usuario" Roles="roles" />
+        </section>
+
+        <section class="ficha-tarjeta">
+            <h3>Datos de la revisión</h3>
+            <p class="suave pequeno">
+                @(editable ? "Agencia que ha traído la mercancía y persona del almacén que la revisa."
+                  : !puedeEditar ? "Solo consulta: la revisión la hace el rol Almacén."
+                  : "Revisión finalizada: solo consulta.")
+            </p>
+            <div class="rejilla-ficha">
+                <Campo Etiqueta="Agencia">
+                    <input maxlength="100" @bind="agencia" disabled="@(!editable || guardando)" />
+                </Campo>
+                <Campo Etiqueta="Mercancía revisada por" Error="@errorRevisadaPor">
+                    <input maxlength="100" @bind="revisadaPor" disabled="@(!editable || guardando)" />
+                </Campo>
+            </div>
+        </section>
+
+        <section class="ficha-tarjeta">
+            <h3>Productos recibidos</h3>
+            @if (editable)
+            {
+                <p class="suave pequeno">Una línea por producto y lote. Si unas unidades están bien y otras no, apúntalas en dos líneas.</p>
+            }
+            @foreach (var (l, i) in lineas.Select((l, i) => (l, i)))
+            {
+                <div class="accion-nc linea-revision @(l.Error != null ? "con-error" : "")">
+                    <div class="accion-cabeza">
+                        <strong>Línea @(i + 1)</strong>
+                        @if (editable)
+                        {
+                            <button class="quitar" title="Quitar" disabled="@guardando" @onclick="() => lineas.Remove(l)">✕</button>
+                        }
+                    </div>
+                    <Campo Etiqueta="Producto">
+                        <select @bind="l.ProductoId" disabled="@(!editable || guardando)">
+                            <option value="">—</option>
+                            @foreach (var p in productos)
+                            {
+                                <option value="@p.Id">@p.Codigo · @p.Nombre@(p.Formato == null ? "" : " · " + p.Formato)</option>
+                            }
+                        </select>
+                    </Campo>
+                    <div class="datos-linea">
+                        <Campo Etiqueta="Lote">
+                            <input maxlength="30" @bind="l.Lote" disabled="@(!editable || guardando)" />
+                        </Campo>
+                        <Campo Etiqueta="Caducidad">
+                            <input type="date" @bind="l.Caducidad" disabled="@(!editable || guardando)" />
+                        </Campo>
+                        <Campo Etiqueta="Cantidad">
+                            <input type="number" inputmode="numeric" min="1" step="1" @bind="l.Cantidad" disabled="@(!editable || guardando)" />
+                        </Campo>
+                        <Campo Etiqueta="Apto para servir">
+                            <select @bind="l.Apto" disabled="@(!editable || guardando)">
+                                <option value="">—</option>
+                                <option value="si">Sí</option>
+                                <option value="no">No</option>
+                            </select>
+                        </Campo>
+                    </div>
+                    @if (l.Error != null)
+                    {
+                        <span class="error-campo">@l.Error</span>
+                    }
+                </div>
+            }
+            @if (lineas.Count == 0)
+            {
+                <p class="suave pequeno">No hay productos apuntados.</p>
+            }
+            @if (editable)
+            {
+                <button class="secundario" disabled="@guardando" @onclick="() => lineas.Add(new Linea())">+ Añadir línea</button>
+            }
+            @if (errorLineas != null)
+            {
+                <p class="error-campo">@errorLineas</p>
+            }
+        </section>
+
+        <section class="ficha-tarjeta">
+            <h3>Observaciones</h3>
+            <p class="suave pequeno">Estado general de la mercancía, embalaje, incidencias en la llegada...</p>
+            <Campo Etiqueta="">
+                <textarea rows="4" maxlength="1000" @bind="observaciones" disabled="@(!editable || guardando)"></textarea>
+            </Campo>
+        </section>
+
+        <section class="ficha-tarjeta">
+            <h3>Fotos de la mercancía</h3>
+            <p class="suave pequeno">
+                @(editable ? "Las fotos se guardan al momento. Si las hiciste al llegar la mercancía, búscalas en la galería."
+                  : "Toca una foto para verla.")
+            </p>
+            <AdjuntosDevolucion DevolucionId="Id" Tipo="@TipoAdjunto.Foto" Editable="editable" Usuario="usuario" Roles="roles" />
+        </section>
+
+        @if (editable)
+        {
+            @if (errorGeneral != null)
+            {
+                <div class="aviso error">@errorGeneral</div>
+            }
+            @if (confirmando)
+            {
+                <div class="aviso">Al finalizar, la revisión pasa a solo consulta. Se puede reabrir desde el escritorio mientras no se registre el abono. ¿Finalizar la revisión?</div>
+                <div class="acciones">
+                    <button class="secundario" disabled="@guardando" @onclick="() => confirmando = false">Cancelar</button>
+                    <button class="principal" disabled="@guardando" @onclick="FinalizarRevision">@(guardando ? "Guardando..." : "Finalizar")</button>
+                </div>
+            }
+            else
+            {
+                <p class="suave pequeno">Lo apuntado en la revisión solo se guarda al finalizarla (las fotos sí se guardan al momento).</p>
+                <button class="principal ancho boton-paso" @onclick="PedirFinalizar">Finalizar revisión</button>
+            }
+        }
+    }
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
+
+    private readonly DevolucionServicio servicio = new();
+
+    private DevolucionFila? devolucion;
+    private Usuario? usuario;
+    private List<string> roles = new();
+    private bool puedeEditar;       // solo el rol Almacén hace los pasos
+    private bool editable;          // y la revisión, solo mientras está en "Mercancía recibida"
+    private bool yaHayRecibo;       // de una recepción que se deshizo
+    private readonly List<ArchivoNuevo> reciboNuevo = new();
+
+    private List<Producto> productos = new();
+    private List<Linea> lineas = new();
+    private string? agencia, revisadaPor, observaciones;
+
+    private string? error, errorGeneral, errorRevisadaPor, errorLineas;
+    private bool confirmando, guardando;
+
+    // Una línea de la tabla de productos del escritorio
+    private sealed class Linea
+    {
+        public int? ProductoId { get; set; }
+        public string? Lote { get; set; }
+        public DateTime? Caducidad { get; set; }
+        public int? Cantidad { get; set; }
+        public string? Apto { get; set; }   // "si", "no" o vacío
+        public string? Error { get; set; }
+
+        public bool? EsApto => Apto switch { "si" => true, "no" => false, _ => null };
+        public string? LoteLimpio => string.IsNullOrWhiteSpace(Lote) ? null : Lote.Trim();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var sesion = (await EstadoSesion).User;
+        if (!TrabajadorActual.HaEntrado(sesion))
+        {
+            Navegacion.NavigateTo("acciones/entrar?volver=%2Falmacen");
+            return;
+        }
+        if (!TrabajadorActual.VeAlmacen(sesion))
+        {
+            Navegacion.NavigateTo(TrabajadorActual.Inicio(sesion).TrimStart('/'));
+            return;
+        }
+        usuario = TrabajadorActual.Usuario(sesion);
+        roles = TrabajadorActual.Roles(sesion);
+        puedeEditar = roles.Contains(Rol.Almacen);
+        Cargar();
+    }
+
+    private void Cargar()
+    {
+        confirmando = false;
+        try
+        {
+            devolucion = servicio.ObtenerDevolucion(Id);
+            if (devolucion == null)
+            {
+                error = "Esta devolución ya no existe.";
+                return;
+            }
+
+            if (devolucion.Fase < Fase.MercanciaRecibida)
+            {
+                yaHayRecibo = servicio.ObtenerAdjuntos(Id, TipoAdjunto.Recibo).Count > 0;
+                return;
+            }
+
+            editable = devolucion.Fase == Fase.MercanciaRecibida && puedeEditar;
+            productos = servicio.ObtenerProductos();
+
+            var cabecera = servicio.ObtenerCabeceraRevision(Id);
+            agencia = cabecera.Agencia ?? cabecera.Transportista;
+            // Se propone quien la está revisando; en consulta solo se ve lo guardado
+            revisadaPor = cabecera.RevisadaPor ?? (editable ? usuario!.Nombre : null);
+            observaciones = cabecera.Observaciones;
+
+            // Sin revisión guardada, se parte de los productos indicados al crear la devolución
+            var guardadas = servicio.ObtenerLineasRevision(Id);
+            lineas = guardadas.Count > 0 || !editable
+                ? guardadas.Select(l => new Linea
+                {
+                    ProductoId = l.ProductoId, Lote = l.Lote, Caducidad = l.Caducidad,
+                    Cantidad = l.Cantidad, Apto = l.Apto ? "si" : "no"
+                }).ToList()
+                : servicio.ObtenerProductosSolicitados(Id).Select(l => new Linea
+                {
+                    ProductoId = l.ProductoId, Lote = l.Lote, Cantidad = l.Cantidad
+                }).ToList();
+        }
+        catch (DbException ex)
+        {
+            error = "No se ha podido cargar la devolución. Comprueba la conexión. " + ex.Message;
+        }
+    }
+
+    private static string Fecha(DateTime? fecha) => fecha?.ToString("dd/MM/yyyy") ?? "—";
+
+    private async Task MarcarRecibida()
+    {
+        errorGeneral = null;
+        guardando = true;
+        await Task.Yield();
+        try
+        {
+            using (Sesion.Como(usuario!, roles))
+                servicio.MarcarRecibida(Id, reciboNuevo);
+            reciboNuevo.Clear();
+            // Se sigue directamente con la revisión en la misma pantalla
+            Cargar();
+        }
+        catch (ReglaNegocioException ex)
+        {
+            error = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            error = "No se ha guardado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+            confirmando = false;
+        }
+    }
+
+    // Marca lo que falta antes de pedir la confirmación, como el escritorio
+    private void PedirFinalizar()
+    {
+        errorGeneral = null;
+        errorRevisadaPor = string.IsNullOrWhiteSpace(revisadaPor) ? "Indica quién ha revisado la mercancía." : null;
+
+        int conError = 0;
+        foreach (var l in lineas)
+        {
+            l.Error = DevolucionServicio.ErrorLinea(l.ProductoId, l.LoteLimpio, l.Cantidad, l.EsApto);
+            if (l.Error != null) conError++;
+        }
+        errorLineas = lineas.Count == 0 ? "Apunta al menos un producto con «Añadir línea»."
+            : conError == 1 ? "Hay 1 línea incompleta."
+            : conError > 1 ? $"Hay {conError} líneas incompletas."
+            : null;
+
+        confirmando = errorRevisadaPor == null && errorLineas == null;
+        if (!confirmando)
+            errorGeneral = "Revisa lo marcado en rojo.";
+    }
+
+    private async Task FinalizarRevision()
+    {
+        var datos = new DatosRevision(Id, revisadaPor!.Trim(),
+            string.IsNullOrWhiteSpace(agencia) ? null : agencia.Trim(),
+            string.IsNullOrWhiteSpace(observaciones) ? null : observaciones.Trim(),
+            lineas.Select(l => new LineaRevisada(l.ProductoId!.Value, l.LoteLimpio, l.Caducidad?.Date, l.Cantidad!.Value, l.EsApto!.Value)).ToList());
+
+        guardando = true;
+        await Task.Yield();
+        try
+        {
+            using (Sesion.Como(usuario!, roles))
+                servicio.FinalizarRevision(datos);
+            Navegacion.NavigateTo("almacen");
+        }
+        catch (ReglaNegocioException ex)
+        {
+            errorGeneral = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            errorGeneral = "No se ha guardado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+            confirmando = false;
+        }
+    }
+}

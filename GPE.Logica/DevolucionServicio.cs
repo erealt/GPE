@@ -60,6 +60,10 @@ public class DevolucionServicio
         repositorio.ObtenerDevoluciones(FasesVisibles().Where(f => f != Fase.Cierre));
 
     // Las cerradas son cada vez más: la lista solo las pide al buscarlas o filtrar por su estado
+    // Las del almacén (las mismas que ve el rol Almacén en el escritorio), para la web
+    public List<DevolucionFila> ObtenerDevolucionesAlmacen() =>
+        repositorio.ObtenerDevoluciones(FasesPorRol[Rol.Almacen]);
+
     public List<DevolucionFila> ObtenerDevolucionesCerradas() =>
         repositorio.ObtenerDevoluciones(new[] { Fase.Cierre });
 
@@ -155,7 +159,14 @@ public class DevolucionServicio
     public void MarcarRecibida(int devolucionId, IEnumerable<string> rutasRecibo)
     {
         ExigirRol(Rol.Almacen, "marcar la mercancía como recibida");
-        var recibo = LeerArchivos(TipoAdjunto.Recibo, rutasRecibo);
+        MarcarRecibida(devolucionId, LeerArchivos(TipoAdjunto.Recibo, rutasRecibo));
+    }
+
+    // Desde la web: el recibo ya viene leído (foto hecha con el móvil)
+    public void MarcarRecibida(int devolucionId, List<ArchivoNuevo> recibo)
+    {
+        ExigirRol(Rol.Almacen, "marcar la mercancía como recibida");
+        ComprobarArchivos(TipoAdjunto.Recibo, recibo);
         if (recibo.Count == 0 && repositorio.ObtenerAdjuntos(devolucionId, TipoAdjunto.Recibo).Count == 0)
             throw new ReglaNegocioException("Adjunta el recibo de la agencia de transporte.");
 
@@ -284,6 +295,35 @@ public class DevolucionServicio
             repositorio.InsertarAdjuntos(devolucionId, tipo, archivos);
     }
 
+    // Desde la web: los archivos ya vienen leídos del móvil
+    public void AnadirAdjuntos(int devolucionId, string tipo, List<ArchivoNuevo> archivos)
+    {
+        ExigirRolAdjunto(tipo);
+        ComprobarArchivos(tipo, archivos);
+        if (archivos.Count > 0)
+            repositorio.InsertarAdjuntos(devolucionId, tipo, archivos);
+    }
+
+    // Un adjunto con su nombre, o null si ya no existe (para verlo desde la web)
+    public (string Nombre, byte[] Contenido)? ObtenerAdjunto(int adjuntoId) => repositorio.ObtenerAdjunto(adjuntoId);
+
+    // Tipo y tamaño de un archivo: el error o null si vale
+    public static string? ErrorArchivo(string tipo, string nombre, long tamano)
+    {
+        if (!ExtensionesPermitidas[tipo].Contains(Path.GetExtension(nombre).ToLowerInvariant()))
+            return $"\"{nombre}\" no es un tipo de archivo permitido.";
+        if (tamano > TamanoMaximoAdjunto)
+            return $"\"{nombre}\" ocupa más de 10 MB.";
+        return null;
+    }
+
+    private static void ComprobarArchivos(string tipo, List<ArchivoNuevo> archivos)
+    {
+        foreach (var archivo in archivos)
+            if (ErrorArchivo(tipo, archivo.NombreArchivo, archivo.Contenido.Length) is string error)
+                throw new ReglaNegocioException(error);
+    }
+
     // Comprueba el tipo y el tamaño de cada archivo y lo lee
     private static List<ArchivoNuevo> LeerArchivos(string tipo, IEnumerable<string> rutas)
     {
@@ -291,12 +331,8 @@ public class DevolucionServicio
         foreach (string ruta in rutas)
         {
             string nombre = Path.GetFileName(ruta);
-
-            if (!ExtensionesPermitidas[tipo].Contains(Path.GetExtension(ruta).ToLowerInvariant()))
-                throw new ReglaNegocioException($"\"{nombre}\" no es un tipo de archivo permitido.");
-
-            if (new FileInfo(ruta).Length > TamanoMaximoAdjunto)
-                throw new ReglaNegocioException($"\"{nombre}\" ocupa más de 10 MB.");
+            if (ErrorArchivo(tipo, nombre, new FileInfo(ruta).Length) is string error)
+                throw new ReglaNegocioException(error);
 
             archivos.Add(new ArchivoNuevo(nombre, File.ReadAllBytes(ruta)));
         }

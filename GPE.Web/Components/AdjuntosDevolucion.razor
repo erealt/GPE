@@ -1,0 +1,114 @@
+@* Recibo o fotos de una devolución en la web del almacén, como ControlAdjuntos del escritorio:
+   los cambios se guardan al momento. "Hacer foto" abre la cámara del móvil; "Elegir" la galería
+   (las fotos hechas antes, al llegar la mercancía) o un archivo. *@
+
+@if (archivos.Count == 0)
+{
+    <p class="suave pequeno">@(Editable ? "Todavía no hay ninguno." : "No hay ninguno.")</p>
+}
+@foreach (var a in archivos)
+{
+    <div class="foto-subida">
+        <a href="almacen/archivo/@a.Id" target="_blank">@(Tipo == TipoAdjunto.Foto ? "📷" : "📄") @a.NombreArchivo</a>
+        @if (Editable)
+        {
+            @if (quitando == a.Id)
+            {
+                <span class="confirmar-quitar">
+                    <button class="secundario" disabled="@ocupado" @onclick="() => quitando = null">No</button>
+                    <button class="principal" disabled="@ocupado" @onclick="() => Quitar(a)">Quitar</button>
+                </span>
+            }
+            else
+            {
+                <button class="quitar" title="Quitar" disabled="@ocupado" @onclick="() => quitando = a.Id">✕</button>
+            }
+        }
+    </div>
+}
+
+@if (Editable)
+{
+    <BotonesFoto Tipo="@Tipo" Ocupado="ocupado" OnElegidos="Subir" />
+}
+@if (error != null)
+{
+    <p class="error-campo">@error</p>
+}
+@if (ocupado)
+{
+    <p class="suave pequeno">Guardando...</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public int DevolucionId { get; set; }
+    [Parameter, EditorRequired] public string Tipo { get; set; } = TipoAdjunto.Foto;
+    [Parameter] public bool Editable { get; set; }
+    [Parameter, EditorRequired] public Usuario Usuario { get; set; } = default!;
+    [Parameter, EditorRequired] public List<string> Roles { get; set; } = new();
+
+    private readonly DevolucionServicio servicio = new();
+    private List<AdjuntoInfo> archivos = new();
+    private int? quitando;
+    private bool ocupado;
+    private string? error;
+
+    protected override void OnInitialized() => Cargar();
+
+    private void Cargar()
+    {
+        try
+        {
+            archivos = servicio.ObtenerAdjuntos(DevolucionId, Tipo);
+        }
+        catch (DbException ex)
+        {
+            error = "No se han podido cargar los archivos. " + ex.Message;
+        }
+    }
+
+    private async Task Subir(List<ArchivoNuevo> nuevos)
+    {
+        error = null;
+        ocupado = true;
+        await Task.Yield();
+        try
+        {
+            using (Sesion.Como(Usuario, Roles))
+                servicio.AnadirAdjuntos(DevolucionId, Tipo, nuevos);
+            Cargar();
+        }
+        catch (ReglaNegocioException ex)
+        {
+            error = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            error = "No se ha guardado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            ocupado = false;
+        }
+    }
+
+    private void Quitar(AdjuntoInfo archivo)
+    {
+        error = null;
+        try
+        {
+            using (Sesion.Como(Usuario, Roles))
+                servicio.EliminarAdjunto(archivo.Id, Tipo);
+            quitando = null;
+            Cargar();
+        }
+        catch (ReglaNegocioException ex)
+        {
+            error = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            error = "No se ha quitado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+    }
+}

@@ -22,7 +22,7 @@
                 <div class="menu-usuario">
                     <span class="suave">@TrabajadorActual.Nombre(context.User)</span>
                     @* Recarga entera: salir no es una página de Blazor *@
-                    <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir" + (Seccion is "control" or "agua" ? "?volver=%2F" + Seccion : ""), forceLoad: true)'>Salir</button>
+                    <button class="secundario" @onclick='() => Navegacion.NavigateTo("acciones/salir" + (Seccion is "control" or "agua" or "almacen" ? "?volver=%2F" + Seccion : ""), forceLoad: true)'>Salir</button>
                 </div>
 
                 @if (TrabajadorActual.VeAcciones(context.User))
@@ -33,6 +33,10 @@
                 {
                     <a class="@Activo("control")" href="control" @onclick="CerrarEnMovil">Control diario</a>
                     <a class="@Activo("agua")" href="agua" @onclick="CerrarEnMovil">Control de agua</a>
+                }
+                @if (TrabajadorActual.VeAlmacen(context.User))
+                {
+                    <a class="@Activo("almacen")" href="almacen" @onclick="CerrarEnMovil">Almacén</a>
                 }
                 @if (TrabajadorActual.VeDeca(context.User))
                 {
@@ -71,7 +75,7 @@
 @code {
     private bool menuAlternado;
 
-    // "acciones", "control", "agua" o "deca" según la página (la de entrar con ?volver=/control cuenta como control)
+    // "acciones", "control", "agua", "almacen" o "deca" según la página (la de entrar con ?volver=/control cuenta como control)
     private string Seccion
     {
         get
@@ -81,6 +85,8 @@
                 return "control";
             if (ruta.StartsWith("agua") || ruta.Contains("volver=%2Fagua", StringComparison.OrdinalIgnoreCase))
                 return "agua";
+            if (ruta.StartsWith("almacen") || ruta.Contains("volver=%2Falmacen", StringComparison.OrdinalIgnoreCase))
+                return "almacen";
             if (ruta.StartsWith("acciones"))
                 return "acciones";
             return "deca";
@@ -92,6 +98,7 @@
         "control" => "Control diario",
         "agua" => "Control de agua",
         "acciones" => "Mis acciones",
+        "almacen" => "Almacén",
         _ => "DeCA"
     };
 
@@ -99,7 +106,7 @@
     private string Ancho => Seccion switch
     {
         "control" => "ancha",
-        "acciones" => "estrecha",
+        "acciones" or "almacen" => "estrecha",
         _ => ""
     };
 

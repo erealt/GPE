@@ -2,7 +2,7 @@
 @layout LayoutTrabajadores
 @inject NavigationManager Navegacion
 
-<PageTitle>Entrar · @(Volver == "/control" ? "Control diario" : Volver == "/agua" ? "Control de agua" : "Mis acciones")</PageTitle>
+<PageTitle>Entrar · @(Volver == "/control" ? "Control diario" : Volver == "/agua" ? "Control de agua" : Volver == "/almacen" ? "Almacén" : "Mis acciones")</PageTitle>
 
 @* Formulario normal (no de Blazor): lo recibe /acciones/iniciar-sesion en Program.cs, que pone la cookie.
    Sirve para "Mis acciones", el control diario (?volver=/control) y el de agua (?volver=/agua). *@
@@ -11,6 +11,7 @@
     <p class="suave pequeno">
         @(Volver == "/control" ? "Para pasar el control diario de calidad."
           : Volver == "/agua" ? "Para apuntar el control de agua."
+          : Volver == "/almacen" ? "Para la llegada y revisión de la mercancía de las devoluciones."
           : "Para ver las acciones de calidad que tienes asignadas.")
     </p>
 
@@ -28,7 +29,7 @@
     }
 
     <form method="post" action="acciones/iniciar-sesion">
-        @if (EsCalidad)
+        @if (OtraPagina)
         {
             <input type="hidden" name="volver" value="@Volver" />
         }
@@ -55,15 +56,15 @@
     [SupplyParameterFromQuery] private string? Usuario { get; set; }
     [SupplyParameterFromQuery] private string? Volver { get; set; }
 
-    // Las de Calidad: después de entrar se vuelve a ellas
-    private bool EsCalidad => Volver is "/control" or "/agua";
+    // Las de Calidad y la del almacén: después de entrar se vuelve a ellas
+    private bool OtraPagina => Volver is "/control" or "/agua" or "/almacen";
 
     // Si ya ha entrado, directamente a donde iba
     protected override async Task OnInitializedAsync()
     {
         var sesion = (await EstadoSesion).User;
         if (TrabajadorActual.HaEntrado(sesion))
-            Navegacion.NavigateTo(EsCalidad && TrabajadorActual.VeControl(sesion)
+            Navegacion.NavigateTo(OtraPagina && TrabajadorActual.PuedeVer(sesion, Volver!)
                 ? Volver!.TrimStart('/')
                 : TrabajadorActual.Inicio(sesion).TrimStart('/'));
     }

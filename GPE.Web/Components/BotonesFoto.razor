@@ -1,0 +1,67 @@
+@* Los dos botones de la ficha de no conformidad: "Hacer foto" abre la cámara trasera del móvil
+   (capture) y "Elegir" la galería o, para el recibo, también un PDF. Devuelve los archivos ya
+   leídos y comprobados (tipo y 10 MB). La clave cambia tras cada selección para poder elegir
+   otra vez la misma foto. *@
+<div class="botones-foto" @key="selecciones">
+    <label class="principal boton-foto @(Desactivado ? "desactivado" : "")">
+        📷 Hacer foto
+        <InputFile accept="image/*" capture="environment" OnChange="Leer" disabled="@Desactivado" />
+    </label>
+    <label class="secundario boton-foto @(Desactivado ? "desactivado" : "")">
+        🖼 @(Tipo == TipoAdjunto.Foto ? "Elegir de la galería" : "Elegir foto o PDF")
+        <InputFile accept="@(Tipo == TipoAdjunto.Foto ? "image/*" : "image/*,.pdf,application/pdf")" multiple OnChange="Leer" disabled="@Desactivado" />
+    </label>
+</div>
+@if (error != null)
+{
+    <p class="error-campo">@error</p>
+}
+@if (leyendo)
+{
+    <p class="suave pequeno">Cargando...</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Tipo { get; set; } = TipoAdjunto.Foto;
+    [Parameter] public bool Ocupado { get; set; }
+    [Parameter] public EventCallback<List<ArchivoNuevo>> OnElegidos { get; set; }
+
+    private bool leyendo;
+    private string? error;
+    private int selecciones;
+
+    private bool Desactivado => Ocupado || leyendo;
+
+    private async Task Leer(InputFileChangeEventArgs e)
+    {
+        error = null;
+        leyendo = true;
+        var leidos = new List<ArchivoNuevo>();
+        try
+        {
+            foreach (var archivo in e.GetMultipleFiles(20))
+            {
+                if (DevolucionServicio.ErrorArchivo(Tipo, archivo.Name, archivo.Size) is string mal)
+                {
+                    error = mal;
+                    continue;
+                }
+                using var memoria = new MemoryStream();
+                await archivo.OpenReadStream(DevolucionServicio.TamanoMaximoAdjunto).CopyToAsync(memoria);
+                leidos.Add(new ArchivoNuevo(archivo.Name, memoria.ToArray()));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            error = "No se ha podido cargar. Prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            leyendo = false;
+            selecciones++;
+        }
+
+        if (leidos.Count > 0)
+            await OnElegidos.InvokeAsync(leidos);
+    }
+}

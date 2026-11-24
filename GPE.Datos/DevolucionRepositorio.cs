@@ -643,6 +643,19 @@ public class DevolucionRepositorio
         return (byte[])comando.ExecuteScalar()!;
     }
 
+    public (string Nombre, byte[] Contenido)? ObtenerAdjunto(int adjuntoId)
+    {
+        const string sql = "SELECT nombre_archivo, contenido FROM ADJUNTO WHERE id = @adjunto;";
+
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@adjunto", adjuntoId);
+
+        using var lector = comando.ExecuteReader();
+        if (!lector.Read()) return null;
+        return (lector.GetString(0), (byte[])lector[1]);
+    }
+
     // Todos los archivos elegidos a la vez se guardan juntos (una sola entrada en el historial)
     public void InsertarAdjuntos(int devolucionId, string tipo, List<ArchivoNuevo> archivos)
     {
