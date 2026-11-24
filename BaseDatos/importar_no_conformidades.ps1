@@ -1,18 +1,38 @@
 ﻿<#
     Pasa la hoja INCIDENCIAS del Excel "INCIDENCIAS Y NO CONFORMIDADES - CALIDAD" (MT-RG09)
     a las tablas NO_CONFORMIDAD y NC_ACCION. Se ejecuta una vez, después de no_conformidades.sql y causa_raiz.sql.
+    Para volver a cargarlo cuando calidad añade filas: -Reemplazar (borra lo que hay en la misma transacción).
+    En el servidor, desde el ordenador de desarrollo: -Servidor 192.168.2.249 (entra con gpe_app).
+    En el propio servidor (que no tiene Excel): en el ordenador de desarrollo -GuardarDatos incidencias.xml
+    lee el Excel y guarda lo leído; en el servidor -Datos incidencias.xml lo carga en la base.
     Es para el Excel con el formato de noviembre de 2026 (títulos agrupados en la fila 2, cabeceras en la 3,
     columna CAUSA RAIZ). ESTADO, Año, Mes, Sem y Día son fórmulas y no se pasan: la aplicación los calcula.
     La columna DESCRIPCIÓN DEL PROBLEMA es la antigua "Descripción causa" (mismo texto): va a descripcion_causa.
 #>
 param(
-    [Parameter(Mandatory)] [int] $UsuarioId,     # usuario que figura como creador (y en el historial)
+    [int] $UsuarioId,     # usuario que figura como creador (y en el historial); no hace falta con -GuardarDatos
     [string] $Excel = (Join-Path $PSScriptRoot '..\..\INCIDENCIAS Y NO CONFORMIDADES - CALIDAD.xlsx'),
     [string] $Conexion = $(if ($env:GPE_CONEXION) { $env:GPE_CONEXION }
                            else { 'Server=localhost;Database=GPE;Integrated Security=True;TrustServerCertificate=True;' }),
     [switch] $Probar,      # deshace todo al terminar
-    [switch] $Forzar       # importa aunque NO_CONFORMIDAD ya tenga registros
+    [switch] $Forzar,      # importa aunque NO_CONFORMIDAD ya tenga registros
+    # Para volver a cargar el Excel: borra antes todos los registros (con sus acciones y fotos) en la
+    # misma transacción. Enseña los que se hicieron a mano y pide confirmación.
+    [switch] $Reemplazar,
+    # Base GPE del servidor con el usuario gpe_app (su contraseña, la de %LOCALAPPDATA%\GPE\gpe_app.txt)
+    [string] $Servidor,
+    # Solo lee el Excel y guarda lo leído en este archivo (para cargarlo en un ordenador sin Excel)
+    [string] $GuardarDatos,
+    # Carga lo guardado con -GuardarDatos en vez de leer el Excel
+    [string] $Datos
 )
+if (-not $GuardarDatos -and -not $UsuarioId) { throw 'Falta -UsuarioId (el usuario que figura como creador).' }
+if ($GuardarDatos -and $Datos) { throw '-GuardarDatos y -Datos no van juntos.' }
+if ($Servidor) {
+    $archivoClave = Join-Path $env:LOCALAPPDATA 'GPE\gpe_app.txt'
+    if (-not (Test-Path $archivoClave)) { throw "No está $archivoClave (la contraseña de gpe_app del ordenador de desarrollo)." }
+    $Conexion = "Server=$Servidor,1433;Database=GPE;User Id=gpe_app;Password=$((Get-Content $archivoClave -Raw).Trim());TrustServerCertificate=True;"
+}
 
 $ErrorActionPreference = 'Stop'
 $avisos = New-Object System.Collections.Generic.List[string]
@@ -108,86 +128,103 @@ function PorQues($texto, $fila) {
     })
 }
 
-# Lectura del Excel
+# Lectura del Excel (o de lo guardado con -GuardarDatos)
 
-$Excel = (Resolve-Path $Excel).Path
-Write-Host "Leyendo $Excel ..."
-$xl = New-Object -ComObject Excel.Application
-$xl.Visible = $false
-$xl.DisplayAlerts = $false
-try {
-    $libro = $xl.Workbooks.Open($Excel, 0, $true)   # solo lectura
-    $hoja = $libro.Worksheets.Item('INCIDENCIAS')
-    $ultimaFila = $hoja.Cells.Item($hoja.Rows.Count, $COL.Problema).End(-4162).Row   # xlUp
-    $celdas = $hoja.Range($hoja.Cells.Item($PRIMERA_FILA, 1), $hoja.Cells.Item($ultimaFila, $ULTIMA_COLUMNA)).Value2
-    $libro.Close($false)
+if ($Datos) {
+    Write-Host "Leyendo $Datos ..."
+    $guardado = Import-Clixml $Datos
+    $registros = @($guardado.Registros)
+    foreach ($a in $guardado.Avisos) { $avisos.Add($a) }
 }
-finally {
-    $xl.Quit()
-    [void][Runtime.InteropServices.Marshal]::ReleaseComObject($xl)
-}
-
-$registros = New-Object System.Collections.Generic.List[object]
-for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
-    $fila = $i + $PRIMERA_FILA - 1
-    $c = @{}
-    foreach ($k in $COL.Keys) { $c[$k] = $celdas[$i, $COL[$k]] }
-
-    $problema = Texto $c.Problema
-    $fecha = Fecha $c.FechaDetectado $fila 'Fecha detectado'
-    if (-not $problema -and -not $fecha) { continue }   # fila vacía
-    if (-not $problema) { Aviso $fila 'sin problema; no se importa.'; continue }
-    if (-not $fecha) { Aviso $fila 'sin fecha detectado; no se importa.'; continue }
-
-    $r = [pscustomobject]@{
-        Fila = $fila
-        TipoRegistro = TipoRegistro $c.NcI $fila
-        Numero = Texto $c.Numero
-        FechaDetectado = $fecha
-        Origen = Texto $c.Origen
-        Seccion = Texto $c.Seccion
-        Tipo = Texto $c.Tipo
-        Problema = $problema
-        DescripcionCausa = Texto $c.DescripcionCausa
-        Responsable = Texto $c.Responsable
-        FechaPrevista = Fecha $c.FechaPrevista $fila 'Fecha prevista'
-        FechaFin = Fecha $c.FechaFin $fila 'Fecha fin'
-        Cliente = Texto $c.Cliente
-        Proveedor = Texto $c.Proveedor
-        McPccBpm = Texto $c.McPccBpm
-        Parametro = Texto $c.Parametro
-        Operario = Texto $c.Operario
-        CapituloNorma = Texto $c.CapituloNorma
-        AnalisisCausaRaiz = Texto $c.AnalisisCausaRaiz
-        CausaRaiz = CausaRaiz $c.CausaRaiz $fila
-        Coste = Numero $c.Coste $fila 'Coste'
-        Horas = Numero $c.Horas $fila 'Horas'
-        AccionInmediata = Texto $c.AccionInmediata
-        AccionCorrectora = Texto $c.AccionCorrectora
-        ResponsableCorrectora = Texto $c.ResponsableCorrectora
-        Seguimiento = Texto $c.Seguimiento
+else {
+    $Excel = (Resolve-Path $Excel).Path
+    Write-Host "Leyendo $Excel ..."
+    $xl = New-Object -ComObject Excel.Application
+    $xl.Visible = $false
+    $xl.DisplayAlerts = $false
+    try {
+        $libro = $xl.Workbooks.Open($Excel, 0, $true)   # solo lectura
+        $hoja = $libro.Worksheets.Item('INCIDENCIAS')
+        $ultimaFila = $hoja.Cells.Item($hoja.Rows.Count, $COL.Problema).End(-4162).Row   # xlUp
+        $celdas = $hoja.Range($hoja.Cells.Item($PRIMERA_FILA, 1), $hoja.Cells.Item($ultimaFila, $ULTIMA_COLUMNA)).Value2
+        $libro.Close($false)
     }
-    # Los porqués van a sus casillas y el texto ya no se repite en "Análisis de la causa raíz"
-    $r | Add-Member PorQues (PorQues $r.AnalisisCausaRaiz $fila)
-    if ($r.PorQues) { $r.AnalisisCausaRaiz = $null }
-    if ($r.FechaFin -and $r.FechaFin -lt $r.FechaDetectado) {
-        Aviso $fila "la fecha fin ($($r.FechaFin.ToString('dd/MM/yy'))) es anterior a la de detección; se importa igual."
+    finally {
+        $xl.Quit()
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($xl)
     }
-    $registros.Add($r)
-}
 
-# Las incidencias no tienen número en el Excel: se numeran por fecha, como hace la aplicación.
-$n = 0
-foreach ($r in ($registros | Where-Object { $_.TipoRegistro -eq 'INCIDENCIA' -and -not $_.Numero } |
-                Sort-Object FechaDetectado, Fila)) {
-    $n++
-    $r.Numero = [string]$n
+    $registros = New-Object System.Collections.Generic.List[object]
+    for ($i = 1; $i -le $celdas.GetLength(0); $i++) {
+        $fila = $i + $PRIMERA_FILA - 1
+        $c = @{}
+        foreach ($k in $COL.Keys) { $c[$k] = $celdas[$i, $COL[$k]] }
+
+        $problema = Texto $c.Problema
+        $fecha = Fecha $c.FechaDetectado $fila 'Fecha detectado'
+        if (-not $problema -and -not $fecha) { continue }   # fila vacía
+        if (-not $problema) { Aviso $fila 'sin problema; no se importa.'; continue }
+        if (-not $fecha) { Aviso $fila 'sin fecha detectado; no se importa.'; continue }
+
+        $r = [pscustomobject]@{
+            Fila = $fila
+            TipoRegistro = TipoRegistro $c.NcI $fila
+            Numero = Texto $c.Numero
+            FechaDetectado = $fecha
+            Origen = Texto $c.Origen
+            Seccion = Texto $c.Seccion
+            Tipo = Texto $c.Tipo
+            Problema = $problema
+            DescripcionCausa = Texto $c.DescripcionCausa
+            Responsable = Texto $c.Responsable
+            FechaPrevista = Fecha $c.FechaPrevista $fila 'Fecha prevista'
+            FechaFin = Fecha $c.FechaFin $fila 'Fecha fin'
+            Cliente = Texto $c.Cliente
+            Proveedor = Texto $c.Proveedor
+            McPccBpm = Texto $c.McPccBpm
+            Parametro = Texto $c.Parametro
+            Operario = Texto $c.Operario
+            CapituloNorma = Texto $c.CapituloNorma
+            AnalisisCausaRaiz = Texto $c.AnalisisCausaRaiz
+            CausaRaiz = CausaRaiz $c.CausaRaiz $fila
+            Coste = Numero $c.Coste $fila 'Coste'
+            Horas = Numero $c.Horas $fila 'Horas'
+            AccionInmediata = Texto $c.AccionInmediata
+            AccionCorrectora = Texto $c.AccionCorrectora
+            ResponsableCorrectora = Texto $c.ResponsableCorrectora
+            Seguimiento = Texto $c.Seguimiento
+        }
+        # Los porqués van a sus casillas y el texto ya no se repite en "Análisis de la causa raíz"
+        $r | Add-Member PorQues (PorQues $r.AnalisisCausaRaiz $fila)
+        if ($r.PorQues) { $r.AnalisisCausaRaiz = $null }
+        if ($r.FechaFin -and $r.FechaFin -lt $r.FechaDetectado) {
+            Aviso $fila "la fecha fin ($($r.FechaFin.ToString('dd/MM/yy'))) es anterior a la de detección; se importa igual."
+        }
+        $registros.Add($r)
+    }
+
+    # Las incidencias no tienen número en el Excel: se numeran por fecha, como hace la aplicación.
+    $n = 0
+    foreach ($r in ($registros | Where-Object { $_.TipoRegistro -eq 'INCIDENCIA' -and -not $_.Numero } |
+                    Sort-Object FechaDetectado, Fila)) {
+        $n++
+        $r.Numero = [string]$n
+    }
 }
 
 Write-Host ("Filas leídas: {0} ({1} NC, {2} incidencias, {3} acciones de mejora)" -f $registros.Count,
     @($registros | Where-Object TipoRegistro -eq 'NC').Count,
     @($registros | Where-Object TipoRegistro -eq 'INCIDENCIA').Count,
     @($registros | Where-Object TipoRegistro -eq 'MEJORA').Count)
+
+if ($GuardarDatos) {
+    $guardar = New-Object PSObject
+    $guardar | Add-Member Registros ([object[]]$registros.ToArray())
+    $guardar | Add-Member Avisos ([string[]]$avisos.ToArray())
+    Export-Clixml -InputObject $guardar -Path $GuardarDatos -Depth 5
+    Write-Host "Guardado en $GuardarDatos (no se ha tocado ninguna base de datos)." -ForegroundColor Green
+    return
+}
 
 # Escritura en la base de datos
 
@@ -232,8 +269,36 @@ try {
     $cmd = $bd.CreateCommand()
     $cmd.CommandText = 'SELECT COUNT(*) FROM NO_CONFORMIDAD'
     $existentes = [int]$cmd.ExecuteScalar()
-    if ($existentes -gt 0 -and -not $Forzar) {
-        throw "NO_CONFORMIDAD ya tiene $existentes registros. Para no duplicarlos no se importa nada (usa -Forzar si es lo que quieres)."
+    if ($existentes -gt 0 -and -not $Forzar -and -not $Reemplazar) {
+        throw "NO_CONFORMIDAD ya tiene $existentes registros. Para no duplicarlos no se importa nada (-Reemplazar para borrarlos y cargar el Excel otra vez)."
+    }
+
+    if ($Reemplazar -and $existentes -gt 0) {
+        # Los de la carga anterior se crearon todos a la vez; los de después se hicieron a mano
+        $cmd = $bd.CreateCommand()
+        $cmd.CommandText = @'
+DECLARE @carga DATETIME2 = (SELECT MIN(creado_en) FROM NO_CONFORMIDAD);
+SELECT tipo_registro, numero, CONVERT(varchar(10), fecha_detectado, 103) AS fecha,
+       LEFT(REPLACE(problema, CHAR(10), ' '), 70) AS problema, FORMAT(creado_en, 'dd/MM/yyyy HH:mm') AS creado
+FROM NO_CONFORMIDAD WHERE creado_en > DATEADD(MINUTE, 30, @carga) ORDER BY creado_en;
+SELECT (SELECT COUNT(*) FROM NC_FOTO) AS fotos,
+       (SELECT COUNT(*) FROM RUTINA_RESULTADO WHERE no_conformidad_id IS NOT NULL) AS casillas;
+'@
+        $ds = New-Object System.Data.DataSet
+        [void](New-Object System.Data.SqlClient.SqlDataAdapter $cmd).Fill($ds)
+        $aMano = $ds.Tables[0]
+        Write-Host "`nSe van a borrar los $existentes registros que hay, con sus acciones, $($ds.Tables[1].Rows[0].fotos) fotos" -ForegroundColor Yellow
+        Write-Host "y el enlace de $($ds.Tables[1].Rows[0].casillas) casillas de la rutina (la casilla se queda, sin su incidencia)." -ForegroundColor Yellow
+        if ($aMano.Rows.Count -gt 0) {
+            Write-Host "Hechos a mano después de la carga anterior ($($aMano.Rows.Count)); si no están en el Excel, se pierden:" -ForegroundColor Yellow
+            $aMano | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+        } else {
+            Write-Host 'No hay ninguno hecho a mano después de la carga anterior.'
+        }
+        if (-not $Probar -and (Read-Host '¿Borrarlos y cargar el Excel? (S/N)') -notmatch '^[sS]') {
+            Write-Host 'No se ha cambiado nada.'
+            return
+        }
     }
 
     # Los triggers de historial necesitan saber quién hace el cambio
@@ -245,6 +310,13 @@ try {
     $transaccion = $bd.BeginTransaction()
     $acciones = 0
     try {
+        if ($Reemplazar) {
+            # Acciones, fotos, avisos y bloqueos se borran con su registro; las casillas se quedan sin enlace
+            $cmd = New-Object System.Data.SqlClient.SqlCommand('DELETE FROM NO_CONFORMIDAD;', $bd, $transaccion)
+            $cmd.CommandTimeout = 0
+            [void]$cmd.ExecuteNonQuery()
+        }
+
         foreach ($r in $registros) {
             $cmd = New-Object System.Data.SqlClient.SqlCommand($sqlRegistro, $bd, $transaccion)
             $p = $cmd.Parameters
@@ -295,6 +367,16 @@ try {
                 $acciones++
             }
         }
+
+        # Las acciones del Excel se dan por avisadas, como hace acciones_nc_avisos.sql: si no, cuando
+        # haya correo a cada responsable le llegaría un aviso por cada acción antigua
+        $cmd = New-Object System.Data.SqlClient.SqlCommand(@'
+IF OBJECT_ID('NC_ACCION_AVISO') IS NOT NULL
+    INSERT INTO NC_ACCION_AVISO (accion_id, responsable)
+    SELECT a.id, a.responsable FROM NC_ACCION a
+    WHERE a.responsable IS NOT NULL AND NOT EXISTS (SELECT 1 FROM NC_ACCION_AVISO v WHERE v.accion_id = a.id);
+'@, $bd, $transaccion)
+        [void]$cmd.ExecuteNonQuery()
 
         if ($Probar) {
             $transaccion.Rollback()

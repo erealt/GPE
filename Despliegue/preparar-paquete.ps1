@@ -12,16 +12,24 @@
 #        ordenadores instalan la aplicación. La aplicación se copia ahí directamente (no va en el
 #        paquete). Sin esto, va en el paquete y el instalador crea \\SERVIDOR\GPE.
 #   -SoloEscritorio      solo publica la aplicación en -Instalacion (para actualizarla sin ir al servidor)
+#   -SinEscritorio       solo la web y la tarea, para actualizarlas en el servidor sin tocar la base de datos:
+#                        no publica una versión nueva de la aplicación (McAfee la volvería a bloquear),
+#                        no hace la copia de la base ni pone gpe_app.txt. Basta con -Servidor.
 #   -BaseLocal miGPE     base de datos local que se copia al servidor
 #   -CopiarEn            carpeta donde se copian los archivos, si desde este ordenador no se entra
 #                        por la ruta de -Instalacion (p. ej. -Instalacion por IP y -CopiarEn por nombre)
+#   -Incidencias "..\INCIDENCIAS Y NO CONFORMIDADES - CALIDAD.xlsx"   lee el Excel (aquí, que hay Excel)
+#                        y lo deja en BaseDatos\incidencias.xml para cargarlo en el servidor con
+#                        importar_no_conformidades.ps1 -Datos
 
 param(
     [Parameter(Mandatory)] [string]$Servidor,
     [string]$Instalacion = "",
     [switch]$SoloEscritorio,
+    [switch]$SinEscritorio,
     [string]$BaseLocal = "miGPE",
-    [string]$CopiarEn = ""
+    [string]$CopiarEn = "",
+    [string]$Incidencias = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +42,7 @@ $Instalacion = $Instalacion.Trim().TrimEnd('\')
 
 function Paso($texto) { Write-Host ""; Write-Host "== $texto" -ForegroundColor Cyan }
 
+if ($SoloEscritorio -and $SinEscritorio) { throw "-SoloEscritorio y -SinEscritorio no van juntos." }
 if ($SoloEscritorio -and -not $Instalacion) { throw "-SoloEscritorio necesita -Instalacion (la carpeta compartida de la aplicación)." }
 if ($Instalacion -and -not $Instalacion.StartsWith("\\")) {
     throw "-Instalacion tiene que ser la ruta de red (\\servidor\carpeta), no una letra de unidad: la letra puede ser otra en cada ordenador."
@@ -72,8 +81,17 @@ if (-not $SoloEscritorio) {
 
     # ---------- 2. Copia de la base de datos ----------
 
-    Paso "2. Copia de la base de datos $BaseLocal"
     Copy-Item (Join-Path $raiz "BaseDatos") (Join-Path $paquete "BaseDatos") -Recurse
+
+    if ($Incidencias) {
+        Paso "Incidencias del Excel"
+        & (Join-Path $raiz "BaseDatos\importar_no_conformidades.ps1") -Excel $Incidencias `
+            -GuardarDatos (Join-Path $paquete "BaseDatos\incidencias.xml")
+    }
+}
+
+if (-not $SoloEscritorio -and -not $SinEscritorio) {
+    Paso "2. Copia de la base de datos $BaseLocal"
 
     function Sql($texto) {
         $conexion = New-Object System.Data.SqlClient.SqlConnection(
@@ -130,6 +148,9 @@ if (-not $SoloEscritorio) {
 
 # ---------- 3. Aplicación de escritorio (ClickOnce) ----------
 
+if ($SinEscritorio) {
+    Paso "3. Aplicación de escritorio: no se publica (-SinEscritorio)"
+} else {
 Paso "3. Aplicación de escritorio"
 # Certificado con el que se firma ClickOnce. Tiene que ser siempre el mismo: si cambia,
 # los ordenadores no se actualizan y hay que desinstalar e instalar otra vez.
@@ -175,6 +196,7 @@ try {
         Remove-Item -Force
 }
 Write-Host "Publicada la versión $versionApp en $destino. Se instala desde $urlInstalacion\setup.exe"
+}
 
 if ($SoloEscritorio) {
     Write-Host ""
@@ -190,4 +212,6 @@ Copy-Item (Join-Path $PSScriptRoot "LEEME.txt") $paquete
 Write-Host ""
 Write-Host "Paquete listo en $paquete" -ForegroundColor Green
 Write-Host "Copia esa carpeta entera al servidor y sigue LEEME.txt."
-Write-Host "Ojo: gpe_app.txt lleva una contraseña. No subas la carpeta a ningún sitio compartido con más gente." -ForegroundColor Yellow
+if (-not $SinEscritorio) {
+    Write-Host "Ojo: gpe_app.txt lleva una contraseña. No subas la carpeta a ningún sitio compartido con más gente." -ForegroundColor Yellow
+}
