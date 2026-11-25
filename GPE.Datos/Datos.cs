@@ -82,12 +82,19 @@ public static class Sesion
         set => usuarioPrograma = value;
     }
 
-    // using (Sesion.Como(usuario)) { ... }: lo que se haga dentro queda a nombre de ese usuario
-    public static IDisposable Como(Usuario usuario)
+    // using (Sesion.Como(usuario)) { ... }: lo que se haga dentro queda a nombre de ese usuario.
+    // Con roles, dentro también cuentan sus roles (la web del almacén los necesita para sus pasos).
+    public static IDisposable Como(Usuario usuario, IEnumerable<string>? roles = null)
     {
         var anterior = usuarioOperacion.Value;
+        var rolesAnteriores = rolesOperacion.Value;
         usuarioOperacion.Value = usuario;
-        return new Restaurar(() => usuarioOperacion.Value = anterior);
+        rolesOperacion.Value = roles?.ToHashSet();
+        return new Restaurar(() =>
+        {
+            usuarioOperacion.Value = anterior;
+            rolesOperacion.Value = rolesAnteriores;
+        });
     }
 
     private sealed class Restaurar(Action accion) : IDisposable
@@ -96,7 +103,14 @@ public static class Sesion
     }
 
     // Roles del usuario (tabla USUARIO_ROL): deciden qué pasos puede hacer
-    public static HashSet<string> Roles { get; set; } = new();
+    private static HashSet<string> rolesPrograma = new();
+    private static readonly AsyncLocal<HashSet<string>?> rolesOperacion = new();
+
+    public static HashSet<string> Roles
+    {
+        get => rolesOperacion.Value ?? rolesPrograma;
+        set => rolesPrograma = value;
+    }
 
     public static bool TieneRol(string rol) => Roles.Contains(rol);
 

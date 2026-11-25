@@ -587,3 +587,18 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
 }
 .sugerencias li { padding: 7px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sugerencias li:hover, .sugerencias li.marcada { background: var(--acento-suave); color: var(--acento-oscuro); }
+
+/* Almacén (/almacen): lista de devoluciones y ficha de llegada y revisión */
+.grupo-almacen { margin: 18px 0 8px 2px; }
+.devolucion-almacen { display: block; padding: 16px 18px; margin-bottom: 10px; color: var(--texto); text-decoration: none; }
+.devolucion-almacen:hover { border-color: var(--acento); }
+.devolucion-almacen .pequeno { margin: 2px 0 0; }
+.datos-devolucion { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; padding-bottom: 10px; }
+.datos-devolucion > div { display: flex; flex-direction: column; gap: 2px; }
+.datos-linea { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.linea-revision .campo { margin-bottom: 4px; }
+.foto-subida a { color: var(--texto); text-decoration: none; }
+.confirmar-quitar { display: flex; gap: 6px; }
+.confirmar-quitar button { height: 34px; padding: 0 12px; }
+.boton-paso { height: 48px; margin: 6px 0 12px; }
+.ficha-almacen .aviso:not(.error) { background: var(--acento-suave); border-color: var(--acento); }

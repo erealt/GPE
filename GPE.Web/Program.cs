@@ -18,7 +18,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddSingleton<UsuarioWeb>();
 
-// Web de los trabajadores (/acciones) y control diario de calidad (/control): entran con su usuario y
+// Web de los trabajadores (/acciones), control diario de calidad (/control) y almacén (/almacen): entran con su usuario y
 // contraseña del escritorio y la sesión se queda abierta en el móvil 90 días desde la última vez que
 // la usan. El DeCA no pide nada.
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -82,16 +82,36 @@ app.MapPost("/acciones/iniciar-sesion", async (HttpContext http) =>
         CookieAuthenticationDefaults.AuthenticationScheme);
     var principal = new ClaimsPrincipal(identidad);
 
-    // Almacén, Transporte o sin rol: no hay ninguna página para ellos en la web
+    // Transporte o sin rol: no hay ninguna página para ellos en la web
     if (!TrabajadorActual.VeAlgo(principal))
         return Results.Redirect("/acciones/entrar?error=sinweb&usuario=" + Uri.EscapeDataString(usuario.Trim()) + conVolver);
 
     await http.SignInAsync(principal, new AuthenticationProperties { IsPersistent = true });
 
     // Si iba a una página que no le toca, a la suya
-    bool puede = volver is "/control" or "/agua" ? TrabajadorActual.VeControl(principal) : TrabajadorActual.VeAcciones(principal);
-    return Results.Redirect(puede ? volver : TrabajadorActual.Inicio(principal));
+    return Results.Redirect(TrabajadorActual.PuedeVer(principal, volver) ? volver : TrabajadorActual.Inicio(principal));
 }).DisableAntiforgery();
+
+// Recibo y fotos de una devolución, para verlos desde la web del almacén
+app.MapGet("/almacen/archivo/{id:int}", (int id, HttpContext http) =>
+{
+    if (!TrabajadorActual.VeAlmacen(http.User)) return Results.Redirect("/acciones/entrar?volver=%2Falmacen");
+
+    var archivo = new DevolucionServicio().ObtenerAdjunto(id);
+    if (archivo == null) return Results.NotFound("Este archivo ya no existe.");
+
+    var (nombre, contenido) = archivo.Value;
+    string tipo = Path.GetExtension(nombre).ToLowerInvariant() switch
+    {
+        ".pdf" => "application/pdf",
+        ".png" => "image/png",
+        ".gif" => "image/gif",
+        ".bmp" => "image/bmp",
+        _ => "image/jpeg"
+    };
+    // Sin nombre: uno con tildes no vale en la cabecera, y así se abre en el navegador
+    return Results.File(contenido, tipo);
+});
 
 app.MapGet("/acciones/salir", async (HttpContext http, string? volver) =>
 {
@@ -127,7 +147,7 @@ app.MapGet("/acciones/foto/{id:int}", (int id, HttpContext http) =>
 app.Run();
 
 // Página a la que se vuelve después de entrar: solo las de la web con login (nunca otra dirección)
-static string Volver(string? volver) => volver is "/control" or "/agua" ? volver : "/acciones";
+static string Volver(string? volver) => volver is "/control" or "/agua" or "/almacen" ? volver : "/acciones";
 
 static IResult Archivo(int id, HttpContext http, Func<GPE.Datos.DecaGuardado, string?> nombre, string tipo)
 {
