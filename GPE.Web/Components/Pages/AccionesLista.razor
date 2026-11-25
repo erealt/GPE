@@ -20,7 +20,7 @@
 
 @if (hecha != null)
 {
-    <div class="aviso bien">Apuntada como hecha: @hecha. Calidad ya lo ve en la ficha.</div>
+    <div class="aviso bien">Apuntada como hecha: @hecha. A calidad le sale el aviso en el programa.</div>
 }
 @if (error != null)
 {
@@ -68,19 +68,37 @@ else if (acciones.Count == 0)
 {
     <div class="tarjeta vacio">No tienes ninguna acción pendiente.</div>
 }
+else if (acciones.FirstOrDefault(x => x.Id == elegida) is not { } a)
+{
+    <p class="suave contador">@acciones.Count @(acciones.Count == 1 ? "acción pendiente" : "acciones pendientes") · pulsa una para verla</p>
+
+    @foreach (var p in acciones)
+    {
+        <button class="tarjeta fila-accion @("prioridad-" + ColorPrioridad(p.Prioridad))" @onclick="() => Elegir(p.Id)">
+            <span class="accion-cabecera">
+                <span class="numero">@Registro(p.TipoRegistro, p.NumeroNc)</span>
+                <span class="etiqueta @ColorPrioridad(p.Prioridad)">@(p.Prioridad ?? "Sin prioridad")</span>
+            </span>
+            <span class="fila-problema">@p.Problema</span>
+            <span class="fila-pie">
+                <span>@(p.Clase == "INMEDIATA" ? "Acción inmediata" : "Acción correctora")</span>
+                @if (p.Fecha != null)
+                {
+                    <span class="@(p.Fecha < DateTime.Today ? "fuera-plazo" : "")">
+                        @(p.Fecha < DateTime.Today ? "Fuera de plazo · " : "Antes del ")@p.Fecha.Value.ToString("dd/MM/yyyy")
+                    </span>
+                }
+            </span>
+        </button>
+    }
+}
 else
 {
-    <p class="suave contador">@acciones.Count @(acciones.Count == 1 ? "acción pendiente" : "acciones pendientes")</p>
-
-    @foreach (var a in acciones)
-    {
-        <div class="tarjeta accion-trabajador">
+    <button class="secundario volver" @onclick="VolverALista">← Volver a la lista</button>
+        <div class="tarjeta accion-trabajador @("prioridad-" + ColorPrioridad(a.Prioridad))">
             <div class="accion-cabecera">
                 <span class="numero">@Registro(a.TipoRegistro, a.NumeroNc)</span>
-                @if (a.Prioridad != null)
-                {
-                    <span class="etiqueta @ColorPrioridad(a.Prioridad)">@a.Prioridad</span>
-                }
+                <span class="etiqueta @ColorPrioridad(a.Prioridad)">@(a.Prioridad ?? "Sin prioridad")</span>
             </div>
             <p class="pequeno suave">
                 Detectada el @a.FechaDetectado.ToString("dd/MM/yyyy")@(a.Seccion != null ? " · " + a.Seccion : "")
@@ -145,7 +163,6 @@ else
                 <button class="principal ancho" @onclick="() => Abrir(a.Id)">La he hecho</button>
             }
         </div>
-    }
 }
 
 @code {
@@ -163,6 +180,7 @@ else
     private List<AccionHecha>? hechas;
     private readonly HashSet<int> fotosAbiertas = new();
 
+    private int? elegida;            // la que se está viendo; null = la lista
     private int? abierta;            // la que tiene abierto el comentario
     private string comentario = "";
     private bool guardando;
@@ -202,6 +220,8 @@ else
     private void Ver(bool verLasHechas)
     {
         verHechas = verLasHechas;
+        elegida = null;
+        abierta = null;
         hecha = null;
         error = null;
         if (!verHechas || hechas != null) return;
@@ -213,6 +233,21 @@ else
         {
             error = "No se han podido cargar las hechas. " + ex.Message;
         }
+    }
+
+    private void Elegir(int id)
+    {
+        elegida = id;
+        abierta = null;
+        hecha = null;
+        error = null;
+    }
+
+    private void VolverALista()
+    {
+        elegida = null;
+        abierta = null;
+        error = null;
     }
 
     private void Abrir(int id)
@@ -237,11 +272,13 @@ else
                 servicio.MarcarHecha(accion.Id, persona, comentario);
             hecha = Registro(accion.TipoRegistro, accion.NumeroNc);
             abierta = null;
+            elegida = null;   // vuelve a la lista
         }
         catch (ReglaNegocioException ex)
         {
             error = ex.Message;
             abierta = null;
+            elegida = null;
         }
         catch (DbException ex)
         {
@@ -259,10 +296,12 @@ else
         (tipoRegistro == "INCIDENCIA" ? "Incidencia" : tipoRegistro == "MEJORA" ? "Mejora" : "NC")
         + (numero != null ? " " + numero : "");
 
-    private static string ColorPrioridad(string prioridad) => prioridad switch
+    // Alta en rojo, media en naranja, baja en verde
+    private static string ColorPrioridad(string? prioridad) => prioridad switch
     {
         "Alta" => "roja",
-        "Media" => "ambar",
+        "Media" => "naranja",
+        "Baja" => "verde",
         _ => "gris"
     };
 }

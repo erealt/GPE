@@ -23,7 +23,7 @@ public class TrabajadorWebServicio
         string nota = $"Hecha por {persona} desde la web el {DateTime.Now:dd/MM/yyyy HH:mm}"
             + (string.IsNullOrEmpty(comentario) ? "." : $": {comentario}");
 
-        if (!repositorio.MarcarHecha(accionId, persona, nota))
+        if (!repositorio.MarcarHecha(accionId, persona, nota, comentario))
             throw new ReglaNegocioException(
                 "Esta acción ya no está pendiente: puede que calidad la haya cambiado o cerrado. Se ha actualizado la lista.");
     }

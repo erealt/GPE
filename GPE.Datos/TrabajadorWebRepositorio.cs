@@ -125,7 +125,8 @@ public class TrabajadorWebRepositorio
     // calidad ve en la ficha. Solo si sigue pendiente y es de esa persona; si no, devuelve false.
     // También cambia la versión del registro: si calidad tiene la ficha abierta en el escritorio,
     // al guardar se le avisará de que ha cambiado, en vez de volver a dejar la acción sin hacer.
-    public bool MarcarHecha(int accionId, string persona, string nota)
+    // Y deja el aviso para calidad (NC_ACCION_HECHA_WEB), que le sale en el programa de escritorio.
+    public bool MarcarHecha(int accionId, string persona, string nota, string? comentario)
     {
         // UPDLOCK: si se pulsa dos veces, la segunda espera y ya no la encuentra pendiente.
         // problema = problema no cambia ningún dato (el historial no apunta nada), solo la versión.
@@ -153,6 +154,9 @@ public class TrabajadorWebRepositorio
                 WHERE id = @id;
 
                 UPDATE NO_CONFORMIDAD SET problema = problema WHERE id = @nc;
+
+                INSERT INTO NC_ACCION_HECHA_WEB (accion_id, persona, comentario)
+                VALUES (@id, @persona, NULLIF(@comentario, N''));
             END;
 
             COMMIT;
@@ -163,6 +167,7 @@ public class TrabajadorWebRepositorio
         comando.Parameters.AddWithValue("@id", accionId);
         comando.Parameters.AddWithValue("@persona", persona);
         comando.Parameters.AddWithValue("@nota", nota);
+        comando.Parameters.AddWithValue("@comentario", (object?)comentario ?? DBNull.Value);
         return comando.ExecuteScalar() is int;
     }
 }
