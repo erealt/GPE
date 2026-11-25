@@ -2,7 +2,14 @@
 --   admin          contraseña admin                  todos los roles (lo ve todo)
 --   celia          contraseña celia@calidad          Calidad
 --   alba           contraseña alba@calidad           Calidad
---   marcoantonio   contraseña marcoAntonio@almacen   Almacén
+--   marcoantonio   contraseña marcoAntonio@almacen   Almacén y Trabajador
+-- Trabajadores de la web (25/11), para ver sus acciones de NC en /acciones:
+--   ana            contraseña ana@produccion          Trabajador   (Ana López, encargada de producción)
+--   lidia          contraseña lidia@envasado          Trabajador   (Lidia Martínez, encargada de envasado final)
+--   cati           contraseña cati@limpieza           Trabajador   (Cati Cantos, encargada de limpieza)
+--   antonioraul    contraseña antonioRaul@planta      Trabajador   (Antonio Raúl, jefe de planta)
+-- El nombre tiene que ser igual que en la lista de responsables (PERSONA, personas_responsables.sql):
+-- así le salen sus acciones. Un usuario puede tener varios roles separados por comas.
 -- Se quitan los de prueba estela, calidad y almacen. Quedan transporte y trabajador (Prueba1234).
 -- Los correos son provisionales (llegan a estelaretin10@gmail.com) hasta tener los de cada uno.
 --
@@ -23,14 +30,31 @@ INSERT INTO @usuarios (usuario, nombre, email, rol, clave) VALUES
      N'PBKDF2-SHA256$100000$GEoVTlu6aGXNikK5S0DeRQ==$hOGm757ZbiaUa7xwgTnrghW82xgydg/iP8kPOvfFaxM='),
     (N'alba',         N'Alba',          N'estelaretin10+alba@gmail.com',         N'Calidad',
      N'PBKDF2-SHA256$100000$SkGvaBlBFflPd2X7Rm0hkw==$9RBwzcHjKvKpsIbxUoYKhaV1J8lC0bez2FOPxcGGsdc='),
-    (N'marcoantonio', N'Marco Antonio', N'estelaretin10+marcoantonio@gmail.com', N'Almacén',
-     N'PBKDF2-SHA256$100000$3iHd6o+tLlr+GVLD79OEYQ==$QM4MJsJQmD4++U2JNI8kJrL4LzLiPDc1nr4v7cZxvCc=');
+    (N'marcoantonio', N'Marco Antonio', N'estelaretin10+marcoantonio@gmail.com', N'Almacén,Trabajador',
+     N'PBKDF2-SHA256$100000$3iHd6o+tLlr+GVLD79OEYQ==$QM4MJsJQmD4++U2JNI8kJrL4LzLiPDc1nr4v7cZxvCc='),
+    (N'ana',          N'Ana López',     N'estelaretin10+ana@gmail.com',          N'Trabajador',
+     N'PBKDF2-SHA256$100000$a1SgkNnDniRzqOmPYuLAwA==$J0joNJB3rFlBC53wYpv2AK0bcLLBwGJm5u8JWZBEncg='),
+    (N'lidia',        N'Lidia Martínez', N'estelaretin10+lidia@gmail.com',       N'Trabajador',
+     N'PBKDF2-SHA256$100000$UuSzAoXxd4s/HOVsvpqmvQ==$2Gvmk17fyXg/W6mQQuo0TiGuViRHRn3X27Q+7NzcCb0='),
+    (N'cati',         N'Cati Cantos',   N'estelaretin10+cati@gmail.com',         N'Trabajador',
+     N'PBKDF2-SHA256$100000$dMvdWG2LXKi8pgs/XE+CtA==$M8lcD4QwxWOy/Oj0k+0/GxjfQ8hT9JEYN7k/skn86tI='),
+    (N'antonioraul',  N'Antonio Raúl',  N'estelaretin10+antonioraul@gmail.com',  N'Trabajador',
+     N'PBKDF2-SHA256$100000$nHfIxzIABL7SfPw7sS7oow==$tg/aJ6mOCtxdkNuOG0Ymum1TIT+imKlbP31uEWklBWg=');
+
+-- Cada usuario con cada uno de sus roles (NULL: todos)
+DECLARE @roles TABLE (usuario NVARCHAR(50), rol NVARCHAR(50));
+INSERT INTO @roles (usuario, rol)
+SELECT u.usuario, LTRIM(RTRIM(s.value))
+FROM @usuarios u
+CROSS APPLY STRING_SPLIT(u.rol, N',') s
+UNION ALL
+SELECT u.usuario, NULL FROM @usuarios u WHERE u.rol IS NULL;
 
 DECLARE @quitar TABLE (usuario NVARCHAR(50));
 INSERT INTO @quitar VALUES (N'estela'), (N'calidad'), (N'almacen');
 
 -- Si algún rol no coincide con la tabla ROL (pasa si el archivo se lee sin UTF-8), no se toca nada
-IF EXISTS (SELECT 1 FROM @usuarios u WHERE u.rol IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ROL r WHERE r.nombre = u.rol))
+IF EXISTS (SELECT 1 FROM @roles u WHERE u.rol IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ROL r WHERE r.nombre = u.rol))
 BEGIN
     RAISERROR(N'Algún rol de la lista no existe en la tabla ROL. Si usas sqlcmd, ejecútalo con -f 65001.', 16, 1);
     RETURN;
@@ -73,18 +97,19 @@ UPDATE us SET nombre = u.nombre, clave = u.clave, activo = 1
 FROM USUARIO us
 JOIN @usuarios u ON u.usuario = us.usuario;
 
--- 3. Roles: admin todos; los demás, solo el suyo
+-- 3. Roles: admin todos; los demás, solo los suyos
 DELETE ur
 FROM USUARIO_ROL ur
 JOIN USUARIO us ON us.id = ur.usuario_id
 JOIN @usuarios u ON u.usuario = us.usuario
 JOIN ROL r ON r.id = ur.rol_id
 WHERE ur.fabrica_id = @fabrica
-  AND u.rol IS NOT NULL AND r.nombre <> u.rol;
+  AND u.rol IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM @roles x WHERE x.usuario = u.usuario AND x.rol = r.nombre);
 
 INSERT INTO USUARIO_ROL (usuario_id, rol_id, fabrica_id)
-SELECT us.id, r.id, @fabrica
-FROM @usuarios u
+SELECT DISTINCT us.id, r.id, @fabrica
+FROM @roles u
 JOIN USUARIO us ON us.usuario = u.usuario
 JOIN ROL r ON u.rol IS NULL OR r.nombre = u.rol
 WHERE NOT EXISTS (SELECT 1 FROM USUARIO_ROL ur
