@@ -48,7 +48,8 @@ public record PorQue(string? Pregunta, string? Respuesta)
 
 // Fila de la hoja INCIDENCIAS (Id = 0: nuevo). Tipo es solo de NC; McPccBpm, Parametro y Operario, de incidencias.
 // DescripcionCausa y AnalisisCausaRaiz: textos libres de antes de los 5 porqués; ya no se piden.
-// PorQues: siempre 5 (null = todos vacíos). CausaRaiz: uno de los grupos de CausasRaiz.
+// PorQues: siempre 5 (null = todos vacíos). CausaRaiz: uno de los grupos de CausasRaiz;
+// CausaRaizSubgrupo: uno de los subgrupos de ese grupo (25/11).
 // Version: la ROWVERSION leída, para no pisar lo que otro haya guardado.
 // ProveedorId: el proveedor de la lista de proveedores. Con él, Proveedor es su nombre en la lista; sin él,
 // Proveedor es el nombre escrito a mano en las NC antiguas (o null).
@@ -78,7 +79,8 @@ public record NoConformidad(
     string? CausaRaiz = null,
     byte[]? Version = null,
     int? ProveedorId = null,
-    bool? SeguridadAlimentaria = null)
+    bool? SeguridadAlimentaria = null,
+    string? CausaRaizSubgrupo = null)
 {
     public const int NumeroPorQues = 5;
 }

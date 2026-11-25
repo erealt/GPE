@@ -53,12 +53,16 @@ public class FormNoConformidad : Form
     // Solo incidencias
     private readonly ComboBox cmbMcPccBpm = new();
     private readonly ComboBox cmbParametro = new();
-    private readonly ComboBox cmbOperario = new();
+    // Puede haber varios operarios (25/11): se eligen en un panel y se guardan separados por comas
+    private readonly Button btnOperarios = Tema.BotonSecundario("", 300);
+    private string? operarios;
 
     // Análisis y acción correctora
     private readonly TextBox[] txtPreguntas = NuevasCajas();
     private readonly TextBox[] txtRespuestas = NuevasCajas();
     private readonly ComboBox cmbCausaRaiz = new();
+    private readonly ComboBox cmbSubgrupo = new();   // subgrupo de la causa raíz (25/11)
+    private Control campoSubgrupo = null!;   // solo con un grupo elegido
     private readonly ComboBox cmbCapitulo = new();
     private readonly TextBox txtAnalisis = new();
     // Textos libres de antes de los 5 porqués: solo se ven en los registros que los tienen
@@ -142,6 +146,8 @@ public class FormNoConformidad : Form
         foreach (var texto in new[] { txtProblema, txtCausa, txtAnalisis }.Concat(txtPreguntas).Concat(txtRespuestas))
             texto.TextChanged += (s, e) => ActualizarFases();
         cmbCausaRaiz.SelectedIndexChanged += (s, e) => ActualizarFases();
+        // Otro grupo: sus subgrupos, sin ninguno elegido
+        cmbCausaRaiz.SelectedIndexChanged += (s, e) => LlenarSubgrupos(null);
         dtpFin.ValueChanged += (s, e) => ActualizarFases();
         tablaInmediatas.Cambiado += (s, e) => ActualizarFases();
         tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
@@ -228,6 +234,7 @@ public class FormNoConformidad : Form
             else
                 control.Enabled = false;
         }
+        btnOperarios.Enabled = false;
         tablaInmediatas.SoloLectura = true;
         tablaCorrectoras.SoloLectura = true;
         tablaSeguimientos.SoloLectura = true;
@@ -390,6 +397,20 @@ public class FormNoConformidad : Form
         foreach (string grupo in CausasRaiz.Todas)
             cmbCausaRaiz.Items.Add(new OpcionLista(grupo, null));
         Elegir(cmbCausaRaiz, causa);
+    }
+
+    // Los subgrupos del grupo elegido en la causa raíz; sin grupo no se ve el campo
+    private void LlenarSubgrupos(string? subgrupo)
+    {
+        var subgrupos = CausasRaiz.Subgrupos(Valor(cmbCausaRaiz));
+        cmbSubgrupo.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbSubgrupo.Items.Clear();
+        cmbSubgrupo.Items.Add(SinIndicar);
+        foreach (string s in subgrupos)
+            cmbSubgrupo.Items.Add(new OpcionLista(s, null));
+        Elegir(cmbSubgrupo, subgrupo);
+        AjustarAnchoLista(cmbSubgrupo);
+        campoSubgrupo.Visible = Valor(cmbCausaRaiz) != null;
     }
 
     private static TextBox[] NuevasCajas() =>
@@ -572,6 +593,10 @@ public class FormNoConformidad : Form
         rejilla.SetColumnSpan(campoPorQues, 2);
         rejilla.Controls.Add(campos.Campo("Causa raíz", cmbCausaRaiz), 0, 1);
         rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 1, 1);
+        // A todo lo ancho: hay subgrupos con frases largas
+        campoSubgrupo = campos.Campo("Subgrupo de la causa raíz", cmbSubgrupo);
+        rejilla.Controls.Add(campoSubgrupo, 0, 2);
+        rejilla.SetColumnSpan(campoSubgrupo, 2);
 
         campoCausaAnterior = campos.Campo("Descripción de la causa (texto de antes de los 5 porqués)", txtCausa);
         campoAnalisisAnterior = campos.Campo("Análisis de la causa raíz (texto de antes de los 5 porqués)", txtAnalisis);
@@ -637,10 +662,40 @@ public class FormNoConformidad : Form
         var rejilla = Componentes.Rejilla(3);
         rejilla.Controls.Add(campos.Campo("MC / PCC / BPM", cmbMcPccBpm), 0, 0);
         rejilla.Controls.Add(campos.Campo("Parámetro", cmbParametro), 1, 0);
-        rejilla.Controls.Add(campos.Campo("Operario causante", cmbOperario), 2, 0);
+        btnOperarios.Height = cmbParametro.Height + 4;
+        btnOperarios.TextAlign = ContentAlignment.MiddleLeft;
+        btnOperarios.AutoEllipsis = true;
+        btnOperarios.Padding = new Padding(6, 0, 0, 0);
+        btnOperarios.Click += (s, e) => ElegirOperarios();
+        rejilla.Controls.Add(campos.Campo("Operarios causantes", btnOperarios), 2, 0);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
+    }
+
+    private void ElegirOperarios()
+    {
+        var actuales = NoConformidadServicio.Operarios(operarios);
+        var nombres = (listas.GetValueOrDefault(ListaCalidad.Operario) ?? new()).Select(o => o.Valor).ToList();
+        // Los que ya no están en la lista se quedan, para no perderlos (como en los desplegables)
+        nombres.InsertRange(0, actuales.Where(a => !nombres.Contains(a, StringComparer.OrdinalIgnoreCase)));
+
+        var panel = new ElegirVarios("Operarios causantes", nombres, actuales);
+        panel.Abrir(this, btnOperarios.PointToScreen(new Point(0, btnOperarios.Height)), () =>
+        {
+            if (panel.Elegidas == null) return;
+            string? nuevos = NoConformidadServicio.UnirOperarios(panel.Elegidas);
+            if (nuevos == operarios) return;
+            operarios = nuevos;
+            MostrarOperarios();
+            hayCambios = true;
+        });
+    }
+
+    private void MostrarOperarios()
+    {
+        btnOperarios.Text = operarios ?? "Elige uno o varios…";
+        btnOperarios.ForeColor = operarios == null ? Tema.Suave : Tema.Texto;
     }
 
     private Control CrearTarjetaAccionCorrectora()
@@ -760,7 +815,8 @@ public class FormNoConformidad : Form
         LlenarLista(cmbTipo, ListaCalidad.Tipo, nc?.Tipo);
         LlenarLista(cmbMcPccBpm, ListaCalidad.McPccBpm, nc?.McPccBpm);
         LlenarLista(cmbParametro, ListaCalidad.Parametro, nc?.Parametro);
-        LlenarLista(cmbOperario, ListaCalidad.Operario, nc?.Operario);
+        operarios = NoConformidadServicio.UnirOperarios(NoConformidadServicio.Operarios(nc?.Operario));
+        MostrarOperarios();
         LlenarLista(cmbCapitulo, ListaCalidad.CapituloNorma, nc?.CapituloNorma);
 
         txtCliente.Text = nc?.Cliente ?? "";
@@ -787,6 +843,7 @@ public class FormNoConformidad : Form
             txtRespuestas[i].Text = porQue?.Respuesta ?? "";
         }
         LlenarCausasRaiz(nc?.CausaRaiz);
+        LlenarSubgrupos(nc?.CausaRaizSubgrupo);
         txtCoste.Text = nc?.CosteEconomico?.ToString("0.##", Componentes.Es) ?? "";
         txtHoras.Text = nc?.HorasManoObra?.ToString("0.##", Componentes.Es) ?? "";
 
@@ -1005,13 +1062,14 @@ public class FormNoConformidad : Form
             },
             McPccBpm: Valor(cmbMcPccBpm),
             Parametro: Valor(cmbParametro),
-            Operario: Valor(cmbOperario),
+            Operario: operarios,
             CapituloNorma: Valor(cmbCapitulo),
             AnalisisCausaRaiz: txtAnalisis.Text,
             CosteEconomico: coste,
             HorasManoObra: horas,
             PorQues: LeerPorQues(),
             CausaRaiz: Valor(cmbCausaRaiz),
+            CausaRaizSubgrupo: Valor(cmbSubgrupo),
             Version: original?.Version);
     }
 
@@ -1036,6 +1094,7 @@ public class FormNoConformidad : Form
                 [nameof(NoConformidad.Proveedor)] = cmbProveedor,
                 [nameof(NoConformidad.SeguridadAlimentaria)] = cmbSeguridad,
                 [nameof(NoConformidad.Problema)] = txtProblema,
+                [nameof(NoConformidad.Operario)] = btnOperarios,
                 [nameof(NoConformidad.FechaPrevista)] = dtpPrevista,
                 [nameof(NoConformidad.FechaFin)] = dtpFin,
                 [nameof(NoConformidad.CosteEconomico)] = txtCoste,

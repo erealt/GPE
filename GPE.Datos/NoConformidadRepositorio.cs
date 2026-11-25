@@ -19,7 +19,7 @@ public class NoConformidadRepositorio
                    n.porque_pregunta_1, n.porque_respuesta_1, n.porque_pregunta_2, n.porque_respuesta_2,
                    n.porque_pregunta_3, n.porque_respuesta_3, n.porque_pregunta_4, n.porque_respuesta_4,
                    n.porque_pregunta_5, n.porque_respuesta_5,
-                   n.causa_raiz, n.version, n.proveedor_id, n.seguridad_alimentaria
+                   n.causa_raiz, n.version, n.proveedor_id, n.seguridad_alimentaria, n.causa_raiz_subgrupo
             FROM NO_CONFORMIDAD n
             LEFT JOIN PROVEEDOR p ON p.id = n.proveedor_id";
 
@@ -80,7 +80,8 @@ public class NoConformidadRepositorio
                 CausaRaiz: Texto(30),
                 Version: (byte[])lector[31],
                 ProveedorId: lector.IsDBNull(32) ? null : lector.GetInt32(32),
-                SeguridadAlimentaria: lector.IsDBNull(33) ? null : lector.GetBoolean(33)));
+                SeguridadAlimentaria: lector.IsDBNull(33) ? null : lector.GetBoolean(33),
+                CausaRaizSubgrupo: Texto(34)));
         }
 
         return lista;
@@ -213,7 +214,7 @@ public class NoConformidadRepositorio
                  porque_pregunta_1, porque_respuesta_1, porque_pregunta_2, porque_respuesta_2,
                  porque_pregunta_3, porque_respuesta_3, porque_pregunta_4, porque_respuesta_4,
                  porque_pregunta_5, porque_respuesta_5,
-                 causa_raiz, creado_por)
+                 causa_raiz, causa_raiz_subgrupo, creado_por)
             VALUES
                 (@tipo_registro, @numero, @fecha_detectado, @origen, @seccion, @tipo,
                  @problema, @descripcion_causa,
@@ -225,7 +226,7 @@ public class NoConformidadRepositorio
                  @porque_pregunta_1, @porque_respuesta_1, @porque_pregunta_2, @porque_respuesta_2,
                  @porque_pregunta_3, @porque_respuesta_3, @porque_pregunta_4, @porque_respuesta_4,
                  @porque_pregunta_5, @porque_respuesta_5,
-                 @causa_raiz, @usuario);
+                 @causa_raiz, @causa_raiz_subgrupo, @usuario);
 
             -- Como en DEVOLUCION: con trigger no se puede usar OUTPUT INSERTED.id
             SELECT CAST(SCOPE_IDENTITY() AS INT);";
@@ -272,7 +273,7 @@ public class NoConformidadRepositorio
                 porque_pregunta_3 = @porque_pregunta_3, porque_respuesta_3 = @porque_respuesta_3,
                 porque_pregunta_4 = @porque_pregunta_4, porque_respuesta_4 = @porque_respuesta_4,
                 porque_pregunta_5 = @porque_pregunta_5, porque_respuesta_5 = @porque_respuesta_5,
-                causa_raiz = @causa_raiz
+                causa_raiz = @causa_raiz, causa_raiz_subgrupo = @causa_raiz_subgrupo
             WHERE id = @id AND version = @version;";
 
         using var conexion = Conexion.Abrir();
@@ -446,6 +447,7 @@ public class NoConformidadRepositorio
             Valor("@" + ColumnasPorQue[2 * i + 1], porQue?.Respuesta);
         }
         Valor("@causa_raiz", nc.CausaRaiz);
+        Valor("@causa_raiz_subgrupo", nc.CausaRaizSubgrupo);
     }
 
     // Bloqueos (quién tiene abierta cada ficha)

@@ -602,3 +602,20 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
 .confirmar-quitar button { height: 34px; padding: 0 12px; }
 .boton-paso { height: 48px; margin: 6px 0 12px; }
 .ficha-almacen .aviso:not(.error) { background: var(--acento-suave); border-color: var(--acento); }
+
+/* Operarios causantes elegidos (puede haber varios), debajo de su desplegable */
+.operario-elegido {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    align-self: flex-start;   /* la etiqueta es una columna: uno debajo de otro, sin estirarse */
+    padding: 0 0 0 12px;
+    color: var(--texto);
+    font-size: 15px;
+    border-radius: 17px;
+    background: var(--acento-suave);
+    font-weight: 600;
+}
+
+/* Un campo que ocupa toda la fila de la rejilla (textos largos, como el subgrupo de la causa raíz) */
+.rejilla-ficha .entera { grid-column: 1 / -1; }

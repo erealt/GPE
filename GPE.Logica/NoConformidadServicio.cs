@@ -166,7 +166,7 @@ public class NoConformidadServicio
             Proveedor = Limpio(nc.Proveedor),
             McPccBpm = esIncidencia ? Limpio(nc.McPccBpm) : null,
             Parametro = esIncidencia ? Limpio(nc.Parametro) : null,
-            Operario = esIncidencia ? Limpio(nc.Operario) : null,
+            Operario = esIncidencia ? UnirOperarios(Operarios(nc.Operario)) : null,
             CapituloNorma = Limpio(nc.CapituloNorma),
             AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz),
             // Siempre los 5, para que al guardar se borren los que se hayan vaciado.
@@ -177,6 +177,8 @@ public class NoConformidadServicio
                     : new PorQue(null, null))
                 .ToList(),
             CausaRaiz = Limpio(nc.CausaRaiz),
+            // El subgrupo solo con su grupo
+            CausaRaizSubgrupo = Limpio(nc.CausaRaiz) == null ? null : Limpio(nc.CausaRaizSubgrupo),
             // Solo cuenta en las NC de un proveedor de la lista (para su nota de reclamaciones)
             SeguridadAlimentaria = esNc && nc.ProveedorId != null ? nc.SeguridadAlimentaria : null
         };
@@ -214,6 +216,9 @@ public class NoConformidadServicio
         // Hace falta para la nota de reclamaciones del proveedor
         if (esNc && nc.ProveedorId != null && nc.SeguridadAlimentaria == null)
             Error(nameof(nc.SeguridadAlimentaria), "Indica si afecta a la seguridad alimentaria.");
+
+        if (nc.Operario?.Length > LargoOperarios)
+            Error(nameof(nc.Operario), $"Son demasiados operarios: caben {LargoOperarios} letras en total.");
 
         if (nc.Problema == "")
             Error(nameof(nc.Problema), "Describe el problema detectado.");
@@ -273,6 +278,20 @@ public class NoConformidadServicio
     // Fotos
 
     public static readonly string[] ExtensionesFoto = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
+    // Operarios causantes (25/11): puede haber varios, en la misma columna separados por comas
+    public const string SeparadorOperarios = ", ";
+    public const int LargoOperarios = 150;   // NO_CONFORMIDAD.operario
+
+    public static List<string> Operarios(string? texto) =>
+        (texto ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    public static string? UnirOperarios(IEnumerable<string> operarios)
+    {
+        var lista = operarios.Select(o => o.Trim()).Where(o => o != "").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return lista.Count == 0 ? null : string.Join(SeparadorOperarios, lista);
+    }
+
     public const int TamanoMaximoFoto = 10 * 1024 * 1024;   // como los adjuntos de las devoluciones
 
     public static bool EsFoto(string ruta) => ExtensionesFoto.Contains(Path.GetExtension(ruta).ToLowerInvariant());

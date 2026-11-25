@@ -28,6 +28,7 @@ public class FormAnalisisNc : Form
 
     private const string VerMes = "Mes", VerAno = "Año";
     private const string SinIndicar = "(sin indicar)";
+    private const string AgruparOperario = "Operario";
     private const string TodosLosValores = "Todos";
     private const int ColTipo = 2, ColEstado = 5;
 
@@ -65,7 +66,7 @@ public class FormAnalisisNc : Form
             new("Sección", nc => nc.Seccion, null),
             new("MC/PCC/BPM", nc => nc.McPccBpm, TipoRegistro.Incidencia),
             new("Tipo", nc => nc.Tipo, TipoRegistro.NoConformidad),
-            new("Operario", nc => nc.Operario, TipoRegistro.Incidencia),
+            new(AgruparOperario, nc => nc.Operario, TipoRegistro.Incidencia),
             new("Origen", nc => nc.Origen == null ? null : nombresOrigen.GetValueOrDefault(nc.Origen, nc.Origen), null),
             // Personal, Equipos... Los registros de antes de los 5 porqués salen como "(sin indicar)"
             new("Causa raíz", nc => nc.CausaRaiz, null)
@@ -341,7 +342,7 @@ public class FormAnalisisNc : Form
         string? valor = cmbSoloValor.SelectedIndex > 0 ? cmbSoloValor.Text : null;
         return registros
             .Where(r => tipos.Contains(r.TipoRegistro) && r.FechaDetectado >= desde && r.FechaDetectado <= hasta)
-            .Where(r => valor == null || Grupo(r) == valor)
+            .Where(r => valor == null || Grupos(r).Contains(valor))
             .ToList();
     }
 
@@ -351,7 +352,15 @@ public class FormAnalisisNc : Form
         return string.IsNullOrWhiteSpace(valor) ? SinIndicar : valor.Trim();
     }
 
-    private string Grupo(NoConformidad nc) => Valor((OpcionAgrupar)cmbAgrupar.SelectedItem!, nc);
+    // Los grupos a los que va un registro: uno, salvo los operarios (25/11), que puede haber varios
+    // y el registro cuenta en la barra de cada uno
+    private List<string> Grupos(NoConformidad nc)
+    {
+        var opcion = (OpcionAgrupar)cmbAgrupar.SelectedItem!;
+        if (opcion.Nombre != AgruparOperario) return [Valor(opcion, nc)];
+        var operarios = NoConformidadServicio.Operarios(opcion.Valor(nc));
+        return operarios.Count == 0 ? [SinIndicar] : operarios;
+    }
 
     private bool llenandoValores;
 
@@ -364,7 +373,7 @@ public class FormAnalisisNc : Form
         var tipos = ((OpcionContar)cmbContar.SelectedItem!).Tipos;
         var valores = registros
             .Where(r => tipos.Contains(r.TipoRegistro) && r.FechaDetectado >= desde && r.FechaDetectado <= hasta)
-            .Select(Grupo)
+            .SelectMany(Grupos)
             .Concat(antes == null ? [] : [antes])
             .Distinct()
             .OrderBy(v => v == SinIndicar).ThenBy(v => v, StringComparer.Create(Componentes.Es, true))
@@ -392,7 +401,7 @@ public class FormAnalisisNc : Form
         var lista = DelPeriodo();
         // De más a menos; "(sin indicar)" siempre al final, en gris
         var grupos = lista
-            .GroupBy(Grupo)
+            .SelectMany(Grupos).GroupBy(g => g)
             .Select(g => new GraficaBarras.Barra(g.Key, g.Count(), g.Key == SinIndicar))
             .OrderBy(b => b.Apagada).ThenByDescending(b => b.Valor).ThenBy(b => b.Nombre)
             .ToList();
@@ -418,7 +427,7 @@ public class FormAnalisisNc : Form
     {
         string? grupo = grafica.Elegido;
         var visibles = DelPeriodo()
-            .Where(nc => grupo == null || Grupo(nc) == grupo)
+            .Where(nc => grupo == null || Grupos(nc).Contains(grupo))
             .OrderByDescending(nc => nc.FechaDetectado).ThenByDescending(nc => nc.Id)
             .ToList();
 

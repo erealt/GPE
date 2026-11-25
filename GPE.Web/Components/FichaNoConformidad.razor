@@ -117,8 +117,28 @@
                 <Campo Etiqueta="Parámetro">
                     <select @bind="f.Parametro" disabled="@guardando">@Opciones(ListaCalidad.Parametro, f.Parametro)</select>
                 </Campo>
-                <Campo Etiqueta="Operario causante">
-                    <select @bind="f.Operario" disabled="@guardando">@Opciones(ListaCalidad.Operario, f.Operario)</select>
+                @* Puede haber varios (25/11): se eligen de uno en uno y salen debajo con su ✕.
+                   El desplegable va primero porque la etiqueta activa el primer control de dentro. *@
+                <Campo Etiqueta="Operarios causantes" Error="@Error(nameof(NoConformidad.Operario))">
+                    @{ var elegidos = NoConformidadServicio.Operarios(f.Operario); }
+                    <select @key="anadidosOperario" @onchange="AnadirOperario" disabled="@guardando">
+                        <option value="">@(elegidos.Count == 0 ? "—" : "Añadir otro…")</option>
+                        @foreach (var o in listas.GetValueOrDefault(ListaCalidad.Operario) ?? new())
+                        {
+                            @if (!elegidos.Contains(o.Valor, StringComparer.OrdinalIgnoreCase))
+                            {
+                                <option value="@o.Valor">@o</option>
+                            }
+                        }
+                    </select>
+                    @foreach (var o in elegidos)
+                    {
+                        <span class="operario-elegido">
+                            @o
+                            <button type="button" class="quitar" title="Quitar" disabled="@guardando"
+                                    @onclick="() => QuitarOperario(o)" @onclick:preventDefault>✕</button>
+                        </span>
+                    }
                 </Campo>
             </div>
         </section>
@@ -189,7 +209,8 @@
         }
         <div class="rejilla-ficha">
             <Campo Etiqueta="Causa raíz">
-                <select @bind="f.CausaRaiz" disabled="@guardando">
+                @* Al cambiar de grupo se vacía el subgrupo: el de antes es de otro grupo *@
+                <select @bind="f.CausaRaiz" @bind:after="QuitarSubgrupo" disabled="@guardando">
                     <option value="">—</option>
                     @foreach (var grupo in CausasRaiz.Todas)
                     {
@@ -197,6 +218,23 @@
                     }
                 </select>
             </Campo>
+            @if (f.CausaRaiz != null)
+            {
+                var subgrupos = CausasRaiz.Subgrupos(f.CausaRaiz);
+                <Campo Etiqueta="Subgrupo de la causa raíz" Clase="entera">
+                    <select @bind="f.CausaRaizSubgrupo" disabled="@guardando">
+                        <option value="">—</option>
+                        @foreach (var subgrupo in subgrupos)
+                        {
+                            <option value="@subgrupo">@subgrupo</option>
+                        }
+                        @if (f.CausaRaizSubgrupo != null && !subgrupos.Contains(f.CausaRaizSubgrupo))
+                        {
+                            <option value="@f.CausaRaizSubgrupo">@f.CausaRaizSubgrupo</option>
+                        }
+                    </select>
+                </Campo>
+            }
             <Campo Etiqueta="Capítulo de la norma">
                 <select @bind="f.Capitulo" disabled="@guardando">@Opciones(ListaCalidad.CapituloNorma, f.Capitulo)</select>
             </Campo>
@@ -282,6 +320,7 @@
         public string?[] Preguntas { get; set; } = new string?[NoConformidad.NumeroPorQues];
         public string?[] Respuestas { get; set; } = new string?[NoConformidad.NumeroPorQues];
         public string? CausaRaiz { get; set; }
+        public string? CausaRaizSubgrupo { get; set; }
         public string? Capitulo { get; set; }
         public string? Coste { get; set; }
         public string? Horas { get; set; }
@@ -345,6 +384,7 @@
             Parametro = b.Parametro,
             Operario = b.Operario,
             CausaRaiz = b.CausaRaiz,
+            CausaRaizSubgrupo = b.CausaRaizSubgrupo,
             Capitulo = b.CapituloNorma
         };
         try
@@ -421,6 +461,22 @@
     }
 
     private sealed record FotoEnMovil(string Nombre, long Tamano);
+
+    private void QuitarSubgrupo() => f.CausaRaizSubgrupo = null;
+
+    // Cambia la clave del desplegable de operarios para que vuelva a "Añadir otro…"
+    private int anadidosOperario;
+
+    private void AnadirOperario(ChangeEventArgs e)
+    {
+        if (e.Value is string nombre && nombre != "")
+            f.Operario = NoConformidadServicio.UnirOperarios(NoConformidadServicio.Operarios(f.Operario).Append(nombre));
+        anadidosOperario++;
+    }
+
+    private void QuitarOperario(string nombre) =>
+        f.Operario = NoConformidadServicio.UnirOperarios(
+            NoConformidadServicio.Operarios(f.Operario).Where(o => !o.Equals(nombre, StringComparison.OrdinalIgnoreCase)));
 
     private async Task QuitarFoto(ArchivoNuevo foto)
     {
@@ -560,6 +616,7 @@
             Operario = f.Operario,
             PorQues = Enumerable.Range(0, NoConformidad.NumeroPorQues).Select(i => new PorQue(f.Preguntas[i], f.Respuestas[i])).ToList(),
             CausaRaiz = f.CausaRaiz,
+            CausaRaizSubgrupo = f.CausaRaizSubgrupo,
             CapituloNorma = f.Capitulo,
             CosteEconomico = coste,
             HorasManoObra = horas

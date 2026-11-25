@@ -93,7 +93,7 @@ public static class NoConformidadPdf
         hoja.Texto("ANÁLISIS DE LA CAUSA RAÍZ", nc.AnalisisCausaRaiz);
         hoja.Datos(new (string, string?)[]
         {
-            ("CAUSA RAÍZ", nc.CausaRaiz),
+            ("CAUSA RAÍZ", nc.CausaRaizSubgrupo == null ? nc.CausaRaiz : $"{nc.CausaRaiz} - {nc.CausaRaizSubgrupo}"),
             ("CAPÍTULO DE LA NORMA", nc.CapituloNorma),
             ("MC / PCC / BPM", nc.McPccBpm),
             ("PARÁMETRO", nc.Parametro),

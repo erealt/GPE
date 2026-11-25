@@ -175,7 +175,7 @@ La web o todo: el comando de A2, copiar el paquete al servidor y ejecutar, SIN -
     Si una versión nueva trae scripts en BaseDatos, se añaden con -Scripts (el nombre sin .sql,
     separados por comas) y el script los ejecuta sobre la base GPE. Por ejemplo:
 
-      powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -InstanciaSql MSSQLSERVER -Scripts acciones_hechas_web,personas_responsables
+      powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -InstanciaSql MSSQLSERVER -Scripts acciones_hechas_web,personas_responsables,causa_raiz_subgrupo
 
     Si la aplicación de escritorio nueva usa esas tablas, publicarla DESPUÉS de esto.
 
