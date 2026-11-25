@@ -1,17 +1,20 @@
 namespace GPE.Escritorio;
 
-// Recuadro pequeño abajo a la derecha de la ventana principal. No coge el foco, no hay que cerrarlo
-// y se quita solo a los 15 segundos (mientras el ratón está encima, espera).
+// Recuadro pequeño abajo a la derecha de la ventana principal. No coge el foco y no hay que cerrarlo.
+// Normalmente se quita solo a los 15 segundos (mientras el ratón está encima, espera); con
+// seQuitaSolo = false se queda hasta que se pulsa "Ver" o la ✕.
 public class FormAvisoEsquina : Form
 {
     private const int SegundosVisible = 15;
-    private readonly System.Windows.Forms.Timer temporizador = new() { Interval = SegundosVisible * 1000 };
+    private readonly System.Windows.Forms.Timer? temporizador;
+    private Form? principal;
 
     public event EventHandler? VerPulsado;
+    public event EventHandler? CerrarPulsado;
 
     protected override bool ShowWithoutActivation => true;
 
-    public FormAvisoEsquina(string titulo, string texto)
+    public FormAvisoEsquina(string titulo, string texto, bool seQuitaSolo = true, string icono = "⚠")
     {
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -23,7 +26,7 @@ public class FormAvisoEsquina : Form
 
         var lblTitulo = new Label
         {
-            Text = "⚠  " + titulo,
+            Text = icono + "  " + titulo,
             AutoSize = true,
             Font = Tema.FuenteNegrita,
             ForeColor = Tema.Aviso,
@@ -33,7 +36,7 @@ public class FormAvisoEsquina : Form
         {
             Text = texto,
             AutoSize = false,
-            Size = new Size(330, 40),
+            Size = new Size(360, 40),
             ForeColor = Tema.Texto,
             Location = new Point(18, 42)
         };
@@ -60,18 +63,34 @@ public class FormAvisoEsquina : Form
             Close();
             VerPulsado?.Invoke(this, EventArgs.Empty);
         };
-        btnCerrar.Click += (s, e) => Close();
+        btnCerrar.Click += (s, e) =>
+        {
+            Close();
+            CerrarPulsado?.Invoke(this, EventArgs.Empty);
+        };
 
         Controls.AddRange(new Control[] { lblTitulo, lblTexto, lnkVer, btnCerrar });
 
-        // Con el ratón encima no se quita
-        temporizador.Tick += (s, e) =>
+        if (seQuitaSolo)
         {
-            if (Bounds.Contains(Cursor.Position)) return;
-            Close();
+            temporizador = new() { Interval = SegundosVisible * 1000 };
+            // Con el ratón encima no se quita
+            temporizador.Tick += (s, e) =>
+            {
+                if (Bounds.Contains(Cursor.Position)) return;
+                Close();
+            };
+            Shown += (s, e) => temporizador.Start();
+        }
+        FormClosed += (s, e) =>
+        {
+            temporizador?.Dispose();
+            if (principal != null)
+            {
+                principal.LocationChanged -= Colocar;
+                principal.SizeChanged -= Colocar;
+            }
         };
-        Shown += (s, e) => temporizador.Start();
-        FormClosed += (s, e) => temporizador.Dispose();
     }
 
     // Borde del color del aviso
@@ -82,11 +101,21 @@ public class FormAvisoEsquina : Form
         e.Graphics.DrawRectangle(borde, 0, 0, Width - 1, Height - 1);
     }
 
-    // Abajo a la derecha de la ventana principal, sin quitarle el foco
+    // Abajo a la derecha de la ventana principal, sin quitarle el foco.
+    // Si la ventana se mueve o cambia de tamaño, el aviso la sigue.
     public void MostrarEn(Form principal)
     {
+        this.principal = principal;
+        Colocar(this, EventArgs.Empty);
+        principal.LocationChanged += Colocar;
+        principal.SizeChanged += Colocar;
+        Show(principal);
+    }
+
+    private void Colocar(object? sender, EventArgs e)
+    {
+        if (principal == null || principal.WindowState == FormWindowState.Minimized) return;
         var esquina = principal.PointToScreen(new Point(principal.ClientSize.Width, principal.ClientSize.Height));
         Location = new Point(esquina.X - Width - 20, esquina.Y - Height - 20);
-        Show(principal);
     }
 }

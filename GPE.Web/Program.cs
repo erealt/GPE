@@ -100,6 +100,30 @@ app.MapGet("/acciones/salir", async (HttpContext http, string? volver) =>
     return Results.Redirect("/acciones/entrar" + (volver == "/acciones" ? "" : "?volver=" + Uri.EscapeDataString(volver)));
 });
 
+// Fotos de la ficha, para verlas desde "Mis acciones". Solo las de fichas en las que tiene alguna acción.
+app.MapGet("/acciones/foto/{id:int}", (int id, HttpContext http) =>
+{
+    if (!TrabajadorActual.VeAcciones(http.User))
+        return Results.Unauthorized();
+
+    var foto = new TrabajadorWebServicio().ObtenerFoto(id, TrabajadorActual.Nombre(http.User)!);
+    if (foto == null)
+        return Results.NotFound("Esta foto no existe o no es de una de tus acciones.");
+
+    string nombre = foto.Value.NombreArchivo;
+    string tipo = Path.GetExtension(nombre).ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        ".heic" => "image/heic",
+        ".bmp" => "image/bmp",
+        _ => "image/jpeg"
+    };
+    http.Response.Headers.CacheControl = "private, max-age=3600";
+    return Results.File(foto.Value.Contenido, tipo);
+});
+
 app.Run();
 
 // Página a la que se vuelve después de entrar: solo las de la web con login (nunca otra dirección)

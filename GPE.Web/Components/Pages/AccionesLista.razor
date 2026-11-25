@@ -7,20 +7,57 @@
 <div class="cabecera">
     <div>
         <h1>Mis acciones</h1>
-        <p class="suave">Acciones de incidencias y no conformidades que tienes pendientes.</p>
+        <p class="suave">Acciones de incidencias y no conformidades de las que eres responsable.</p>
     </div>
+</div>
+
+<div class="revisiones">
+    <button class="revision @(verHechas ? "" : "elegida")" @onclick="() => Ver(false)">
+        Pendientes@(acciones != null ? $" ({acciones.Count})" : "")
+    </button>
+    <button class="revision @(verHechas ? "elegida" : "")" @onclick="() => Ver(true)">Hechas</button>
 </div>
 
 @if (hecha != null)
 {
-    <div class="aviso bien">Apuntada como hecha: @hecha. Calidad ya lo ve en la ficha.</div>
+    <div class="aviso bien">Apuntada como hecha: @hecha. A calidad le sale el aviso en el programa.</div>
 }
 @if (error != null)
 {
     <div class="aviso error">@error</div>
 }
 
-@if (acciones == null)
+@if (verHechas)
+{
+    @if (hechas == null)
+    {
+        @if (error == null)
+        {
+            <p class="suave">Cargando...</p>
+        }
+    }
+    else if (hechas.Count == 0)
+    {
+        <div class="tarjeta vacio">No has hecho ninguna acción en el último mes.</div>
+    }
+    else
+    {
+        <p class="suave contador">Las que has hecho en el último mes</p>
+        @foreach (var h in hechas)
+        {
+            <div class="tarjeta accion-trabajador accion-hecha">
+                <div class="accion-cabecera">
+                    <span class="numero">@Registro(h.TipoRegistro, h.NumeroNc)</span>
+                    <span class="etiqueta verde">Hecha el @h.HechaEl.ToString("dd/MM/yyyy")</span>
+                </div>
+                <p class="accion-problema suave">@h.Problema</p>
+                <div class="etiqueta-dato">@(h.Clase == "INMEDIATA" ? "ACCIÓN INMEDIATA" : "ACCIÓN CORRECTORA")</div>
+                <p class="accion-texto">@h.Accion</p>
+            </div>
+        }
+    }
+}
+else if (acciones == null)
 {
     @if (error == null)
     {
@@ -31,29 +68,78 @@ else if (acciones.Count == 0)
 {
     <div class="tarjeta vacio">No tienes ninguna acción pendiente.</div>
 }
+else if (acciones.FirstOrDefault(x => x.Id == elegida) is not { } a)
+{
+    <p class="suave contador">@acciones.Count @(acciones.Count == 1 ? "acción pendiente" : "acciones pendientes") · pulsa una para verla</p>
+
+    @foreach (var p in acciones)
+    {
+        <button class="tarjeta fila-accion @("prioridad-" + ColorPrioridad(p.Prioridad))" @onclick="() => Elegir(p.Id)">
+            <span class="accion-cabecera">
+                <span class="numero">@Registro(p.TipoRegistro, p.NumeroNc)</span>
+                <span class="etiqueta @ColorPrioridad(p.Prioridad)">@(p.Prioridad ?? "Sin prioridad")</span>
+            </span>
+            <span class="fila-problema">@p.Problema</span>
+            <span class="fila-pie">
+                <span>@(p.Clase == "INMEDIATA" ? "Acción inmediata" : "Acción correctora")</span>
+                @if (p.Fecha != null)
+                {
+                    <span class="@(p.Fecha < DateTime.Today ? "fuera-plazo" : "")">
+                        @(p.Fecha < DateTime.Today ? "Fuera de plazo · " : "Antes del ")@p.Fecha.Value.ToString("dd/MM/yyyy")
+                    </span>
+                }
+            </span>
+        </button>
+    }
+}
 else
 {
-    <p class="suave contador">@acciones.Count @(acciones.Count == 1 ? "acción pendiente" : "acciones pendientes")</p>
-
-    @foreach (var a in acciones)
-    {
-        <div class="tarjeta accion-trabajador">
+    <button class="secundario volver" @onclick="VolverALista">← Volver a la lista</button>
+        <div class="tarjeta accion-trabajador @("prioridad-" + ColorPrioridad(a.Prioridad))">
             <div class="accion-cabecera">
-                <span class="numero">@Registro(a)</span>
-                @if (a.Prioridad != null)
-                {
-                    <span class="etiqueta @ColorPrioridad(a.Prioridad)">@a.Prioridad</span>
-                }
+                <span class="numero">@Registro(a.TipoRegistro, a.NumeroNc)</span>
+                <span class="etiqueta @ColorPrioridad(a.Prioridad)">@(a.Prioridad ?? "Sin prioridad")</span>
             </div>
-            <p class="accion-problema suave">@a.Problema</p>
+            <p class="pequeno suave">
+                Detectada el @a.FechaDetectado.ToString("dd/MM/yyyy")@(a.Seccion != null ? " · " + a.Seccion : "")
+            </p>
 
-            <div class="etiqueta-dato">@(a.Clase == "INMEDIATA" ? "ACCIÓN INMEDIATA" : "ACCIÓN CORRECTORA")</div>
-            <p class="accion-texto">@a.Accion</p>
+            <div class="etiqueta-dato">QUÉ HA PASADO</div>
+            <p class="accion-texto">@a.Problema</p>
+
+            @if (!string.IsNullOrWhiteSpace(a.Causa))
+            {
+                <div class="etiqueta-dato">CAUSA</div>
+                <p class="accion-texto">@a.Causa</p>
+            }
+
+            @if (a.Fotos.Count > 0)
+            {
+                @if (fotosAbiertas.Contains(a.Id))
+                {
+                    <div class="fotos-accion">
+                        @foreach (var foto in a.Fotos)
+                        {
+                            <a href="acciones/foto/@foto" target="_blank"><img src="acciones/foto/@foto" alt="Foto" loading="lazy" /></a>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <button class="secundario ver-fotos" @onclick="() => fotosAbiertas.Add(a.Id)">
+                        Ver @(a.Fotos.Count == 1 ? "la foto" : $"las {a.Fotos.Count} fotos")
+                    </button>
+                }
+            }
+            <hr class="separador-accion" />
+
+            <div class="etiqueta-dato">LO QUE TIENES QUE HACER · @(a.Clase == "INMEDIATA" ? "ACCIÓN INMEDIATA" : "ACCIÓN CORRECTORA")</div>
+            <p class="accion-texto accion-tuya">@a.Accion</p>
 
             @if (a.Fecha != null)
             {
                 <p class="pequeno @(a.Fecha < DateTime.Today ? "fuera-plazo" : "suave")">
-                    Fecha: @a.Fecha.Value.ToString("dd/MM/yyyy")@(a.Fecha < DateTime.Today ? " · fuera de plazo" : "")
+                    Hacer antes del @a.Fecha.Value.ToString("dd/MM/yyyy")@(a.Fecha < DateTime.Today ? " · fuera de plazo" : "")
                 </p>
             }
 
@@ -77,7 +163,6 @@ else
                 <button class="principal ancho" @onclick="() => Abrir(a.Id)">La he hecho</button>
             }
         </div>
-    }
 }
 
 @code {
@@ -91,6 +176,11 @@ else
     private string? error;
     private string? hecha;           // la última marcada, para el aviso de arriba
 
+    private bool verHechas;          // pestaña "Hechas"
+    private List<AccionHecha>? hechas;
+    private readonly HashSet<int> fotosAbiertas = new();
+
+    private int? elegida;            // la que se está viendo; null = la lista
     private int? abierta;            // la que tiene abierto el comentario
     private string comentario = "";
     private bool guardando;
@@ -124,6 +214,40 @@ else
         {
             error = "No se han podido cargar tus acciones. " + ex.Message;
         }
+        hechas = null;   // ha podido cambiar: se vuelve a leer al abrir la pestaña
+    }
+
+    private void Ver(bool verLasHechas)
+    {
+        verHechas = verLasHechas;
+        elegida = null;
+        abierta = null;
+        hecha = null;
+        error = null;
+        if (!verHechas || hechas != null) return;
+        try
+        {
+            hechas = servicio.ObtenerHechas(persona);
+        }
+        catch (DbException ex)
+        {
+            error = "No se han podido cargar las hechas. " + ex.Message;
+        }
+    }
+
+    private void Elegir(int id)
+    {
+        elegida = id;
+        abierta = null;
+        hecha = null;
+        error = null;
+    }
+
+    private void VolverALista()
+    {
+        elegida = null;
+        abierta = null;
+        error = null;
     }
 
     private void Abrir(int id)
@@ -146,13 +270,15 @@ else
         {
             using (Sesion.Como(usuario!))
                 servicio.MarcarHecha(accion.Id, persona, comentario);
-            hecha = Registro(accion);
+            hecha = Registro(accion.TipoRegistro, accion.NumeroNc);
             abierta = null;
+            elegida = null;   // vuelve a la lista
         }
         catch (ReglaNegocioException ex)
         {
             error = ex.Message;
             abierta = null;
+            elegida = null;
         }
         catch (DbException ex)
         {
@@ -166,14 +292,16 @@ else
         Cargar();
     }
 
-    private static string Registro(AccionTrabajador a) =>
-        (a.TipoRegistro == "INCIDENCIA" ? "Incidencia" : a.TipoRegistro == "MEJORA" ? "Mejora" : "NC")
-        + (a.NumeroNc != null ? " " + a.NumeroNc : "");
+    private static string Registro(string tipoRegistro, string? numero) =>
+        (tipoRegistro == "INCIDENCIA" ? "Incidencia" : tipoRegistro == "MEJORA" ? "Mejora" : "NC")
+        + (numero != null ? " " + numero : "");
 
-    private static string ColorPrioridad(string prioridad) => prioridad switch
+    // Alta en rojo, media en naranja, baja en verde
+    private static string ColorPrioridad(string? prioridad) => prioridad switch
     {
         "Alta" => "roja",
-        "Media" => "ambar",
+        "Media" => "naranja",
+        "Baja" => "verde",
         _ => "gris"
     };
 }

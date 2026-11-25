@@ -494,6 +494,16 @@ public class ModuloNoConformidades : UserControl
         if (hayCambios) CargarDatos();
     }
 
+    // Desde el aviso de acciones hechas en la web: recarga la lista (para que la acción salga hecha) y abre esa ficha
+    public void AbrirFicha(int id)
+    {
+        CargarDatos();
+        if (registros.FirstOrDefault(r => r.Id == id) is { } nc)
+            AbrirRegistro(nc);
+        else
+            Mensajes.Informacion(this, "Registro no encontrado", "Este registro ya no existe: puede que otro usuario lo haya borrado.");
+    }
+
     // Abre el registro (o uno nuevo con null) y, si se guarda, recarga la lista y lo selecciona
     private void AbrirRegistro(NoConformidad? nc)
     {

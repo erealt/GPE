@@ -50,6 +50,88 @@ public class FormPrincipal : Form
 
         if (devoluciones != null) PrepararAvisoPendientes(devoluciones);
         if (Sesion.VeCalidad) PrepararAvisoCertificados();
+        if (Sesion.VeCalidad) PrepararAvisoAccionesHechas();
+    }
+
+    // Acciones de NC que los trabajadores marcan hechas desde la web: a quien ve Calidad le sale un
+    // recuadro abajo a la derecha que no se quita solo, hasta que pulsa "Ver" o la ✕. Se mira al abrir
+    // GPE y después cada minuto. Si hay otra ventana abierta (una ficha, por ejemplo), espera.
+    private const int SegundosComprobarAcciones = 60;
+    private readonly AccionHechaWebServicio accionesHechas = new();
+    private FormAvisoEsquina? avisoAcciones;
+    private List<AccionHechaWeb> accionesEnAviso = new();
+
+    private void PrepararAvisoAccionesHechas()
+    {
+        var temporizador = new System.Windows.Forms.Timer { Interval = SegundosComprobarAcciones * 1000 };
+        temporizador.Tick += (s, e) => MostrarAvisoAccionesHechas();
+        Shown += (s, e) =>
+        {
+            temporizador.Start();
+            BeginInvoke(MostrarAvisoAccionesHechas);
+        };
+        Activated += (s, e) => { if (avisoAcciones == null) BeginInvoke(MostrarAvisoAccionesHechas); };
+        FormClosed += (s, e) => temporizador.Dispose();
+    }
+
+    private void MostrarAvisoAccionesHechas()
+    {
+        if (Sesion.UsuarioActual is not { } usuario || WindowState == FormWindowState.Minimized) return;
+        // Otra ventana abierta que no sea este aviso: se espera a la próxima vez
+        if (Application.OpenForms.Cast<Form>().Any(f => f != this && f != avisoAcciones)) return;
+
+        List<AccionHechaWeb> sinVer;
+        try
+        {
+            sinVer = accionesHechas.ObtenerSinVer(usuario.Id);
+        }
+        catch (DbException)
+        {
+            return;
+        }
+
+        // Si ya está a la vista con las mismas, se deja como está
+        if (sinVer.Select(a => a.Id).SequenceEqual(accionesEnAviso.Select(a => a.Id)) && avisoAcciones != null) return;
+
+        avisoAcciones?.Close();
+        avisoAcciones = null;
+        accionesEnAviso = sinVer;
+        if (sinVer.Count == 0) return;
+
+        var (titulo, texto) = AccionHechaWebServicio.TextoAviso(sinVer);
+        var aviso = new FormAvisoEsquina(titulo, texto, seQuitaSolo: false, icono: "✔");
+        aviso.VerPulsado += (s, e) => VerAccionesHechas(sinVer);
+        aviso.CerrarPulsado += (s, e) => MarcarAccionesVistas(sinVer);
+        aviso.FormClosed += (s, e) => { if (avisoAcciones == aviso) avisoAcciones = null; };
+        avisoAcciones = aviso;
+        aviso.MostrarEn(this);
+    }
+
+    private void MarcarAccionesVistas(List<AccionHechaWeb> avisos)
+    {
+        accionesEnAviso = new();
+        try
+        {
+            accionesHechas.MarcarVistos(Sesion.UsuarioActual!.Id, avisos.Select(a => a.Id));
+        }
+        catch (DbException)
+        {
+            // Si no se ha podido apuntar, volverá a salir la próxima vez
+        }
+    }
+
+    private void VerAccionesHechas(List<AccionHechaWeb> avisos)
+    {
+        MarcarAccionesVistas(avisos);
+
+        int? ficha = avisos.Count == 1
+            ? avisos[0].NoConformidadId
+            : FormAvisoAccionesHechas.Elegir(this, avisos);
+        if (ficha == null) return;
+
+        var moduloNc = modulos.First(m => m.Nombre == "No conformidades");
+        Mostrar(moduloNc);
+        ((ModuloNoConformidades)moduloNc.Contenido!).AbrirFicha(ficha.Value);
     }
 
     // Certificados de proveedores caducados o que caducan en 30 días: a quien ve Calidad le sale un recuadro pequeño
@@ -66,7 +148,8 @@ public class FormPrincipal : Form
 
     private void MostrarAvisoCertificados()
     {
-        if (!avisoCertificadosPendiente || Application.OpenForms.Count > 1) return;
+        if (!avisoCertificadosPendiente
+            || Application.OpenForms.Cast<Form>().Any(f => f != this && f != avisoAcciones)) return;
         avisoCertificadosPendiente = false;
 
         List<CertificadoPorCaducar> certificados;
