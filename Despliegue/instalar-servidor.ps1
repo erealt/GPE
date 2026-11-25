@@ -7,12 +7,14 @@
 #
 # Opcionales:
 #   -ReemplazarBaseDatos       la base GPE que ya hay se guarda en una copia y se cambia por la del paquete#   -InstanciaSql SQLEXPRESS   solo si en el servidor hay más de una instancia de SQL Server
+#   -Scripts a,b               ejecuta BaseDatos\a.sql y b.sql sobre GPE (los que trae una versión nueva)
 #   -UsuarioWeb 1              id del usuario a cuyo nombre se guardan los DeCA hechos desde la web
 #   -Puerto 80                 puerto de la web
 #   -Carpeta C:\GPE            dónde se instala todo
 
 param(
     [switch]$ReemplazarBaseDatos,    [string]$InstanciaSql = "",
+    [string[]]$Scripts = @(),
     [int]$UsuarioWeb = 1,
     [int]$Puerto = 80,
     [string]$Carpeta = "C:\GPE"
@@ -220,6 +222,22 @@ ALTER ROLE db_datareader ADD MEMBER [$cuentaWeb];
 ALTER ROLE db_datawriter ADD MEMBER [$cuentaWeb];
 "@ $base)
 Write-Host "Permisos dados a gpe_app y a la web."
+
+# Scripts de BaseDatos que trae una versión nueva (-Scripts nombre1,nombre2), sobre la base GPE.
+# Se ejecutan por trozos separados por GO, como sqlcmd. Si uno falla, se para aquí.
+foreach ($nombre in $Scripts) {
+    $archivo = Join-Path $PSScriptRoot "BaseDatos\$nombre.sql"
+    if (-not (Test-Path $archivo)) { throw "No encuentro BaseDatos\$nombre.sql en el paquete." }
+    Write-Host "Ejecutando BaseDatos\$nombre.sql ..."
+    $texto = Get-Content $archivo -Raw -Encoding UTF8
+    foreach ($trozo in ($texto -split '(?im)^\s*GO\s*$')) {
+        if ($trozo.Trim()) {
+            try { [void](Sql $sql $trozo $base) }
+            catch { throw "Ha fallado BaseDatos\$nombre.sql: $($_.Exception.GetBaseException().Message)" }
+        }
+    }
+    Write-Host "  hecho."
+}
 
 # ---------- 3. IIS ----------
 

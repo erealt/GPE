@@ -172,8 +172,12 @@ La web o todo: el comando de A2, copiar el paquete al servidor y ejecutar, SIN -
 
       powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -InstanciaSql MSSQLSERVER
   - La base de datos del servidor NO se toca: se conserva lo que haya hecho calidad.
-    Si una versión nueva trae un script en BaseDatos, hay que ejecutarlo a mano en el
-    servidor (en SQL Server Management Studio, sobre la base GPE).
+    Si una versión nueva trae scripts en BaseDatos, se añaden con -Scripts (el nombre sin .sql,
+    separados por comas) y el script los ejecuta sobre la base GPE. Por ejemplo:
+
+      powershell -ExecutionPolicy Bypass -File .\instalar-servidor.ps1 -InstanciaSql MSSQLSERVER -Scripts acciones_hechas_web,personas_responsables
+
+    Si la aplicación de escritorio nueva usa esas tablas, publicarla DESPUÉS de esto.
 
 Para publicar la aplicación hacen falta dos cosas que están solo en el ordenador de desarrollo:
   - el certificado "GPE Eurochoc" (se creó la primera vez, dura 10 años);
