@@ -41,33 +41,17 @@ BEGIN
 END;
 GO
 
--- PRUEBA: los usuarios de permisos_prueba.sql, todos con la contraseña "Prueba1234".
--- Solo se pone a quien todavía no tiene usuario. Quitar cuando se den las contraseñas de verdad.
+-- PRUEBA: los usuarios de permisos_prueba.sql, con la contraseña "Prueba1234".
+-- Solo se pone a quien todavía no tiene usuario. La contraseña de verdad de admin y los usuarios
+-- de calidad y almacén los pone usuarios.sql.
 DECLARE @clave NVARCHAR(200) = N'PBKDF2-SHA256$100000$CqTgTnEJmb9XJ0F2M7hHcA==$3I5R4JtE/3GD01zSHzFnn8+FbthA9OF+dmt/E/0wKnM=';
 
 UPDATE u SET usuario = p.usuario, clave = @clave
 FROM USUARIO u
 JOIN (VALUES
     (N'estelaretin10@gmail.com',            N'admin'),
-    (N'estelaretin10+almacen@gmail.com',    N'almacen'),
-    (N'estelaretin10+transporte@gmail.com', N'transporte'),
-    (N'estelaretin10+calidad@gmail.com',    N'calidad')
+    (N'estelaretin10+transporte@gmail.com', N'transporte')
 ) AS p(email, usuario) ON p.email = u.email
 WHERE u.usuario IS NULL
   AND NOT EXISTS (SELECT 1 FROM USUARIO o WHERE o.usuario = p.usuario);
-GO
-
--- PRUEBA: usuario "estela" (contraseña "Prueba1234") con todos los roles en la fábrica 1,
--- para ver el programa entero sin cambiar de usuario.
-IF NOT EXISTS (SELECT 1 FROM USUARIO WHERE usuario = N'estela')
-    INSERT INTO USUARIO (nombre, email, usuario, clave)
-    VALUES (N'Estela', N'estelaretin10+estela@gmail.com', N'estela',
-            N'PBKDF2-SHA256$100000$CqTgTnEJmb9XJ0F2M7hHcA==$3I5R4JtE/3GD01zSHzFnn8+FbthA9OF+dmt/E/0wKnM=');
-
-INSERT INTO USUARIO_ROL (usuario_id, rol_id, fabrica_id)
-SELECT u.id, r.id, 1
-FROM USUARIO u
-CROSS JOIN ROL r
-WHERE u.usuario = N'estela'
-  AND NOT EXISTS (SELECT 1 FROM USUARIO_ROL ur WHERE ur.usuario_id = u.id AND ur.rol_id = r.id AND ur.fabrica_id = 1);
 GO

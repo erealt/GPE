@@ -108,11 +108,14 @@ C1. Instalar la aplicación de escritorio
        versión nueva.
 
 C2. Entrar
-    Los usuarios son los de miGPE, todos con la contraseña Prueba1234:
-      calidad      rol Calidad
-      admin        Administración (todo)
-      trabajador   rol Trabajador (solo web: sus acciones)
-      almacen, transporte, estela
+    Usuarios (los crea BaseDatos\usuarios.sql):
+      admin          contraseña admin                  todos los roles (lo ve todo)
+      celia          contraseña celia@calidad          rol Calidad
+      alba           contraseña alba@calidad           rol Calidad
+      marcoantonio   contraseña marcoAntonio@almacen   rol Almacén
+      transporte     contraseña Prueba1234             rol Transporte (prueba)
+      trabajador     contraseña Prueba1234             rol Trabajador (prueba; solo web: sus acciones)
+    estela, calidad y almacen ya no entran (desactivados).
     La aplicación todavía no permite cambiar contraseñas.
 
 C3. La web
@@ -147,7 +150,7 @@ Solo la web (sin publicar otra versión de la aplicación, que McAfee volvería 
 Volver a cargar el Excel de incidencias en la base del servidor (desde el ordenador de desarrollo,
 sin ir al servidor; entra con gpe_app):
 
-      powershell -ExecutionPolicy Bypass -File BaseDatos\importar_no_conformidades.ps1 -UsuarioId 5 -Servidor 192.168.2.249 -Reemplazar
+      powershell -ExecutionPolicy Bypass -File BaseDatos\importar_no_conformidades.ps1 -UsuarioId 1 -Servidor 192.168.2.249 -Reemplazar
 
   Enseña los registros hechos a mano en el servidor (se pierden si no están en el Excel) y pide
   confirmación. Borra y carga en la misma transacción: si falla, la base se queda como estaba.
@@ -160,8 +163,8 @@ sin ir al servidor; entra con gpe_app):
 
   y en el servidor, en la carpeta del paquete (PowerShell como administrador):
 
-      powershell -ExecutionPolicy Bypass -File .\BaseDatos\importar_no_conformidades.ps1 -UsuarioId 5 -Datos .\BaseDatos\incidencias.xml -Reemplazar -Probar
-      powershell -ExecutionPolicy Bypass -File .\BaseDatos\importar_no_conformidades.ps1 -UsuarioId 5 -Datos .\BaseDatos\incidencias.xml -Reemplazar
+      powershell -ExecutionPolicy Bypass -File .\BaseDatos\importar_no_conformidades.ps1 -UsuarioId 1 -Datos .\BaseDatos\incidencias.xml -Reemplazar -Probar
+      powershell -ExecutionPolicy Bypass -File .\BaseDatos\importar_no_conformidades.ps1 -UsuarioId 1 -Datos .\BaseDatos\incidencias.xml -Reemplazar
 
   Allí entra con tu usuario de Windows (la conexión de la variable GPE_CONEXION del servidor).
 

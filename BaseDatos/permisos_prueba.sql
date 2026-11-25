@@ -1,6 +1,7 @@
 /* Un usuario de prueba por rol, en la fábrica 1. Después de crear_tablas.sql; con sqlcmd, -f 65001.
    Los correos "nombre+algo@gmail.com" llegan todos a "nombre@gmail.com".
-   Se puede ejecutar varias veces: deja a cada usuario exactamente con su rol. */
+   Se puede ejecutar varias veces: deja a cada usuario exactamente con su rol.
+   Deja a admin solo con Administración: después hay que ejecutar usuarios.sql, que le da todos. */
 
 USE GPE;
 GO
@@ -10,9 +11,7 @@ DECLARE @fabrica INT = 1;
 DECLARE @usuarios TABLE (email_antiguo NVARCHAR(150) NULL, email NVARCHAR(150), nombre NVARCHAR(100), rol NVARCHAR(50));
 INSERT INTO @usuarios (email_antiguo, email, nombre, rol) VALUES
     (NULL,                N'estelaretin10@gmail.com',            N'Administrador', N'Administración'),
-    (N'prueba@gpe.local', N'estelaretin10+almacen@gmail.com',    N'Almacén',       N'Almacén'),
-    (NULL,                N'estelaretin10+transporte@gmail.com', N'Transporte',    N'Transporte'),
-    (NULL,                N'estelaretin10+calidad@gmail.com',    N'Calidad',       N'Calidad');
+    (NULL,                N'estelaretin10+transporte@gmail.com', N'Transporte',    N'Transporte');
 
 -- El rol Calidad se añadió después: en las bases de datos anteriores no existe todavía
 IF NOT EXISTS (SELECT 1 FROM ROL WHERE nombre = N'Calidad')
