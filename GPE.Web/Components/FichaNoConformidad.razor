@@ -2,7 +2,11 @@
    que FormNoConformidad del escritorio (registro, clasificación, fotos, acción inmediata, análisis con
    los 5 porqués, corrección y cierre), con las mismas reglas del servicio. *@
 
-<div class="ficha-nc">
+<div class="ficha-nc" data-borrador="@ClaveBorrador">
+    @if (recuperada)
+    {
+        <div class="aviso bien">Se ha recuperado lo que estabas escribiendo en esta ficha.</div>
+    }
     <div class="ficha-fases">
         @foreach (var (fase, i) in Fases().Select((f, i) => (f, i)))
         {
@@ -86,12 +90,9 @@
             <textarea rows="4" placeholder="Qué se ha detectado: producto, lote, cliente..." @bind="f.Problema" @bind:event="oninput" disabled="@guardando"></textarea>
         </Campo>
 
-        <div class="rejilla-ficha">
-            <Campo Etiqueta="Fecha prevista" Error="@Error(nameof(NoConformidad.FechaPrevista))">
-                <input type="date" @bind="f.FechaPrevista" disabled="@guardando" />
-            </Campo>
-            @if (f.Tipo == TipoRegistro.NoConformidad && f.ProveedorId != null)
-            {
+        @if (f.Tipo == TipoRegistro.NoConformidad && f.ProveedorId != null)
+        {
+            <div class="rejilla-ficha">
                 <Campo Etiqueta="¿Afecta a la seguridad alimentaria?" Error="@Error(nameof(NoConformidad.SeguridadAlimentaria))">
                     <select @bind="f.Seguridad" disabled="@guardando">
                         <option value="">—</option>
@@ -100,8 +101,8 @@
                     </select>
                     <span class="pequeno suave">Cuenta para la nota de reclamaciones del proveedor.</span>
                 </Campo>
-            }
-        </div>
+            </div>
+        }
     </section>
 
     @if (f.Tipo == TipoRegistro.Incidencia)
@@ -150,7 +151,7 @@
         {
             <div class="foto-subida">
                 <span>📷 @foto.NombreArchivo · @Tamano(foto.Contenido.Length)</span>
-                <button class="quitar" disabled="@guardando" @onclick="() => fotos.Remove(foto)">✕</button>
+                <button class="quitar" disabled="@guardando" @onclick="() => QuitarFoto(foto)">✕</button>
             </div>
         }
     </section>
@@ -165,18 +166,26 @@
     @* 3. Análisis de la causa *@
     <section class="ficha-tarjeta">
         <h3>3. Análisis de la causa</h3>
-        <p class="suave pequeno">Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega</p>
-        <span class="etiqueta-campo">5 porqués</span>
-        @for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+        @* Los 5 porqués, solo en las NC (25/11) *@
+        @if (f.Tipo == TipoRegistro.NoConformidad)
         {
-            var n = i;
-            <div class="porque">
-                <strong>@(n + 1).</strong>
-                <textarea rows="2" maxlength="1000" placeholder="@(n == 0 ? "¿Por qué ha pasado...?" : "¿Por qué...?")"
-                          @bind="f.Preguntas[n]" @bind:event="oninput" disabled="@guardando"></textarea>
-                <textarea rows="2" maxlength="1000" placeholder="Porque..."
-                          @bind="f.Respuestas[n]" @bind:event="oninput" disabled="@guardando"></textarea>
-            </div>
+            <p class="suave pequeno">Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega</p>
+            <span class="etiqueta-campo">5 porqués</span>
+            @for (int i = 0; i < NoConformidad.NumeroPorQues; i++)
+            {
+                var n = i;
+                <div class="porque">
+                    <strong>@(n + 1).</strong>
+                    <textarea rows="2" maxlength="1000" placeholder="@(n == 0 ? "¿Por qué ha pasado...?" : "¿Por qué...?")"
+                              @bind="f.Preguntas[n]" @bind:event="oninput" disabled="@guardando"></textarea>
+                    <textarea rows="2" maxlength="1000" placeholder="Porque..."
+                              @bind="f.Respuestas[n]" @bind:event="oninput" disabled="@guardando"></textarea>
+                </div>
+            }
+        }
+        else
+        {
+            <p class="suave pequeno">Por qué ha pasado: el grupo de la causa raíz</p>
         }
         <div class="rejilla-ficha">
             <Campo Etiqueta="Causa raíz">
@@ -212,7 +221,7 @@
     @* 5. Verificación y cierre *@
     <section class="ficha-tarjeta">
         <h3>5. Verificación y cierre</h3>
-        <p class="pequeno @(NoConformidadServicio.Estado(f.FechaPrevista, f.FechaFin) == EstadoRegistro.FueraPlazo ? "error-campo" : "suave")">@TextoEstado()</p>
+        <p class="pequeno suave">@TextoEstado()</p>
         @ListaAcciones(ClaseAccion.Seguimiento,
             "Todavía no hay seguimientos. Añade uno cada vez que se compruebe si las acciones han funcionado.", "+ Añadir seguimiento")
         <div class="rejilla-ficha">
@@ -244,6 +253,11 @@
     // Al guardar: el id y el registro tal como se ha guardado
     [Parameter] public EventCallback<(int Id, NoConformidad Registro, string? AvisoProveedor)> OnGuardado { get; set; }
     [Parameter] public EventCallback OnCancelar { get; set; }
+    // Si se pasa, lo escrito y las fotos se van guardando en el móvil con esta clave (gpe.borradorNc)
+    // y al abrir la ficha se recupera lo que hubiera. Lo borra quien abre la ficha, al guardarla o cerrarla.
+    [Parameter] public string? ClaveBorrador { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private readonly NoConformidadServicio servicio = new();
     private static string Hoy => DateTime.Today.ToString("yyyy-MM-dd");
@@ -265,8 +279,8 @@
         public string? McPccBpm { get; set; }
         public string? Parametro { get; set; }
         public string? Operario { get; set; }
-        public string?[] Preguntas { get; } = new string?[NoConformidad.NumeroPorQues];
-        public string?[] Respuestas { get; } = new string?[NoConformidad.NumeroPorQues];
+        public string?[] Preguntas { get; set; } = new string?[NoConformidad.NumeroPorQues];
+        public string?[] Respuestas { get; set; } = new string?[NoConformidad.NumeroPorQues];
         public string? CausaRaiz { get; set; }
         public string? Capitulo { get; set; }
         public string? Coste { get; set; }
@@ -283,7 +297,7 @@
         public string? Responsable { get; set; }
         public string? Prioridad { get; set; }
         public string? Observaciones { get; set; }
-        public string? Error { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore] public string? Error { get; set; }
 
         public bool Vacia => !Hecha && string.IsNullOrWhiteSpace(Accion) && Fecha == null
             && string.IsNullOrWhiteSpace(Responsable) && string.IsNullOrWhiteSpace(Prioridad) && string.IsNullOrWhiteSpace(Observaciones);
@@ -293,8 +307,14 @@
     }
 
     private Ficha f = new();
-    private readonly List<FilaAccion> acciones = new();
+    private List<FilaAccion> acciones = new();
     private readonly List<ArchivoNuevo> fotos = new();
+
+    // Lo que se guarda en el móvil (las fotos van aparte)
+    private sealed record Guardado(Ficha Ficha, List<FilaAccion> Acciones);
+    private bool borradorListo;      // no se escribe hasta haber leído lo que hubiera
+    private string? ultimoGuardado;
+    private bool recuperada;
 
     private Dictionary<string, List<OpcionLista>> listas = new();
     private List<string> clientes = new();
@@ -338,6 +358,81 @@
             errorGeneral = "No se han podido leer las listas de calidad. Comprueba la conexión. " + ex.Message;
         }
         ActualizarNumero();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ClaveBorrador == null) return;
+        try
+        {
+            if (firstRender)
+            {
+                await Recuperar();
+                borradorListo = true;
+                return;
+            }
+            if (!borradorListo) return;
+            // Después de cada cambio: es poco texto, se escribe entero
+            string json = System.Text.Json.JsonSerializer.Serialize(new Guardado(f, acciones));
+            if (json == ultimoGuardado) return;
+            await JS.InvokeVoidAsync("gpe.borradorNc.guardar", ClaveBorrador, json);
+            ultimoGuardado = json;
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+            // Sin guardar en el móvil la ficha funciona igual
+        }
+    }
+
+    // Lo escrito y las fotos que se guardaron en el móvil antes de que se recargara la página
+    private async Task Recuperar()
+    {
+        bool hay = false;
+        if (await JS.InvokeAsync<string?>("gpe.borradorNc.leer", ClaveBorrador) is string json
+            && System.Text.Json.JsonSerializer.Deserialize<Guardado>(json) is Guardado guardado)
+        {
+            f = guardado.Ficha;
+            acciones = guardado.Acciones;
+            ultimoGuardado = json;
+            hay = true;
+        }
+
+        var enMovil = await JS.InvokeAsync<List<FotoEnMovil>>("gpe.borradorNc.fotos", ClaveBorrador);
+        for (int i = 0; i < enMovil.Count; i++)
+        {
+            var (nombre, tamano) = (enMovil[i].Nombre, enMovil[i].Tamano);
+            // Ya está si la página no se recargó y llegó al servidor
+            if (fotos.Any(x => x.NombreArchivo == nombre && x.Contenido.Length == tamano)) continue;
+            if (NoConformidadServicio.ErrorFoto(nombre, tamano) != null) continue;
+            var referencia = await JS.InvokeAsync<IJSStreamReference>("gpe.borradorNc.foto", ClaveBorrador, i);
+            await using var flujo = await referencia.OpenReadStreamAsync(NoConformidadServicio.TamanoMaximoFoto);
+            using var memoria = new MemoryStream();
+            await flujo.CopyToAsync(memoria);
+            fotos.Add(new ArchivoNuevo(nombre, memoria.ToArray()));
+            hay = true;
+        }
+
+        if (hay)
+        {
+            recuperada = true;
+            ActualizarNumero();
+            StateHasChanged();
+        }
+    }
+
+    private sealed record FotoEnMovil(string Nombre, long Tamano);
+
+    private async Task QuitarFoto(ArchivoNuevo foto)
+    {
+        fotos.Remove(foto);
+        if (ClaveBorrador == null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("gpe.borradorNc.quitarFoto", ClaveBorrador, foto.NombreArchivo, foto.Contenido.Length);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+        }
     }
 
     // Opciones de un desplegable; si el valor ya no está en la lista, se añade para no perderlo (como el escritorio)
@@ -486,17 +581,8 @@
         _ => "Verificación y cierre"
     };
 
-    private string TextoEstado()
-    {
-        string estado = NoConformidadServicio.Estado(f.FechaPrevista, f.FechaFin);
-        return estado switch
-        {
-            EstadoRegistro.Cerrada => "Estado: cerrada.",
-            EstadoRegistro.SinPlazo => "Estado: abierta, sin fecha prevista.",
-            EstadoRegistro.EnPlazo => $"Estado: en plazo, hasta el {f.FechaPrevista:dd/MM/yyyy}.",
-            _ => $"Estado: fuera de plazo desde el {f.FechaPrevista!.Value.AddDays(1):dd/MM/yyyy}."
-        };
-    }
+    private string TextoEstado() =>
+        NoConformidadServicio.Estado(f.FechaFin) == EstadoRegistro.Cerrada ? "Estado: cerrada." : "Estado: abierta.";
 
     private string? Error(string campo) =>
         errores.Where(e => e.Campo == campo).Select(e => e.Mensaje).FirstOrDefault();

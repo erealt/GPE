@@ -14,8 +14,10 @@ CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("es-ES");
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Al hacer una foto el móvil deja la página en segundo plano y puede cortar la conexión: el
+// servidor guarda la sesión de la página 15 minutos (en vez de 3) para que al volver siga todo igual.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(opciones => opciones.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(15));
 builder.Services.AddSingleton<UsuarioWeb>();
 
 // Web de los trabajadores (/acciones), control diario de calidad (/control) y almacén (/almacen): entran con su usuario y

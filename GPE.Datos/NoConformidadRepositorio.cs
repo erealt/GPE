@@ -86,18 +86,14 @@ public class NoConformidadRepositorio
         return lista;
     }
 
-    // Fecha prevista de los abiertos, para contar los fuera de plazo sin leerlos enteros
-    public List<DateTime?> ObtenerPlazosAbiertos()
+    // Cuántos siguen abiertos, sin leerlos enteros
+    public int ContarAbiertas()
     {
-        const string sql = "SELECT fecha_prevista FROM NO_CONFORMIDAD WHERE fecha_fin IS NULL;";
+        const string sql = "SELECT COUNT(*) FROM NO_CONFORMIDAD WHERE fecha_fin IS NULL;";
 
-        var lista = new List<DateTime?>();
         using var conexion = Conexion.Abrir();
         using var comando = new SqlCommand(sql, conexion);
-        using var lector = comando.ExecuteReader();
-        while (lector.Read())
-            lista.Add(lector.IsDBNull(0) ? null : lector.GetDateTime(0));
-        return lista;
+        return (int)comando.ExecuteScalar()!;
     }
 
     // Acciones inmediatas, correctoras y seguimientos de un registro, en su orden
@@ -132,13 +128,14 @@ public class NoConformidadRepositorio
         return acciones;
     }
 
-    // Opciones activas de todos los desplegables, agrupadas por lista y en su orden
+    // Opciones activas de todos los desplegables, agrupadas por lista y en su orden.
+    // Los operarios, por nombre (25/11): así se encuentran antes en la lista.
     public Dictionary<string, List<OpcionLista>> ObtenerListas()
     {
         const string sql = @"
             SELECT lista, valor, descripcion FROM CALIDAD_LISTA
             WHERE activo = 1
-            ORDER BY lista, orden, valor;";
+            ORDER BY lista, CASE WHEN lista = N'OPERARIO' THEN 0 ELSE orden END, valor;";
 
         var listas = new Dictionary<string, List<OpcionLista>>();
 

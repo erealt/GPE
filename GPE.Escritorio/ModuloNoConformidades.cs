@@ -11,11 +11,11 @@ public class ModuloNoConformidades : UserControl
     private const int ColumnaDetectada = 1;
     private const int ColumnaTipo = 2;
     private const int ColumnaProblema = 4;
-    private const int ColumnaPrevista = 5;
-    private const int ColumnaEstado = 6;
+    private const int ColumnaEstado = 5;
 
     private const string TodasLasSecciones = "Todas";
     private const string EstadoAbiertas = "Abiertas";
+    private const string EstadoCerradas = "Cerradas";
 
     private readonly NoConformidadServicio servicio = new();
     private List<NoConformidad> registros = new();
@@ -143,7 +143,7 @@ public class ModuloNoConformidades : UserControl
         cmbEstado.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbEstado.Items.Add("Todos");
         cmbEstado.Items.Add(EstadoAbiertas);
-        cmbEstado.Items.AddRange(EstadoRegistro.Todos);
+        cmbEstado.Items.Add(EstadoCerradas);
         cmbEstado.SelectedItem = EstadoAbiertas;   // lo del día a día son las abiertas
 
         foreach (var fecha in new[] { dtpDesde, dtpHasta })
@@ -257,7 +257,7 @@ public class ModuloNoConformidades : UserControl
         (string Nombre, int Ancho)[] columnas =
         {
             ("Nº", 70), ("DETECTADA", 110), ("TIPO", 115), ("SECCIÓN", 145),
-            ("PROBLEMA", 0), ("PREVISTA", 100), ("ESTADO", 140)
+            ("PROBLEMA", 0), ("ESTADO", 140)
         };
         foreach (var (nombre, ancho) in columnas)
         {
@@ -304,7 +304,6 @@ public class ModuloNoConformidades : UserControl
         {
             ColumnaNumero => CompararNumeros(a.Numero, b.Numero),
             ColumnaDetectada => a.FechaDetectado.CompareTo(b.FechaDetectado),
-            ColumnaPrevista => CompararFechas(a.FechaPrevista, b.FechaPrevista),
             _ => null
         };
         if (resultado == null) return;
@@ -313,10 +312,6 @@ public class ModuloNoConformidades : UserControl
         e.SortResult = resultado.Value != 0 ? resultado.Value : b.Id.CompareTo(a.Id);
         e.Handled = true;
     }
-
-    // Los registros sin fecha o sin número van al final (al principio si se ordena al revés)
-    private static int CompararFechas(DateTime? a, DateTime? b) =>
-        a == null ? (b == null ? 0 : 1) : b == null ? -1 : a.Value.CompareTo(b.Value);
 
     // "99" antes que "100"; "AC-2026-2" antes que "AC-2026-10": primero la serie, luego el número
     private static int CompararNumeros(string? a, string? b)
@@ -380,13 +375,9 @@ public class ModuloNoConformidades : UserControl
             nc.TipoRegistro,
             nc.Seccion ?? "—",
             problema,
-            Corta(nc.FechaPrevista),
             NoConformidadServicio.Estado(nc));
 
         fila.Cells[ColumnaProblema].ToolTipText = nc.Problema.Length > 600 ? nc.Problema[..600] + "…" : nc.Problema;
-
-        if (NoConformidadServicio.DiasFueraPlazo(nc) is int dias)
-            fila.Cells[ColumnaEstado].ToolTipText = $"La fecha prevista pasó hace {dias} {(dias == 1 ? "día" : "días")}";
 
         return fila;
     }
@@ -430,7 +421,7 @@ public class ModuloNoConformidades : UserControl
                 && (tipo == null || nc.TipoRegistro == tipo)
                 && (seccion == null || nc.Seccion == seccion)
                 && (estado == null
-                    || (estado == EstadoAbiertas ? NoConformidadServicio.Abierta(nc) : NoConformidadServicio.Estado(nc) == estado))
+                    || NoConformidadServicio.Abierta(nc) == (estado == EstadoAbiertas))
                 && (desde == null || nc.FechaDetectado >= desde)
                 && (hasta == null || nc.FechaDetectado <= hasta))
             .ToList();
@@ -467,10 +458,8 @@ public class ModuloNoConformidades : UserControl
     private void ActualizarContador(List<NoConformidad> visibles, bool fechasCruzadas)
     {
         int abiertas = visibles.Count(NoConformidadServicio.Abierta);
-        int fuera = visibles.Count(nc => NoConformidadServicio.Estado(nc) == EstadoRegistro.FueraPlazo);
         lblContador.Text = $"{visibles.Count} {(visibles.Count == 1 ? "registro" : "registros")}"
-            + $"  ·  {abiertas} {(abiertas == 1 ? "abierto" : "abiertos")}"
-            + (fuera > 0 ? $"  ·  {fuera} fuera de plazo" : "");
+            + $"  ·  {abiertas} {(abiertas == 1 ? "abierto" : "abiertos")}";
 
         lblVacio.Text = fechasCruzadas
             ? "La fecha \"desde\" es posterior a la fecha \"hasta\"."

@@ -73,9 +73,7 @@ public static class Tema
 
     public static (Color Fondo, Color Texto) ColorEstadoRegistro(string estado) => estado switch
     {
-        EstadoRegistro.EnPlazo => (Color.FromArgb(225, 245, 232), Color.FromArgb(25, 120, 70)),
-        EstadoRegistro.FueraPlazo => (FondoError, Error),
-        EstadoRegistro.SinPlazo => (AvisoFondo, Aviso),
+        EstadoRegistro.Abierta => (AvisoFondo, Aviso),
         _ => (Color.FromArgb(236, 238, 236), Color.FromArgb(90, 100, 95))
     };
 

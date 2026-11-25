@@ -1,6 +1,7 @@
 @page "/control"
 @layout LayoutTrabajadores
 @inject NavigationManager Navegacion
+@inject IJSRuntime JS
 
 <PageTitle>Control diario</PageTitle>
 
@@ -111,9 +112,10 @@ else
         <div class="panel-casilla panel-ficha">
             <div class="panel-titulo">
                 <strong>Registrar · @fichaPunto.Nombre · @fichaMaquina.Nombre</strong>
-                <button class="quitar" @onclick="() => ficha = null">✕</button>
+                <button class="quitar" @onclick="CerrarFicha">✕</button>
             </div>
-            <FichaNoConformidad Borrador="fichaBorrador" Usuario="usuario!" OnGuardado="IncidenciaGuardada" OnCancelar="() => ficha = null" />
+            <FichaNoConformidad Borrador="fichaBorrador" Usuario="usuario!" ClaveBorrador="@ClaveFicha(fichaPunto, fichaMaquina)"
+                                OnGuardado="IncidenciaGuardada" OnCancelar="CerrarFicha" />
         </div>
     }
 
@@ -457,13 +459,70 @@ else
         {
             sinApuntar = "Se ha guardado, pero no se ha podido apuntar en la casilla. " + ex.Message;
         }
+        await BorrarBorrador(ClaveFicha(punto, maquina));
         ficha = null;
         Cargar();
         error ??= sinApuntar;
         var numero = resultados.GetValueOrDefault((revision, punto.Id, maquina.Id))?.NumeroIncidencia;
         avisoGuardada = $"{TipoRegistro.Nombre(guardado.Registro.TipoRegistro)} {numero} guardada: {punto.Nombre} en {maquina.Nombre}."
             + (guardado.AvisoProveedor is string aviso ? " " + aviso : "");
-        await Task.CompletedTask;
+    }
+
+    // La ficha va guardando en el móvil lo escrito y las fotos (gpe.borradorNc): si al hacer una foto
+    // se recarga la página, al volver se abre otra vez la misma ficha con todo. Clave: quién, qué día,
+    // qué revisión y qué casilla.
+    private string ClaveFicha(RutinaPunto p, RutinaSeccion s) => $"{usuario!.Id}|{fecha:yyyy-MM-dd}|{revision}|{p.Id}|{s.Id}";
+
+    private bool borradorRevisado;
+
+    private async Task CerrarFicha()
+    {
+        if (ficha is var (p, s, _))
+            await BorrarBorrador(ClaveFicha(p, s));
+        ficha = null;
+    }
+
+    private async Task BorrarBorrador(string clave)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("gpe.borradorNc.borrar", clave);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Una vez, en cuanto está cargado (el primer render puede llegar antes que la plantilla)
+        if (borradorRevisado || plantilla == null || usuario == null) return;
+        borradorRevisado = true;
+        string? clave;
+        try
+        {
+            clave = await JS.InvokeAsync<string?>("gpe.borradorNc.pendiente");
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+            return;
+        }
+        if (clave == null) return;
+
+        // Solo si es de esta persona, de hoy y la casilla sigue en NO sin registrar; si no, ya no sirve
+        var partes = clave.Split('|');
+        var p = partes.Length == 5 ? plantilla.Puntos.FirstOrDefault(x => x.Id.ToString() == partes[3]) : null;
+        var s = partes.Length == 5 ? plantilla.Secciones.FirstOrDefault(x => x.Id.ToString() == partes[4]) : null;
+        if (p != null && s != null && partes[0] == usuario.Id.ToString() && partes[1] == fecha.ToString("yyyy-MM-dd")
+            && int.TryParse(partes[2], out int rev) && revisiones.Any(r => r.Numero == rev))
+        {
+            revision = rev;
+            planta = s.Planta;
+            AbrirIncidencia(p, s);
+        }
+        if (ficha == null)
+            await BorrarBorrador(clave);
+        StateHasChanged();
     }
 
     // Presentación: mismos símbolos que el escritorio (OpcionesCasilla.Simbolo)

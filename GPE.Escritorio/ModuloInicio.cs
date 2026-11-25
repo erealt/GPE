@@ -151,9 +151,8 @@ public class ModuloInicio : UserControl
     {
         try
         {
-            var (abiertas, fuera) = new NoConformidadServicio().ContarAbiertas();
-            return $"{abiertas} {(abiertas == 1 ? "abierta" : "abiertas")}"
-                + (fuera > 0 ? $"  ·  ⚠ {fuera} fuera de plazo" : "");
+            int abiertas = new NoConformidadServicio().ContarAbiertas();
+            return $"{abiertas} {(abiertas == 1 ? "abierta" : "abiertas")}";
         }
         catch (DbException)
         {

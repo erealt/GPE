@@ -5,12 +5,8 @@ namespace GPE.Logica;
 // Estado de un registro. No se guarda: se calcula como la columna "Estado" del Excel.
 public static class EstadoRegistro
 {
-    public const string EnPlazo = "En plazo";
-    public const string FueraPlazo = "Fuera de plazo";
-    public const string SinPlazo = "Sin plazo";
+    public const string Abierta = "Abierta";
     public const string Cerrada = "Cerrada";
-
-    public static readonly string[] Todos = { EnPlazo, FueraPlazo, SinPlazo, Cerrada };
 }
 
 // Fases de un registro: no se guardan, salen de lo rellenado y se completan en cualquier orden.
@@ -113,28 +109,16 @@ public class NoConformidadServicio
         return Renumerar(anterior, serie) ? repositorio.SiguienteNumero(serie) : anterior!.Numero;
     }
 
-    // Cerrada si tiene fecha fin; si no, según la prevista (sin ella es "sin plazo", no "fuera de plazo").
-    public static string Estado(DateTime? fechaPrevista, DateTime? fechaFin)
-    {
-        if (fechaFin != null) return EstadoRegistro.Cerrada;
-        if (fechaPrevista == null) return EstadoRegistro.SinPlazo;
-        return DateTime.Today <= fechaPrevista.Value.Date ? EstadoRegistro.EnPlazo : EstadoRegistro.FueraPlazo;
-    }
+    // Cerrada si tiene fecha fin. Sin plazos: la fecha prevista ya no se pide (25/11).
+    public static string Estado(DateTime? fechaFin) =>
+        fechaFin != null ? EstadoRegistro.Cerrada : EstadoRegistro.Abierta;
 
-    public static string Estado(NoConformidad nc) => Estado(nc.FechaPrevista, nc.FechaFin);
+    public static string Estado(NoConformidad nc) => Estado(nc.FechaFin);
 
     public static bool Abierta(NoConformidad nc) => nc.FechaFin == null;
 
-    // Para el inicio: cuántos registros hay abiertos y cuántos de ellos fuera de plazo
-    public (int Abiertas, int FueraPlazo) ContarAbiertas()
-    {
-        var plazos = repositorio.ObtenerPlazosAbiertos();
-        return (plazos.Count, plazos.Count(fecha => Estado(fecha, null) == EstadoRegistro.FueraPlazo));
-    }
-
-    // Días que han pasado desde la fecha prevista (solo si está fuera de plazo)
-    public static int? DiasFueraPlazo(NoConformidad nc) =>
-        Estado(nc) == EstadoRegistro.FueraPlazo ? (DateTime.Today - nc.FechaPrevista!.Value.Date).Days : null;
+    // Para el inicio: cuántos registros hay abiertos
+    public int ContarAbiertas() => repositorio.ContarAbiertas();
 
     // Fases
 
@@ -151,7 +135,7 @@ public class NoConformidadServicio
         {
             new(FaseCalidad.Registro, !string.IsNullOrWhiteSpace(nc.Problema)),
             new(FaseCalidad.AccionInmediata, lista.Any(a => a.Clase == ClaseAccion.Inmediata), esMejora),
-            new(FaseCalidad.Analisis, (nc.PorQues?.Any(p => !p.Vacio) ?? false) || nc.CausaRaiz != null
+            new(FaseCalidad.Analisis, (!esIncidencia && !esMejora && (nc.PorQues?.Any(p => !p.Vacio) ?? false)) || nc.CausaRaiz != null
                 || !string.IsNullOrWhiteSpace(nc.DescripcionCausa)
                 || !string.IsNullOrWhiteSpace(nc.AnalisisCausaRaiz), esIncidencia || esMejora),
             new(esMejora ? FaseCalidad.Acciones : FaseCalidad.Correccion,
@@ -185,9 +169,10 @@ public class NoConformidadServicio
             Operario = esIncidencia ? Limpio(nc.Operario) : null,
             CapituloNorma = Limpio(nc.CapituloNorma),
             AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz),
-            // Siempre los 5, para que al guardar se borren los que se hayan vaciado
+            // Siempre los 5, para que al guardar se borren los que se hayan vaciado.
+            // Solo las NC llevan los 5 porqués (25/11): en los demás se guardan vacíos.
             PorQues = Enumerable.Range(0, NoConformidad.NumeroPorQues)
-                .Select(i => nc.PorQues?.ElementAtOrDefault(i) is PorQue p
+                .Select(i => esNc && nc.PorQues?.ElementAtOrDefault(i) is PorQue p
                     ? new PorQue(Limpio(p.Pregunta), Limpio(p.Respuesta))
                     : new PorQue(null, null))
                 .ToList(),

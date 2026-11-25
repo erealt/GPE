@@ -76,8 +76,7 @@ public static class NoConformidadPdf
             ("SECCIÓN", nc.Seccion),
             ("TIPO DE NO CONFORMIDAD", nc.Tipo),
             ("CLIENTE", nc.Cliente),
-            ("PROVEEDOR", nc.Proveedor),
-            ("FECHA PREVISTA", nc.FechaPrevista?.ToString("dd/MM/yyyy", Es))
+            ("PROVEEDOR", nc.Proveedor)
         });
         hoja.Texto("PROBLEMA", nc.Problema);
 

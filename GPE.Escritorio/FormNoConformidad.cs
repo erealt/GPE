@@ -79,6 +79,8 @@ public class FormNoConformidad : Form
     private readonly CamposFormulario campos = new();
     private Control campoTipo = null!;
     private Control campoSeguridad = null!;
+    private Control campoPorQues = null!;   // solo en las NC
+    private readonly Label lblSubtituloAnalisis = new();
     private Control tarjetaIncidencia = null!;
 
     private readonly BarraFasesCalidad barraFases = new();
@@ -537,7 +539,8 @@ public class FormNoConformidad : Form
         rejilla.Controls.Add(problema, 0, 3);
         rejilla.SetColumnSpan(problema, 3);
 
-        rejilla.Controls.Add(campos.Campo("Fecha prevista", dtpPrevista), 0, 4);
+        // La fecha prevista ya no se pide (25/11): dtpPrevista no se pone en la ficha, solo
+        // guarda la que ya tuvieran las antiguas para no borrarla al guardar.
         rejilla.Controls.Add(campoSeguridad = campos.Campo("¿Afecta a la seguridad alimentaria?", cmbSeguridad,
             new Label
             {
@@ -546,7 +549,7 @@ public class FormNoConformidad : Form
                 Font = Tema.FuenteNota,
                 ForeColor = Tema.Suave,
                 Margin = new Padding(0, 4, 0, 0)
-            }), 1, 4);
+            }), 0, 4);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -561,13 +564,12 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaAnalisis()
     {
-        var tarjeta = TarjetaFase(3, "Análisis de la causa",
-            "Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega");
+        var tarjeta = TarjetaFase(3, "Análisis de la causa", "", etiquetaSubtitulo: lblSubtituloAnalisis);
 
         var rejilla = Componentes.Rejilla(2);
-        var porQues = campos.Campo("5 porqués", CrearPorQues());
-        rejilla.Controls.Add(porQues, 0, 0);
-        rejilla.SetColumnSpan(porQues, 2);
+        campoPorQues = campos.Campo("5 porqués", CrearPorQues());
+        rejilla.Controls.Add(campoPorQues, 0, 0);
+        rejilla.SetColumnSpan(campoPorQues, 2);
         rejilla.Controls.Add(campos.Campo("Causa raíz", cmbCausaRaiz), 0, 1);
         rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 1, 1);
 
@@ -818,7 +820,12 @@ public class FormNoConformidad : Form
     // Muestra los campos de este tipo de registro y el número que le toca
     private void ActualizarSegunTipo()
     {
-        campoTipo.Visible = TipoElegido == TipoRegistro.NoConformidad;
+        bool esNc = TipoElegido == TipoRegistro.NoConformidad;
+        campoTipo.Visible = esNc;
+        campoPorQues.Visible = esNc;
+        lblSubtituloAnalisis.Text = esNc
+            ? "Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega"
+            : "Por qué ha pasado: el grupo de la causa raíz";
         ActualizarCampoSeguridad();
         ActualizarSecciones();
         ActualizarNumero();
@@ -943,16 +950,9 @@ public class FormNoConformidad : Form
 
     private void ActualizarEstado()
     {
-        DateTime? prevista = LeerFecha(dtpPrevista);
-        string estado = NoConformidadServicio.Estado(prevista, LeerFecha(dtpFin));
-        lblEstado.Text = estado switch
-        {
-            EstadoRegistro.Cerrada => "Estado: cerrada.",
-            EstadoRegistro.SinPlazo => "Estado: abierta, sin fecha prevista.",
-            EstadoRegistro.EnPlazo => $"Estado: en plazo, hasta el {Componentes.Fecha(prevista)}.",
-            _ => $"Estado: fuera de plazo desde el {Componentes.Fecha(prevista!.Value.AddDays(1))}."
-        };
-        lblEstado.ForeColor = estado == EstadoRegistro.FueraPlazo ? Tema.Error : Tema.Suave;
+        lblEstado.Text = NoConformidadServicio.Estado(LeerFecha(dtpFin)) == EstadoRegistro.Cerrada
+            ? "Estado: cerrada." : "Estado: abierta.";
+        lblEstado.ForeColor = Tema.Suave;
     }
 
     // null si el coste o las horas no son números (el error va en errorNumero).
