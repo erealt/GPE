@@ -15,7 +15,7 @@ IF COL_LENGTH('NO_CONFORMIDAD', 'porque_pregunta_1') IS NULL
         porque_pregunta_5 NVARCHAR(1000) NULL, porque_respuesta_5 NVARCHAR(1000) NULL;
 GO
 
--- Uno de los grupos de la hoja CAUSA RAIZ (Personal, Equipos...). La lista está en la aplicación (CausasRaiz.cs).
+-- Uno de los grupos de la hoja CAUSA RAIZ (Personas, Equipos...). La lista está en la aplicación (CausasRaiz.cs).
 IF COL_LENGTH('NO_CONFORMIDAD', 'causa_raiz') IS NULL
     ALTER TABLE NO_CONFORMIDAD ADD causa_raiz NVARCHAR(30) NULL;
 GO

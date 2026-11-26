@@ -50,7 +50,7 @@ $PRIMERA_FILA = 4
 $ULTIMA_COLUMNA = 26
 
 # CAUSA RAIZ: uno de los grupos de la hoja CAUSA RAIZ, igual que en la aplicación (GPE.Datos/CausasRaiz.cs)
-$CAUSAS_RAIZ = 'Personal', 'Equipos', 'Economía', 'Procesos', 'Alimentos'
+$CAUSAS_RAIZ = 'Personas', 'Equipos', 'Economía', 'Procesos', 'Alimentos'
 
 # Conversión de celdas
 
@@ -103,7 +103,9 @@ function CausaRaiz($v, $fila) {
     function SinTildes($s) { -join ($s.Normalize([Text.NormalizationForm]::FormD).ToCharArray() |
         Where-Object { [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne 'NonSpacingMark' }) }
     # Calidad escribe "GRUPO - causa" (una o varias líneas): cuenta el grupo de delante del guion
-    $nombres = @($t -split "`n" | ForEach-Object { ($_ -split ' - ', 2)[0].Trim() } | Where-Object { $_ })
+    # En el Excel puede venir "Personal", el nombre antiguo de Personas
+    $nombres = @($t -split "`n" | ForEach-Object { ($_ -split ' - ', 2)[0].Trim() } | Where-Object { $_ } |
+        ForEach-Object { if ($_ -eq 'Personal') { 'Personas' } else { $_ } })
     $grupos = @($nombres | ForEach-Object {
         $n = $_; $CAUSAS_RAIZ | Where-Object { (SinTildes $_) -eq (SinTildes $n) } | Select-Object -First 1
     } | Select-Object -Unique)
