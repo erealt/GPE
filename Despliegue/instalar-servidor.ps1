@@ -225,6 +225,8 @@ Write-Host "Permisos dados a gpe_app y a la web."
 
 # Scripts de BaseDatos que trae una versión nueva (-Scripts nombre1,nombre2), sobre la base GPE.
 # Se ejecutan por trozos separados por GO, como sqlcmd. Si uno falla, se para aquí.
+# Con "powershell -File" la lista a,b llega como un solo texto "a,b": se separa por las comas.
+$Scripts = @($Scripts | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 foreach ($nombre in $Scripts) {
     $archivo = Join-Path $PSScriptRoot "BaseDatos\$nombre.sql"
     if (-not (Test-Path $archivo)) { throw "No encuentro BaseDatos\$nombre.sql en el paquete." }

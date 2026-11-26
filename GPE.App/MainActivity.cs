@@ -15,7 +15,9 @@ namespace GPE.App;
 // La app enseña la web de GPE (http://192.168.2.249) por dentro: lo mismo que en el navegador
 // (Mis acciones, control diario, agua, almacén...) según el usuario. Lo propio de la app son los
 // avisos de acciones nuevas (ServicioAvisos) y que la sesión se queda abierta.
+// Sin la barra de título de Android: la web ya tiene la suya (con ☰ y Salir)
 [Activity(Label = "@string/app_name", MainLauncher = true, LaunchMode = LaunchMode.SingleTask,
+    Theme = "@android:style/Theme.DeviceDefault.Light.NoActionBar",
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.KeyboardHidden | ConfigChanges.UiMode)]
 public class MainActivity : Activity
 {
@@ -33,7 +35,6 @@ public class MainActivity : Activity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-        Window!.SetStatusBarColor(ServicioAvisos.ColorGpe);
 
         web = new WebView(this);
         web.Settings.JavaScriptEnabled = true;
@@ -42,7 +43,25 @@ public class MainActivity : Activity
         CookieManager.Instance!.SetAcceptCookie(true);
         web.SetWebViewClient(new Cliente(this));
         web.SetWebChromeClient(new Navegador(this));
-        SetContentView(web);
+
+        // Desde Android 15 la app ocupa toda la pantalla, también debajo de la barra de estado, de los
+        // botones de abajo y del teclado: se deja ese hueco (en morado) para que no tapen la web
+        var marco = new FrameLayout(this);
+        marco.SetBackgroundColor(ServicioAvisos.ColorGpe);
+        marco.AddView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+        if (OperatingSystem.IsAndroidVersionAtLeast(30))
+        {
+            // Android 15 o más ya lo hace solo; de 11 a 14 se pide, para que todos queden igual
+            if (!OperatingSystem.IsAndroidVersionAtLeast(35))
+                Window!.SetDecorFitsSystemWindows(false);
+            // Iconos de la barra de estado y botones de abajo en blanco, sobre el morado
+            Window!.InsetsController?.SetSystemBarsAppearance(0,
+                (int)(WindowInsetsControllerAppearance.LightStatusBars | WindowInsetsControllerAppearance.LightNavigationBars));
+            marco.SetOnApplyWindowInsetsListener(new Margenes());
+        }
+        else
+            Window!.SetStatusBarColor(ServicioAvisos.ColorGpe);
+        SetContentView(marco);
 
         // Atrás: página anterior de la web; en la primera, sale de la app
         if (OperatingSystem.IsAndroidVersionAtLeast(33))
@@ -315,6 +334,19 @@ public class MainActivity : Activity
     {
         public override bool OnShowFileChooser(WebView? webView, IValueCallback? filePathCallback, FileChooserParams? fileChooserParams) =>
             filePathCallback != null && fileChooserParams != null && app.ElegirArchivos(filePathCallback, fileChooserParams);
+    }
+
+    // El hueco de la barra de estado, los botones de abajo y el teclado (Android 11 o más)
+    [System.Runtime.Versioning.SupportedOSPlatform("android30.0")]
+    private sealed class Margenes : Java.Lang.Object, View.IOnApplyWindowInsetsListener
+    {
+        public WindowInsets OnApplyWindowInsets(View vista, WindowInsets margenes)
+        {
+            var barras = margenes.GetInsets(WindowInsets.Type.SystemBars() | WindowInsets.Type.DisplayCutout());
+            var teclado = margenes.GetInsets(WindowInsets.Type.Ime());
+            vista.SetPadding(barras.Left, barras.Top, barras.Right, Math.Max(barras.Bottom, teclado.Bottom));
+            return WindowInsets.Consumed!;
+        }
     }
 
     private sealed class Atras(MainActivity app) : Java.Lang.Object, Android.Window.IOnBackInvokedCallback

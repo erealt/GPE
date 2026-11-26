@@ -12,8 +12,8 @@
     <ApplicationId>com.gpe.app</ApplicationId>
     <ApplicationTitle>GPE</ApplicationTitle>
     <!-- Subir los dos en cada APK nuevo: si no, el móvil no la deja instalar encima -->
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>1.1</ApplicationDisplayVersion>
     <TrimMode>full</TrimMode>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
   </PropertyGroup>
