@@ -168,6 +168,9 @@ else
 @code {
     [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
 
+    // Al tocar el aviso de la app del móvil se abre esa acción (/acciones?accion=123)
+    [SupplyParameterFromQuery(Name = "accion")] private int? AccionAviso { get; set; }
+
     private readonly TrabajadorWebServicio servicio = new();
 
     private string persona = "";
@@ -202,6 +205,8 @@ else
         usuario = TrabajadorActual.Usuario(sesion);
         persona = usuario!.Nombre;
         Cargar();
+        if (AccionAviso is int id && acciones?.Any(a => a.Id == id) == true)
+            elegida = id;
     }
 
     private void Cargar()

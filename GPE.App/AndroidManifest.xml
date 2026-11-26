@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- usesCleartextTraffic: la web va por http dentro de la wifi de la empresa (http://192.168.2.249) -->
+  <application android:allowBackup="false" android:icon="@mipmap/appicon" android:label="@string/app_name"
+               android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"
+               android:usesCleartextTraffic="true">
+    <!-- Pregunta por las acciones nuevas con el móvil bloqueado (ServicioAvisos.cs) -->
+    <service android:name="com.gpe.app.ServicioAvisos" android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Avisos de las acciones de calidad asignadas al trabajador, desde el servidor de la empresa" />
+    </service>
+    <!-- Abrir con otra app las fotos y PDF que se descargan de la web -->
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.gpe.app.archivos"
+              android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/rutas_archivos" />
+    </provider>
+  </application>
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- Avisos con el móvil bloqueado -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+</manifest>

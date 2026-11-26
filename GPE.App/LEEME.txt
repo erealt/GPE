@@ -1,0 +1,46 @@
+APP DE ANDROID DE GPE
+=====================
+
+Qué es
+------
+La app enseña por dentro la web de GPE (http://192.168.2.249): lo mismo que en el navegador
+según el usuario (Mis acciones, control diario, agua, almacén...). Además avisa en el móvil,
+aunque esté bloqueado, cuando calidad le asigna una acción nueva a quien ha entrado.
+
+- Los avisos solo llegan con el móvil en la wifi de la empresa (el servidor no se ve desde fuera).
+- La app pregunta cada 30 segundos a http://servidor/acciones/avisos con la sesión de la web.
+- Quien no tiene "Mis acciones" (solo Calidad, solo Almacén) usa la app igual, pero sin avisos.
+- La primera vez que alguien entra en un móvil no se avisan las acciones que ya tenía: solo las nuevas.
+
+
+Compilar el APK
+---------------
+Desde esta carpeta (usa el SDK 10 de .NET por global.json, que es el que tiene Android):
+
+    dotnet publish -c Release -nodeReuse:false -p:AndroidSdkDirectory="%LOCALAPPDATA%\Android\Sdk" -p:JavaSdkDirectory="%LOCALAPPDATA%\Microsoft\jdk"
+
+El APK que se instala es:  bin\Release\net10.0-android\publish\com.gpe.app-Signed.apk
+
+Antes de cada versión nueva, subir en GPE.App.csproj ApplicationVersion (1, 2, 3...) y
+ApplicationDisplayVersion (1.0, 1.1...). Si no, el móvil no la instala encima.
+
+
+La clave de firma (IMPORTANTE)
+------------------------------
+Está en %LOCALAPPDATA%\GPE\firma-app (gpe-app.keystore y clave.txt, que lleva la contraseña dos
+veces, una por línea). No va en git. Guardar una copia en un sitio seguro: si se pierde, las
+versiones nuevas no se podrán instalar encima y habrá que desinstalar la app en cada móvil.
+
+
+Instalar en un móvil
+--------------------
+1. Pasar el APK al móvil (cable, correo, carpeta compartida...) y abrirlo.
+2. Si lo pide, permitir "Instalar aplicaciones desconocidas" para la app con la que se abre.
+3. Si sale Play Protect ("aplicación no reconocida"): "Más detalles" > "Instalar de todas formas".
+4. Abrir GPE: pedirá permiso para las notificaciones (Permitir) y quitar la optimización de
+   batería (Permitir). Las dos hacen falta para que avise con el móvil bloqueado.
+5. Entrar con el usuario y la contraseña de siempre. La sesión se queda abierta.
+6. En Xiaomi/Huawei/Oppo: en los ajustes de la app, activar también "Inicio automático" y
+   poner la batería en "Sin restricciones".
+
+Si no conecta, la app enseña "Reintentar" y "Cambiar servidor" (por defecto http://192.168.2.249).

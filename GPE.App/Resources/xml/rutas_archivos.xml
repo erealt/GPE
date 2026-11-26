@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carpetas de la caché que se pueden pasar a otras apps: fotos hechas con la cámara y archivos abiertos -->
+<paths>
+  <cache-path name="fotos" path="fotos/" />
+  <cache-path name="abiertos" path="abiertos/" />
+</paths>
