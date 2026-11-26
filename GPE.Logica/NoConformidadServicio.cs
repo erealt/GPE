@@ -65,37 +65,18 @@ public class NoConformidadServicio
 
     // Numeración
 
-    // Secciones de las NC de auditoría, que llevan su propia numeración
-    private const string AuditoriaExterna = "A. EXTERNA";
-    private const string AuditoriaInterna = "A. INTERNA";
-    private const string AuditoriaCliente = "A. CLIENTE";
-
-    // Origen A = auditoría: la sección solo puede ser una de las de auditoría
-    public static readonly string[] SeccionesAuditoria = { AuditoriaInterna, AuditoriaExterna, AuditoriaCliente };
-
-    public static bool SoloSeccionesAuditoria(string? origen) => origen == "A";
-
-    // Serie en la que se numera un registro, como en el Excel:
+    // Serie en la que se numera un registro:
     //   incidencias          1, 2, 3...
     //   NC                   558, 559... (la serie sigue, no empieza cada año)
-    //   NC auditoría externa AC-2026-1, AC-2026-2... (empieza cada año)
-    //   NC auditoría interna AI-20/04/26-1, AI-20/04/26-2... (empieza en cada auditoría)
     //   acciones de mejora   sin número
-    public static SerieNumero? Serie(NoConformidad nc)
+    // Hasta el 26/11 las NC de auditoría iban aparte según la sección (AC-2026-1, AI-20/04/26-1). La
+    // sección ya no se pide y ahora todas van en la serie normal; las antiguas conservan su número.
+    public static SerieNumero? Serie(NoConformidad nc) => nc.TipoRegistro switch
     {
-        DateTime fecha = nc.FechaDetectado;
-        return nc.TipoRegistro switch
-        {
-            TipoRegistro.Incidencia => new SerieNumero(TipoRegistro.Incidencia, ""),
-            TipoRegistro.NoConformidad => nc.Seccion switch
-            {
-                AuditoriaExterna => new SerieNumero(TipoRegistro.NoConformidad, $"AC-{fecha:yyyy}-"),
-                AuditoriaInterna => new SerieNumero(TipoRegistro.NoConformidad, $"AI-{fecha:dd'/'MM'/'yy}-"),
-                _ => new SerieNumero(TipoRegistro.NoConformidad, "")
-            },
-            _ => null
-        };
-    }
+        TipoRegistro.Incidencia => new SerieNumero(TipoRegistro.Incidencia, ""),
+        TipoRegistro.NoConformidad => new SerieNumero(TipoRegistro.NoConformidad, ""),
+        _ => null
+    };
 
     // Conserva su número mientras siga en la misma serie; si no tiene o cambia de serie, toca uno nuevo.
     private static bool Renumerar(NoConformidad? anterior, SerieNumero? serie) =>
@@ -144,6 +125,13 @@ public class NoConformidadServicio
         };
     }
 
+    // Origen (26/11): las NC y las acciones de mejora eligen entre estos cuatro (I Interna,
+    // R Reclamación de cliente, A Auditoría, P Proveedor); las incidencias ya no llevan origen.
+    // Los demás de la lista (OBRADOR, ALMACEN...) solo se ven en los registros antiguos que los tienen.
+    public static readonly string[] Origenes = { "I", "R", "A", "P" };
+
+    public static bool LlevaOrigen(string tipoRegistro) => tipoRegistro != TipoRegistro.Incidencia;
+
     // Validación
 
     // Quita espacios, deja en null lo vacío y borra los campos que no son de este tipo
@@ -164,8 +152,9 @@ public class NoConformidadServicio
             DescripcionCausa = Limpio(nc.DescripcionCausa),
             Cliente = Limpio(nc.Cliente),
             Proveedor = Limpio(nc.Proveedor),
-            McPccBpm = esIncidencia ? Limpio(nc.McPccBpm) : null,
-            Parametro = esIncidencia ? Limpio(nc.Parametro) : null,
+            // El parámetro y su MC: de las incidencias y, desde el 26/11, también de las NC
+            McPccBpm = esIncidencia || esNc ? Limpio(nc.McPccBpm) : null,
+            Parametro = esIncidencia || esNc ? Limpio(nc.Parametro) : null,
             Operario = esIncidencia ? UnirOperarios(Operarios(nc.Operario)) : null,
             CapituloNorma = Limpio(nc.CapituloNorma),
             AnalisisCausaRaiz = Limpio(nc.AnalisisCausaRaiz),
@@ -200,18 +189,14 @@ public class NoConformidadServicio
 
         if (esNc && nc.Origen == null)
             Error(nameof(nc.Origen), "Elige el origen de la no conformidad.");
-        if (nc.Seccion == null)
-            Error(nameof(nc.Seccion), "Elige la sección.");
-        else if (SoloSeccionesAuditoria(nc.Origen) && !SeccionesAuditoria.Contains(nc.Seccion))
-            Error(nameof(nc.Seccion), "Con origen auditoría, la sección es A. INTERNA, A. EXTERNA o A. CLIENTE.");
-        if (esNc && nc.Tipo == null)
-            Error(nameof(nc.Tipo), "Elige el tipo de no conformidad.");
+        // La sección y el tipo de no conformidad ya no se piden (26/11); las antiguas conservan los suyos
 
-        // Origen R = reclamación de cliente, P = proveedor
-        if (nc.Origen == "R" && nc.Cliente == null)
+        // Origen R = reclamación de cliente, P = proveedor (en una incidencia el origen no se ve: no cuenta)
+        bool llevaOrigen = LlevaOrigen(nc.TipoRegistro);
+        if (llevaOrigen && nc.Origen == "R" && nc.Cliente == null)
             Error(nameof(nc.Cliente), "En una reclamación de cliente, indica el cliente.");
         // Una NC antigua puede tener el proveedor escrito a mano (sin enlazar): se deja guardar así
-        if (nc.Origen == "P" && nc.ProveedorId == null && nc.Proveedor == null)
+        if (llevaOrigen && nc.Origen == "P" && nc.ProveedorId == null && nc.Proveedor == null)
             Error(nameof(nc.Proveedor), "Si el origen es un proveedor, elige cuál.");
         // Hace falta para la nota de reclamaciones del proveedor
         if (esNc && nc.ProveedorId != null && nc.SeguridadAlimentaria == null)

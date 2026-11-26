@@ -47,17 +47,15 @@
             <Campo Etiqueta="Fecha detectado" Error="@Error(nameof(NoConformidad.FechaDetectado))">
                 <input type="date" max="@Hoy" @bind="f.FechaDetectado" @bind:after="ActualizarNumero" disabled="@guardando" />
             </Campo>
-            <Campo Etiqueta="Origen" Error="@Error(nameof(NoConformidad.Origen))">
-                <select @bind="f.Origen" @bind:after="CambiarOrigen" disabled="@guardando">
-                    @Opciones(ListaCalidad.Origen, f.Origen)
-                </select>
-            </Campo>
-            <Campo Etiqueta="Sección" Error="@Error(nameof(NoConformidad.Seccion))">
-                <select @bind="f.Seccion" @bind:after="ActualizarNumero" disabled="@guardando">
-                    @Opciones(ListaCalidad.Seccion, f.Seccion,
-                        NoConformidadServicio.SoloSeccionesAuditoria(f.Origen) ? o => NoConformidadServicio.SeccionesAuditoria.Contains(o.Valor) : null)
-                </select>
-            </Campo>
+            @* Solo los cuatro de ahora, y no en incidencias (26/11) *@
+            @if (NoConformidadServicio.LlevaOrigen(f.Tipo))
+            {
+                <Campo Etiqueta="Origen" Error="@Error(nameof(NoConformidad.Origen))">
+                    <select @bind="f.Origen" @bind:after="CambiarOrigen" disabled="@guardando">
+                        @Opciones(ListaCalidad.Origen, f.Origen, o => NoConformidadServicio.Origenes.Contains(o.Valor))
+                    </select>
+                </Campo>
+            }
             <Campo Etiqueta="Cliente" Error="@Error(nameof(NoConformidad.Cliente))">
                 <input list="clientes-nc" maxlength="150" @bind="f.Cliente" disabled="@guardando" />
                 <datalist id="clientes-nc">
@@ -76,14 +74,7 @@
                     }
                 </select>
             </Campo>
-            @if (f.Tipo == TipoRegistro.NoConformidad)
-            {
-                <Campo Etiqueta="Tipo de no conformidad" Error="@Error(nameof(NoConformidad.Tipo))">
-                    <select @bind="f.TipoNc" disabled="@guardando">
-                        @Opciones(ListaCalidad.Tipo, f.TipoNc)
-                    </select>
-                </Campo>
-            }
+            @* La sección y el tipo de no conformidad ya no se piden (26/11) *@
         </div>
 
         <Campo Etiqueta="Problema" Error="@Error(nameof(NoConformidad.Problema))">
@@ -105,11 +96,12 @@
         }
     </section>
 
-    @if (f.Tipo == TipoRegistro.Incidencia)
+    @* En incidencias y, desde el 26/11, también en NC; los operarios, solo en incidencias *@
+    @if (f.Tipo is TipoRegistro.Incidencia or TipoRegistro.NoConformidad)
     {
         <section class="ficha-tarjeta">
-            <h3>Clasificación de la incidencia</h3>
-            <p class="suave pequeno">Solo para incidencias: el parámetro y, dentro de él, el MC, PCC o buena práctica a la que afecta</p>
+            <h3>Clasificación</h3>
+            <p class="suave pequeno">El parámetro y, dentro de él, el MC, PCC o buena práctica a la que afecta</p>
             @* Parámetro y, debajo, sus opciones, con botones como la causa raíz (26/11) *@
             <div class="campo">
                 <span class="etiqueta-campo" id="etiqueta-parametro">Parámetro</span>
@@ -123,6 +115,8 @@
                              f.McPccBpm, o => f.McPccBpm = o)
                 </div>
             }
+            @if (f.Tipo == TipoRegistro.Incidencia)
+            {
             <div class="rejilla-ficha">
                 @* Puede haber varios (25/11): se eligen de uno en uno y salen debajo con su ✕.
                    El desplegable va primero porque la etiqueta activa el primer control de dentro. *@
@@ -148,6 +142,7 @@
                     }
                 </Campo>
             </div>
+            }
         </section>
     }
 
@@ -604,15 +599,9 @@
         ActualizarNumero();
     }
 
-    // Con origen auditoría solo valen las secciones de auditoría
-    private void CambiarOrigen()
-    {
-        if (NoConformidadServicio.SoloSeccionesAuditoria(f.Origen) && !NoConformidadServicio.SeccionesAuditoria.Contains(f.Seccion))
-            f.Seccion = null;
-        ActualizarNumero();
-    }
+    private void CambiarOrigen() => ActualizarNumero();
 
-    // El número depende del tipo, la sección (auditorías) y la fecha
+    // El número depende del tipo
     private void ActualizarNumero()
     {
         try
@@ -632,7 +621,7 @@
         {
             TipoRegistro = f.Tipo,
             FechaDetectado = f.FechaDetectado.Date,
-            Origen = f.Origen,
+            Origen = NoConformidadServicio.LlevaOrigen(f.Tipo) ? f.Origen : Borrador.Origen,
             Seccion = f.Seccion,
             Tipo = f.TipoNc,
             Cliente = f.Cliente,

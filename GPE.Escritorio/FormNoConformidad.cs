@@ -35,8 +35,6 @@ public class FormNoConformidad : Form
     private readonly TextBox txtNumero = new();
     private readonly Label lblNumero = new();
     private readonly ComboBox cmbOrigen = new();
-    private readonly ComboBox cmbSeccion = new();
-    private readonly ComboBox cmbTipo = new();
     private readonly TextBox txtCliente = new();
     private readonly ComboBox cmbProveedor = new();
     // Solo NC de un proveedor de la lista: cuenta para su nota de reclamaciones
@@ -86,7 +84,8 @@ public class FormNoConformidad : Form
     private readonly Label lblEstado = new();
 
     private readonly CamposFormulario campos = new();
-    private Control campoTipo = null!;
+    private Control campoOperarios = null!;   // solo en incidencias
+    private Control campoOrigen = null!;      // no en incidencias (26/11)
     private Control campoSeguridad = null!;
     private Control campoPorQues = null!;   // solo en las NC
     private readonly Label lblSubtituloAnalisis = new();
@@ -122,10 +121,7 @@ public class FormNoConformidad : Form
         ActualizarSegunTipo();
         ActualizarEstado();
 
-        // Las NC de auditoría se numeran por año o por fecha: el número cambia con ellas
-        cmbOrigen.SelectedIndexChanged += (s, e) => ActualizarSecciones();
         cmbProveedor.SelectedIndexChanged += (s, e) => ActualizarCampoSeguridad();
-        cmbSeccion.SelectedIndexChanged += (s, e) => ActualizarNumero();
         dtpDetectado.ValueChanged += (s, e) => ActualizarNumero();
 
         // A partir de aquí, cualquier cambio cuenta como "sin guardar"
@@ -584,19 +580,12 @@ public class FormNoConformidad : Form
         rejilla.SetColumnSpan(campoTipoRegistro, 2);
         rejilla.Controls.Add(campos.Campo("Nº", txtNumero, lblNumero), 2, 0);
         rejilla.Controls.Add(campos.Campo("Fecha detectado", dtpDetectado), 0, 1);
-        rejilla.Controls.Add(campos.Campo("Origen", cmbOrigen), 1, 1);
-        rejilla.Controls.Add(campos.Campo("Sección", cmbSeccion), 2, 1);
+        rejilla.Controls.Add(campoOrigen = campos.Campo("Origen", cmbOrigen), 1, 1);
+        // La sección y el tipo de no conformidad ya no se piden (26/11): se guardan los que ya tuvieran
+        // las antiguas. La fecha prevista tampoco (25/11): dtpPrevista no se pone en la ficha.
         rejilla.Controls.Add(campos.Campo("Cliente", txtCliente), 0, 2);
         rejilla.Controls.Add(campos.Campo("Proveedor", cmbProveedor), 1, 2);
-        // Al final de su fila, para que al ocultarse (no es NC) no deje un hueco en medio
-        rejilla.Controls.Add(campoTipo = campos.Campo("Tipo de no conformidad", cmbTipo), 2, 2);
-
-        var problema = campos.Campo("Problema", txtProblema);
-        rejilla.Controls.Add(problema, 0, 3);
-        rejilla.SetColumnSpan(problema, 3);
-
-        // La fecha prevista ya no se pide (25/11): dtpPrevista no se pone en la ficha, solo
-        // guarda la que ya tuvieran las antiguas para no borrarla al guardar.
+        // Al final de su fila, para que al ocultarse no deje un hueco en medio
         rejilla.Controls.Add(campoSeguridad = campos.Campo("¿Afecta a la seguridad alimentaria?", cmbSeguridad,
             new Label
             {
@@ -605,7 +594,11 @@ public class FormNoConformidad : Form
                 Font = Tema.FuenteNota,
                 ForeColor = Tema.Suave,
                 Margin = new Padding(0, 4, 0, 0)
-            }), 0, 4);
+            }), 2, 2);
+
+        var problema = campos.Campo("Problema", txtProblema);
+        rejilla.Controls.Add(problema, 0, 3);
+        rejilla.SetColumnSpan(problema, 3);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -724,8 +717,8 @@ public class FormNoConformidad : Form
 
     private Control CrearTarjetaIncidencia()
     {
-        var tarjeta = Componentes.Tarjeta("Clasificación de la incidencia",
-            "Solo para incidencias: el parámetro y, dentro de él, el MC, PCC o buena práctica a la que afecta");
+        var tarjeta = Componentes.Tarjeta("Clasificación",
+            "El parámetro y, dentro de él, el MC, PCC o buena práctica a la que afecta");
 
         // Parámetro y sus opciones a todo lo ancho, con sus botones; los operarios debajo
         var rejilla = Componentes.Rejilla(3);
@@ -740,7 +733,7 @@ public class FormNoConformidad : Form
         btnOperarios.AutoEllipsis = true;
         btnOperarios.Padding = new Padding(6, 0, 0, 0);
         btnOperarios.Click += (s, e) => ElegirOperarios();
-        rejilla.Controls.Add(campos.Campo("Operarios causantes", btnOperarios), 0, 2);
+        rejilla.Controls.Add(campoOperarios = campos.Campo("Operarios causantes", btnOperarios), 0, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -883,9 +876,8 @@ public class FormNoConformidad : Form
         // Un registro antiguo puede tener una fecha que ya no cabe en MaxDate (no pasa, pero por si acaso)
         dtpDetectado.Value = nc == null ? DateTime.Today : Min(nc.FechaDetectado, DateTime.Today);
 
-        LlenarLista(cmbOrigen, ListaCalidad.Origen, nc?.Origen);
-        LlenarLista(cmbSeccion, ListaCalidad.Seccion, nc?.Seccion);
-        LlenarLista(cmbTipo, ListaCalidad.Tipo, nc?.Tipo);
+        // Solo los cuatro de ahora; el antiguo que tuviera el registro también se ve
+        LlenarLista(cmbOrigen, ListaCalidad.Origen, nc?.Origen, o => NoConformidadServicio.Origenes.Contains(o.Valor));
         LlenarParametros(nc?.Parametro);
         LlenarMcPccBpm(nc?.McPccBpm);
         operarios = NoConformidadServicio.UnirOperarios(NoConformidadServicio.Operarios(nc?.Operario));
@@ -951,16 +943,18 @@ public class FormNoConformidad : Form
     private void ActualizarSegunTipo()
     {
         bool esNc = TipoElegido == TipoRegistro.NoConformidad;
-        campoTipo.Visible = esNc;
+        bool esIncidencia = TipoElegido == TipoRegistro.Incidencia;
         campoPorQues.Visible = esNc;
         lblSubtituloAnalisis.Text = esNc
             ? "Por qué ha pasado: se pregunta por qué hasta cinco veces y se elige el grupo de la causa raíz a la que se llega"
             : "Por qué ha pasado: el grupo de la causa raíz";
         ActualizarCampoSeguridad();
-        ActualizarSecciones();
         ActualizarNumero();
         ActualizarFases();
-        tarjetaIncidencia.Visible = TipoElegido == TipoRegistro.Incidencia;
+        // Parámetro y MC en incidencias y NC (26/11); los operarios, solo en incidencias
+        tarjetaIncidencia.Visible = esIncidencia || esNc;
+        campoOperarios.Visible = esIncidencia;
+        campoOrigen.Visible = !esIncidencia;
     }
 
     // Solo se pregunta en una NC con un proveedor de la lista
@@ -1033,25 +1027,12 @@ public class FormNoConformidad : Form
         scroll.ScrollControlIntoView(control);
     }
 
-    // Con origen auditoría solo se ofrecen las secciones de auditoría
-    private void ActualizarSecciones()
-    {
-        bool soloAuditoria = NoConformidadServicio.SoloSeccionesAuditoria(Valor(cmbOrigen));
-        string? seccion = Valor(cmbSeccion);
-        if (soloAuditoria && !NoConformidadServicio.SeccionesAuditoria.Contains(seccion))
-            seccion = null;
-
-        LlenarLista(cmbSeccion, ListaCalidad.Seccion, seccion,
-            soloAuditoria ? o => NoConformidadServicio.SeccionesAuditoria.Contains(o.Valor) : null);
-    }
-
-    // El número es automático: depende del tipo, la sección (auditorías) y la fecha
+    // El número es automático: depende del tipo
     private void ActualizarNumero()
     {
         var actual = (original ?? Vacio) with
         {
             TipoRegistro = TipoElegido,
-            Seccion = Valor(cmbSeccion),
             FechaDetectado = dtpDetectado.Value.Date
         };
 
@@ -1112,9 +1093,11 @@ public class FormNoConformidad : Form
             TipoRegistro: TipoElegido,
             Numero: original?.Numero,   // el servicio decide el número al guardar
             FechaDetectado: dtpDetectado.Value.Date,
-            Origen: Valor(cmbOrigen),
-            Seccion: Valor(cmbSeccion),
-            Tipo: Valor(cmbTipo),
+            // La incidencia ya no lo pide: se queda el que tuviera
+            Origen: NoConformidadServicio.LlevaOrigen(TipoElegido) ? Valor(cmbOrigen) : (original ?? borrador)?.Origen,
+            // Ya no se piden: se quedan los de antes (y la sección de la rutina en las que vienen de ella)
+            Seccion: (original ?? borrador)?.Seccion,
+            Tipo: (original ?? borrador)?.Tipo,
             Problema: txtProblema.Text,
             DescripcionCausa: txtCausa.Text,
             FechaPrevista: LeerFecha(dtpPrevista),
@@ -1161,8 +1144,6 @@ public class FormNoConformidad : Form
                 [nameof(NoConformidad.TipoRegistro)] = selectorTipo,
                 [nameof(NoConformidad.FechaDetectado)] = dtpDetectado,
                 [nameof(NoConformidad.Origen)] = cmbOrigen,
-                [nameof(NoConformidad.Seccion)] = cmbSeccion,
-                [nameof(NoConformidad.Tipo)] = cmbTipo,
                 [nameof(NoConformidad.Cliente)] = txtCliente,
                 [nameof(NoConformidad.Proveedor)] = cmbProveedor,
                 [nameof(NoConformidad.SeguridadAlimentaria)] = cmbSeguridad,

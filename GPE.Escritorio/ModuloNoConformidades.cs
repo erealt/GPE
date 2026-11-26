@@ -10,10 +10,9 @@ public class ModuloNoConformidades : UserControl
     private const int ColumnaNumero = 0;
     private const int ColumnaDetectada = 1;
     private const int ColumnaTipo = 2;
-    private const int ColumnaProblema = 4;
-    private const int ColumnaEstado = 5;
+    private const int ColumnaProblema = 3;
+    private const int ColumnaEstado = 4;
 
-    private const string TodasLasSecciones = "Todas";
     private const string EstadoAbiertas = "Abiertas";
     private const string EstadoCerradas = "Cerradas";
 
@@ -23,7 +22,6 @@ public class ModuloNoConformidades : UserControl
 
     private readonly TextBox txtBuscar = new();
     private readonly ComboBox cmbTipo = new();
-    private readonly ComboBox cmbSeccion = new();
     private readonly ComboBox cmbEstado = new();
     private readonly DateTimePicker dtpDesde = new();
     private readonly DateTimePicker dtpHasta = new();
@@ -134,10 +132,6 @@ public class ModuloNoConformidades : UserControl
             cmbTipo.Items.Add(new OpcionTipo(tipo));
         cmbTipo.SelectedIndex = 0;
 
-        cmbSeccion.Width = 160;
-        cmbSeccion.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbSeccion.Items.Add(TodasLasSecciones);
-        cmbSeccion.SelectedIndex = 0;
 
         cmbEstado.Width = 140;
         cmbEstado.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -156,7 +150,6 @@ public class ModuloNoConformidades : UserControl
 
         panel.Controls.Add(Componentes.CampoFiltro("Buscar", txtBuscar));
         panel.Controls.Add(Componentes.CampoFiltro("Tipo", cmbTipo));
-        panel.Controls.Add(Componentes.CampoFiltro("Sección", cmbSeccion));
         panel.Controls.Add(Componentes.CampoFiltro("Estado", cmbEstado));
         panel.Controls.Add(Componentes.CampoFiltro("Detectado desde", dtpDesde));
         panel.Controls.Add(Componentes.CampoFiltro("Detectado hasta", dtpHasta));
@@ -164,7 +157,6 @@ public class ModuloNoConformidades : UserControl
         // Los filtros se aplican al momento, sin botón de "Filtrar"
         txtBuscar.TextChanged += (s, e) => AplicarFiltros();
         cmbTipo.SelectedIndexChanged += (s, e) => AplicarFiltros();
-        cmbSeccion.SelectedIndexChanged += (s, e) => AplicarFiltros();
         cmbEstado.SelectedIndexChanged += (s, e) => AplicarFiltros();
         dtpDesde.ValueChanged += (s, e) => AplicarFiltros();
         dtpHasta.ValueChanged += (s, e) => AplicarFiltros();
@@ -256,7 +248,7 @@ public class ModuloNoConformidades : UserControl
         // Ancho fijo para las columnas cortas; el problema se queda con el resto
         (string Nombre, int Ancho)[] columnas =
         {
-            ("Nº", 70), ("DETECTADA", 110), ("TIPO", 115), ("SECCIÓN", 145),
+            ("Nº", 70), ("DETECTADA", 110), ("TIPO", 115),
             ("PROBLEMA", 0), ("ESTADO", 140)
         };
         foreach (var (nombre, ancho) in columnas)
@@ -338,24 +330,12 @@ public class ModuloNoConformidades : UserControl
         try
         {
             registros = servicio.ObtenerRegistros();
-
-            if (cmbSeccion.Items.Count == 1)
-            {
-                var secciones = servicio.ObtenerListas().GetValueOrDefault(ListaCalidad.Seccion) ?? new();
-                foreach (var seccion in secciones)
-                    cmbSeccion.Items.Add(seccion.Valor);
-            }
         }
         catch (DbException ex)
         {
             Mensajes.ErrorBaseDatos(this, "No se pudieron cargar las incidencias y no conformidades de la base de datos.", ex);
             return;
         }
-
-        // Secciones antiguas que ya no están en la lista, para poder filtrar por ellas
-        foreach (string seccion in registros.Select(r => r.Seccion).OfType<string>().Distinct())
-            if (!cmbSeccion.Items.Contains(seccion))
-                cmbSeccion.Items.Add(seccion);
 
         AplicarFiltros();
     }
@@ -373,7 +353,6 @@ public class ModuloNoConformidades : UserControl
             nc.Numero ?? "—",
             Corta(nc.FechaDetectado),
             nc.TipoRegistro,
-            nc.Seccion ?? "—",
             problema,
             NoConformidadServicio.Estado(nc));
 
@@ -408,7 +387,6 @@ public class ModuloNoConformidades : UserControl
     {
         string texto = txtBuscar.Text.Trim();
         string? tipo = (cmbTipo.SelectedItem as OpcionTipo)?.Codigo;
-        string? seccion = cmbSeccion.SelectedIndex > 0 ? cmbSeccion.Text : null;
         string? estado = cmbEstado.SelectedIndex > 0 ? cmbEstado.Text : null;
         DateTime? desde = dtpDesde.Checked ? dtpDesde.Value.Date : null;
         DateTime? hasta = dtpHasta.Checked ? dtpHasta.Value.Date : null;
@@ -419,7 +397,6 @@ public class ModuloNoConformidades : UserControl
                 (texto == "" || Contiene(nc.Numero) || Contiene(nc.Problema) || Contiene(nc.Cliente)
                     || Contiene(nc.Proveedor))
                 && (tipo == null || nc.TipoRegistro == tipo)
-                && (seccion == null || nc.Seccion == seccion)
                 && (estado == null
                     || NoConformidadServicio.Abierta(nc) == (estado == EstadoAbiertas))
                 && (desde == null || nc.FechaDetectado >= desde)
@@ -446,7 +423,6 @@ public class ModuloNoConformidades : UserControl
         limpiando = true;
         txtBuscar.Clear();
         cmbTipo.SelectedIndex = 0;
-        cmbSeccion.SelectedIndex = 0;
         if (todosLosEstados) cmbEstado.SelectedIndex = 0;
         else cmbEstado.SelectedItem = EstadoAbiertas;
         dtpDesde.Checked = false;
