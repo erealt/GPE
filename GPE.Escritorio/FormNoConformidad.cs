@@ -51,8 +51,11 @@ public class FormNoConformidad : Form
     private readonly DateTimePicker dtpFin = new();
 
     // Solo incidencias
-    private readonly ComboBox cmbMcPccBpm = new();
-    private readonly ComboBox cmbParametro = new();
+    // Parámetro (De almacén, De obrador...) y, debajo, una de sus opciones (26/11)
+    private readonly SelectorOpciones selectorParametro = new();
+    private readonly SelectorOpciones selectorMcPccBpm = new();
+    private Control campoMcPccBpm = null!;   // solo con un parámetro elegido
+    private readonly Label lblMcPccBpm = new();
     // Puede haber varios operarios (25/11): se eligen en un panel y se guardan separados por comas
     private readonly Button btnOperarios = Tema.BotonSecundario("", 300);
     private string? operarios;
@@ -155,6 +158,13 @@ public class FormNoConformidad : Form
             ActualizarFases();
         };
         selectorSubgrupo.Cambiado += (s, e) => hayCambios = true;
+        // Otro parámetro: sus opciones, sin ninguna elegida
+        selectorParametro.Cambiado += (s, e) =>
+        {
+            hayCambios = true;
+            LlenarMcPccBpm(null);
+        };
+        selectorMcPccBpm.Cambiado += (s, e) => hayCambios = true;
         dtpFin.ValueChanged += (s, e) => ActualizarFases();
         tablaInmediatas.Cambiado += (s, e) => ActualizarFases();
         tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
@@ -244,6 +254,8 @@ public class FormNoConformidad : Form
         btnOperarios.Enabled = false;
         selectorCausaRaiz.Enabled = false;
         selectorSubgrupo.Enabled = false;
+        selectorParametro.Enabled = false;
+        selectorMcPccBpm.Enabled = false;
         tablaInmediatas.SoloLectura = true;
         tablaCorrectoras.SoloLectura = true;
         tablaSeguimientos.SoloLectura = true;
@@ -415,6 +427,25 @@ public class FormNoConformidad : Form
         selectorSubgrupo.Mostrar(subgrupos, subgrupo);
         lblSubgrupo.Text = $"Subgrupo de {grupo}";
         campoSubgrupo.Visible = grupo != null;
+    }
+
+    // Parámetros de las incidencias (lista fija). Uno guardado que ya no está en la lista se sigue viendo
+    private void LlenarParametros(string? parametro)
+    {
+        var parametros = ParametrosIncidencia.Todos.ToList();
+        if (parametro != null && !parametros.Contains(parametro)) parametros.Add(parametro);
+        selectorParametro.Mostrar(parametros, parametro);
+    }
+
+    // Las opciones del parámetro elegido; sin parámetro solo se ven si el registro ya tenía una
+    private void LlenarMcPccBpm(string? opcion)
+    {
+        string? parametro = selectorParametro.Valor;
+        var opciones = ParametrosIncidencia.Opciones(parametro).ToList();
+        if (opcion != null && !opciones.Contains(opcion)) opciones.Add(opcion);
+        selectorMcPccBpm.Mostrar(opciones, opcion);
+        lblMcPccBpm.Text = parametro == null ? "MC / PCC / BPM" : $"MC / PCC / BPM · {parametro}";
+        campoMcPccBpm.Visible = parametro != null || opcion != null;
     }
 
     private static TextBox[] NuevasCajas() =>
@@ -615,8 +646,15 @@ public class FormNoConformidad : Form
         return tarjeta;
     }
 
-    // Subgrupos debajo del grupo, con una raya de color a la izquierda que los une a él
     private Control CrearCampoSubgrupo()
+    {
+        lblSubgrupo = new Label();
+        return CampoDependiente(lblSubgrupo, selectorSubgrupo);
+    }
+
+    // Opciones que dependen de lo elegido encima (subgrupo, opción del parámetro), con una raya de
+    // color a la izquierda que las une a ello
+    private static Control CampoDependiente(Label etiqueta, SelectorOpciones selector)
     {
         var campo = new TableLayoutPanel
         {
@@ -630,10 +668,12 @@ public class FormNoConformidad : Form
         var raya = new Panel { BackColor = Tema.AcentoSuave, Width = 3, Dock = DockStyle.Left, Margin = new Padding(0) };
         campo.Controls.Add(raya, 0, 0);
         campo.SetRowSpan(raya, 2);
-        lblSubgrupo = new Label { AutoSize = true, Font = Tema.FuentePequenaNegrita, Margin = new Padding(0, 0, 0, 4) };
-        campo.Controls.Add(lblSubgrupo, 1, 0);
-        selectorSubgrupo.Dock = DockStyle.Top;
-        campo.Controls.Add(selectorSubgrupo, 1, 1);
+        etiqueta.AutoSize = true;
+        etiqueta.Font = Tema.FuentePequenaNegrita;
+        etiqueta.Margin = new Padding(0, 0, 0, 4);
+        campo.Controls.Add(etiqueta, 1, 0);
+        selector.Dock = DockStyle.Top;
+        campo.Controls.Add(selector, 1, 1);
         return campo;
     }
 
@@ -685,17 +725,22 @@ public class FormNoConformidad : Form
     private Control CrearTarjetaIncidencia()
     {
         var tarjeta = Componentes.Tarjeta("Clasificación de la incidencia",
-            "Solo para incidencias. MC/PCC/BPM únicamente si afecta a un MC, un PCC o a las buenas prácticas");
+            "Solo para incidencias: el parámetro y, dentro de él, el MC, PCC o buena práctica a la que afecta");
 
+        // Parámetro y sus opciones a todo lo ancho, con sus botones; los operarios debajo
         var rejilla = Componentes.Rejilla(3);
-        rejilla.Controls.Add(campos.Campo("MC / PCC / BPM", cmbMcPccBpm), 0, 0);
-        rejilla.Controls.Add(campos.Campo("Parámetro", cmbParametro), 1, 0);
-        btnOperarios.Height = cmbParametro.Height + 4;
+        var campoParametro = campos.Campo("Parámetro", selectorParametro);
+        rejilla.Controls.Add(campoParametro, 0, 0);
+        rejilla.SetColumnSpan(campoParametro, 3);
+        campoMcPccBpm = CampoDependiente(lblMcPccBpm, selectorMcPccBpm);
+        rejilla.Controls.Add(campoMcPccBpm, 0, 1);
+        rejilla.SetColumnSpan(campoMcPccBpm, 3);
+        btnOperarios.Height = cmbCapitulo.Height + 4;
         btnOperarios.TextAlign = ContentAlignment.MiddleLeft;
         btnOperarios.AutoEllipsis = true;
         btnOperarios.Padding = new Padding(6, 0, 0, 0);
         btnOperarios.Click += (s, e) => ElegirOperarios();
-        rejilla.Controls.Add(campos.Campo("Operarios causantes", btnOperarios), 2, 0);
+        rejilla.Controls.Add(campos.Campo("Operarios causantes", btnOperarios), 0, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
@@ -841,8 +886,8 @@ public class FormNoConformidad : Form
         LlenarLista(cmbOrigen, ListaCalidad.Origen, nc?.Origen);
         LlenarLista(cmbSeccion, ListaCalidad.Seccion, nc?.Seccion);
         LlenarLista(cmbTipo, ListaCalidad.Tipo, nc?.Tipo);
-        LlenarLista(cmbMcPccBpm, ListaCalidad.McPccBpm, nc?.McPccBpm);
-        LlenarLista(cmbParametro, ListaCalidad.Parametro, nc?.Parametro);
+        LlenarParametros(nc?.Parametro);
+        LlenarMcPccBpm(nc?.McPccBpm);
         operarios = NoConformidadServicio.UnirOperarios(NoConformidadServicio.Operarios(nc?.Operario));
         MostrarOperarios();
         LlenarLista(cmbCapitulo, ListaCalidad.CapituloNorma, nc?.CapituloNorma);
@@ -1088,8 +1133,8 @@ public class FormNoConformidad : Form
                 SeguridadNo => false,
                 _ => null
             },
-            McPccBpm: Valor(cmbMcPccBpm),
-            Parametro: Valor(cmbParametro),
+            McPccBpm: selectorMcPccBpm.Valor,
+            Parametro: selectorParametro.Valor,
             Operario: operarios,
             CapituloNorma: Valor(cmbCapitulo),
             AnalisisCausaRaiz: txtAnalisis.Text,

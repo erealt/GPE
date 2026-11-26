@@ -109,14 +109,21 @@
     {
         <section class="ficha-tarjeta">
             <h3>Clasificación de la incidencia</h3>
-            <p class="suave pequeno">Solo para incidencias. MC/PCC/BPM únicamente si afecta a un MC, un PCC o a las buenas prácticas</p>
+            <p class="suave pequeno">Solo para incidencias: el parámetro y, dentro de él, el MC, PCC o buena práctica a la que afecta</p>
+            @* Parámetro y, debajo, sus opciones, con botones como la causa raíz (26/11) *@
+            <div class="campo">
+                <span class="etiqueta-campo" id="etiqueta-parametro">Parámetro</span>
+                @Botones("parametro", "etiqueta-parametro", ConGuardado(ParametrosIncidencia.Todos, f.Parametro), f.Parametro, ElegirParametro)
+            </div>
+            @if (f.Parametro != null || f.McPccBpm != null)
+            {
+                <div class="campo subgrupos">
+                    <span class="etiqueta-campo" id="etiqueta-mc-pcc-bpm">MC / PCC / BPM@(f.Parametro == null ? "" : $" · {f.Parametro}")</span>
+                    @Botones("mc-pcc-bpm", "etiqueta-mc-pcc-bpm", ConGuardado(ParametrosIncidencia.Opciones(f.Parametro), f.McPccBpm),
+                             f.McPccBpm, o => f.McPccBpm = o)
+                </div>
+            }
             <div class="rejilla-ficha">
-                <Campo Etiqueta="MC / PCC / BPM">
-                    <select @bind="f.McPccBpm" disabled="@guardando">@Opciones(ListaCalidad.McPccBpm, f.McPccBpm)</select>
-                </Campo>
-                <Campo Etiqueta="Parámetro">
-                    <select @bind="f.Parametro" disabled="@guardando">@Opciones(ListaCalidad.Parametro, f.Parametro)</select>
-                </Campo>
                 @* Puede haber varios (25/11): se eligen de uno en uno y salen debajo con su ✕.
                    El desplegable va primero porque la etiqueta activa el primer control de dentro. *@
                 <Campo Etiqueta="Operarios causantes" Error="@Error(nameof(NoConformidad.Operario))">
@@ -210,37 +217,14 @@
         @* Grupo y subgrupo a la vista, con un clic, como el tipo de registro (26/11) *@
         <div class="campo">
             <span class="etiqueta-campo" id="etiqueta-causa-raiz">Causa raíz</span>
-            <div class="opciones" role="radiogroup" aria-labelledby="etiqueta-causa-raiz">
-                @foreach (var grupo in CausasRaiz.Todas.Prepend(null))
-                {
-                    <label class="opcion">
-                        <input type="radio" name="causa-raiz" checked="@(f.CausaRaiz == grupo)" disabled="@guardando"
-                               @onchange="() => ElegirCausaRaiz(grupo)" />
-                        @(grupo ?? "Sin indicar")
-                    </label>
-                }
-            </div>
+            @Botones("causa-raiz", "etiqueta-causa-raiz", ConGuardado(CausasRaiz.Todas, f.CausaRaiz), f.CausaRaiz, ElegirCausaRaiz)
         </div>
         @if (f.CausaRaiz != null)
         {
-            var subgrupos = CausasRaiz.Subgrupos(f.CausaRaiz).ToList();
-            // Un subgrupo guardado que ya no está en la lista se sigue viendo
-            if (f.CausaRaizSubgrupo != null && !subgrupos.Contains(f.CausaRaizSubgrupo))
-            {
-                subgrupos.Add(f.CausaRaizSubgrupo);
-            }
             <div class="campo subgrupos">
                 <span class="etiqueta-campo" id="etiqueta-subgrupo">Subgrupo de @f.CausaRaiz</span>
-                <div class="opciones" role="radiogroup" aria-labelledby="etiqueta-subgrupo">
-                    @foreach (var subgrupo in subgrupos.Prepend(null))
-                    {
-                        <label class="opcion">
-                            <input type="radio" name="causa-raiz-subgrupo" checked="@(f.CausaRaizSubgrupo == subgrupo)" disabled="@guardando"
-                                   @onchange="() => f.CausaRaizSubgrupo = subgrupo" />
-                            @(subgrupo ?? "Sin indicar")
-                        </label>
-                    }
-                </div>
+                @Botones("causa-raiz-subgrupo", "etiqueta-subgrupo", ConGuardado(CausasRaiz.Subgrupos(f.CausaRaiz), f.CausaRaizSubgrupo),
+                         f.CausaRaizSubgrupo, s => f.CausaRaizSubgrupo = s)
             </div>
         }
         <div class="rejilla-ficha">
@@ -522,6 +506,36 @@
             <option value="@valor">@valor</option>
         }
     };
+
+    // Opciones a la vista como botones, la primera "Sin indicar" (null): causa raíz, parámetro...
+    private RenderFragment Botones(string nombre, string etiquetaId, IEnumerable<string> opciones, string? elegida,
+        Action<string?> elegir) => __builder =>
+    {
+        <div class="opciones" role="radiogroup" aria-labelledby="@etiquetaId">
+            @foreach (string? opcion in opciones.Prepend(null))
+            {
+                <label class="opcion">
+                    <input type="radio" name="@nombre" checked="@(elegida == opcion)" disabled="@guardando"
+                           @onchange="() => elegir(opcion)" />
+                    @(opcion ?? "Sin indicar")
+                </label>
+            }
+        </div>
+    };
+
+    // La lista y, si el valor guardado ya no está en ella (registro antiguo), también él, para no perderlo
+    private static IEnumerable<string> ConGuardado(IEnumerable<string> lista, string? guardado) =>
+        guardado == null || lista.Contains(guardado) ? lista : lista.Append(guardado);
+
+    // Al cambiar de parámetro se vacía la opción: la de antes es de otro parámetro
+    private void ElegirParametro(string? parametro)
+    {
+        if (f.Parametro != parametro)
+        {
+            f.Parametro = parametro;
+            f.McPccBpm = null;
+        }
+    }
 
     private RenderFragment ListaAcciones(string clase, string vacia, string anadir) => __builder =>
     {
