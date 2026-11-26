@@ -60,9 +60,11 @@ public class FormNoConformidad : Form
     // Análisis y acción correctora
     private readonly TextBox[] txtPreguntas = NuevasCajas();
     private readonly TextBox[] txtRespuestas = NuevasCajas();
-    private readonly ComboBox cmbCausaRaiz = new();
-    private readonly ComboBox cmbSubgrupo = new();   // subgrupo de la causa raíz (25/11)
+    // Causa raíz: grupo y subgrupo como botones a la vista (26/11)
+    private readonly SelectorOpciones selectorCausaRaiz = new();
+    private readonly SelectorOpciones selectorSubgrupo = new();   // subgrupo de la causa raíz (25/11)
     private Control campoSubgrupo = null!;   // solo con un grupo elegido
+    private Label lblSubgrupo = null!;
     private readonly ComboBox cmbCapitulo = new();
     private readonly TextBox txtAnalisis = new();
     // Textos libres de antes de los 5 porqués: solo se ven en los registros que los tienen
@@ -145,9 +147,14 @@ public class FormNoConformidad : Form
         // La barra de fases se pone al día con lo que decide cada fase
         foreach (var texto in new[] { txtProblema, txtCausa, txtAnalisis }.Concat(txtPreguntas).Concat(txtRespuestas))
             texto.TextChanged += (s, e) => ActualizarFases();
-        cmbCausaRaiz.SelectedIndexChanged += (s, e) => ActualizarFases();
         // Otro grupo: sus subgrupos, sin ninguno elegido
-        cmbCausaRaiz.SelectedIndexChanged += (s, e) => LlenarSubgrupos(null);
+        selectorCausaRaiz.Cambiado += (s, e) =>
+        {
+            hayCambios = true;
+            LlenarSubgrupos(null);
+            ActualizarFases();
+        };
+        selectorSubgrupo.Cambiado += (s, e) => hayCambios = true;
         dtpFin.ValueChanged += (s, e) => ActualizarFases();
         tablaInmediatas.Cambiado += (s, e) => ActualizarFases();
         tablaCorrectoras.Cambiado += (s, e) => ActualizarFases();
@@ -235,6 +242,8 @@ public class FormNoConformidad : Form
                 control.Enabled = false;
         }
         btnOperarios.Enabled = false;
+        selectorCausaRaiz.Enabled = false;
+        selectorSubgrupo.Enabled = false;
         tablaInmediatas.SoloLectura = true;
         tablaCorrectoras.SoloLectura = true;
         tablaSeguimientos.SoloLectura = true;
@@ -391,26 +400,21 @@ public class FormNoConformidad : Form
     // Grupos de la hoja CAUSA RAIZ (lista fija, no de CALIDAD_LISTA)
     private void LlenarCausasRaiz(string? causa)
     {
-        cmbCausaRaiz.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbCausaRaiz.Items.Clear();
-        cmbCausaRaiz.Items.Add(SinIndicar);
-        foreach (string grupo in CausasRaiz.Todas)
-            cmbCausaRaiz.Items.Add(new OpcionLista(grupo, null));
-        Elegir(cmbCausaRaiz, causa);
+        // Un grupo guardado que ya no está en la lista se sigue viendo
+        var grupos = CausasRaiz.Todas.ToList();
+        if (causa != null && !grupos.Contains(causa)) grupos.Add(causa);
+        selectorCausaRaiz.Mostrar(grupos, causa);
     }
 
-    // Los subgrupos del grupo elegido en la causa raíz; sin grupo no se ve el campo
+    // Los subgrupos del grupo elegido en la causa raíz; sin grupo no se ven
     private void LlenarSubgrupos(string? subgrupo)
     {
-        var subgrupos = CausasRaiz.Subgrupos(Valor(cmbCausaRaiz));
-        cmbSubgrupo.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbSubgrupo.Items.Clear();
-        cmbSubgrupo.Items.Add(SinIndicar);
-        foreach (string s in subgrupos)
-            cmbSubgrupo.Items.Add(new OpcionLista(s, null));
-        Elegir(cmbSubgrupo, subgrupo);
-        AjustarAnchoLista(cmbSubgrupo);
-        campoSubgrupo.Visible = Valor(cmbCausaRaiz) != null;
+        string? grupo = selectorCausaRaiz.Valor;
+        var subgrupos = CausasRaiz.Subgrupos(grupo).ToList();
+        if (subgrupo != null && !subgrupos.Contains(subgrupo)) subgrupos.Add(subgrupo);
+        selectorSubgrupo.Mostrar(subgrupos, subgrupo);
+        lblSubgrupo.Text = $"Subgrupo de {grupo}";
+        campoSubgrupo.Visible = grupo != null;
     }
 
     private static TextBox[] NuevasCajas() =>
@@ -591,22 +595,46 @@ public class FormNoConformidad : Form
         campoPorQues = campos.Campo("5 porqués", CrearPorQues());
         rejilla.Controls.Add(campoPorQues, 0, 0);
         rejilla.SetColumnSpan(campoPorQues, 2);
-        rejilla.Controls.Add(campos.Campo("Causa raíz", cmbCausaRaiz), 0, 1);
-        rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 1, 1);
-        // A todo lo ancho: hay subgrupos con frases largas
-        campoSubgrupo = campos.Campo("Subgrupo de la causa raíz", cmbSubgrupo);
+        // Grupo y subgrupo a todo lo ancho, con sus botones; el capítulo debajo, aparte
+        var campoCausaRaiz = campos.Campo("Causa raíz", selectorCausaRaiz);
+        rejilla.Controls.Add(campoCausaRaiz, 0, 1);
+        rejilla.SetColumnSpan(campoCausaRaiz, 2);
+        campoSubgrupo = CrearCampoSubgrupo();
         rejilla.Controls.Add(campoSubgrupo, 0, 2);
         rejilla.SetColumnSpan(campoSubgrupo, 2);
+        rejilla.Controls.Add(campos.Campo("Capítulo de la norma", cmbCapitulo), 0, 3);
 
         campoCausaAnterior = campos.Campo("Descripción de la causa (texto de antes de los 5 porqués)", txtCausa);
         campoAnalisisAnterior = campos.Campo("Análisis de la causa raíz (texto de antes de los 5 porqués)", txtAnalisis);
-        rejilla.Controls.Add(campoCausaAnterior, 0, 3);
-        rejilla.Controls.Add(campoAnalisisAnterior, 0, 4);
+        rejilla.Controls.Add(campoCausaAnterior, 0, 4);
+        rejilla.Controls.Add(campoAnalisisAnterior, 0, 5);
         rejilla.SetColumnSpan(campoCausaAnterior, 2);
         rejilla.SetColumnSpan(campoAnalisisAnterior, 2);
 
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
+    }
+
+    // Subgrupos debajo del grupo, con una raya de color a la izquierda que los une a él
+    private Control CrearCampoSubgrupo()
+    {
+        var campo = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            Margin = new Padding(0, 0, 15, 15)
+        };
+        campo.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 17));
+        campo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var raya = new Panel { BackColor = Tema.AcentoSuave, Width = 3, Dock = DockStyle.Left, Margin = new Padding(0) };
+        campo.Controls.Add(raya, 0, 0);
+        campo.SetRowSpan(raya, 2);
+        lblSubgrupo = new Label { AutoSize = true, Font = Tema.FuentePequenaNegrita, Margin = new Padding(0, 0, 0, 4) };
+        campo.Controls.Add(lblSubgrupo, 1, 0);
+        selectorSubgrupo.Dock = DockStyle.Top;
+        campo.Controls.Add(selectorSubgrupo, 1, 1);
+        return campo;
     }
 
     // Cinco filas: número, "¿Por qué?" y "Porque"
@@ -905,7 +933,7 @@ public class FormNoConformidad : Form
             DescripcionCausa = txtCausa.Text,
             AnalisisCausaRaiz = txtAnalisis.Text,
             PorQues = LeerPorQues(),
-            CausaRaiz = Valor(cmbCausaRaiz),
+            CausaRaiz = selectorCausaRaiz.Valor,
             FechaFin = LeerFecha(dtpFin)
         };
         fases = NoConformidadServicio.Fases(actual, tablaInmediatas.Borrador().Concat(tablaCorrectoras.Borrador()));
@@ -1068,8 +1096,8 @@ public class FormNoConformidad : Form
             CosteEconomico: coste,
             HorasManoObra: horas,
             PorQues: LeerPorQues(),
-            CausaRaiz: Valor(cmbCausaRaiz),
-            CausaRaizSubgrupo: Valor(cmbSubgrupo),
+            CausaRaiz: selectorCausaRaiz.Valor,
+            CausaRaizSubgrupo: selectorSubgrupo.Valor,
             Version: original?.Version);
     }
 

@@ -207,34 +207,43 @@
         {
             <p class="suave pequeno">Por qué ha pasado: el grupo de la causa raíz</p>
         }
-        <div class="rejilla-ficha">
-            <Campo Etiqueta="Causa raíz">
-                @* Al cambiar de grupo se vacía el subgrupo: el de antes es de otro grupo *@
-                <select @bind="f.CausaRaiz" @bind:after="QuitarSubgrupo" disabled="@guardando">
-                    <option value="">—</option>
-                    @foreach (var grupo in CausasRaiz.Todas)
-                    {
-                        <option value="@grupo">@grupo</option>
-                    }
-                </select>
-            </Campo>
-            @if (f.CausaRaiz != null)
+        @* Grupo y subgrupo a la vista, con un clic, como el tipo de registro (26/11) *@
+        <div class="campo">
+            <span class="etiqueta-campo" id="etiqueta-causa-raiz">Causa raíz</span>
+            <div class="opciones" role="radiogroup" aria-labelledby="etiqueta-causa-raiz">
+                @foreach (var grupo in CausasRaiz.Todas.Prepend(null))
+                {
+                    <label class="opcion">
+                        <input type="radio" name="causa-raiz" checked="@(f.CausaRaiz == grupo)" disabled="@guardando"
+                               @onchange="() => ElegirCausaRaiz(grupo)" />
+                        @(grupo ?? "Sin indicar")
+                    </label>
+                }
+            </div>
+        </div>
+        @if (f.CausaRaiz != null)
+        {
+            var subgrupos = CausasRaiz.Subgrupos(f.CausaRaiz).ToList();
+            // Un subgrupo guardado que ya no está en la lista se sigue viendo
+            if (f.CausaRaizSubgrupo != null && !subgrupos.Contains(f.CausaRaizSubgrupo))
             {
-                var subgrupos = CausasRaiz.Subgrupos(f.CausaRaiz);
-                <Campo Etiqueta="Subgrupo de la causa raíz" Clase="entera">
-                    <select @bind="f.CausaRaizSubgrupo" disabled="@guardando">
-                        <option value="">—</option>
-                        @foreach (var subgrupo in subgrupos)
-                        {
-                            <option value="@subgrupo">@subgrupo</option>
-                        }
-                        @if (f.CausaRaizSubgrupo != null && !subgrupos.Contains(f.CausaRaizSubgrupo))
-                        {
-                            <option value="@f.CausaRaizSubgrupo">@f.CausaRaizSubgrupo</option>
-                        }
-                    </select>
-                </Campo>
+                subgrupos.Add(f.CausaRaizSubgrupo);
             }
+            <div class="campo subgrupos">
+                <span class="etiqueta-campo" id="etiqueta-subgrupo">Subgrupo de @f.CausaRaiz</span>
+                <div class="opciones" role="radiogroup" aria-labelledby="etiqueta-subgrupo">
+                    @foreach (var subgrupo in subgrupos.Prepend(null))
+                    {
+                        <label class="opcion">
+                            <input type="radio" name="causa-raiz-subgrupo" checked="@(f.CausaRaizSubgrupo == subgrupo)" disabled="@guardando"
+                                   @onchange="() => f.CausaRaizSubgrupo = subgrupo" />
+                            @(subgrupo ?? "Sin indicar")
+                        </label>
+                    }
+                </div>
+            </div>
+        }
+        <div class="rejilla-ficha">
             <Campo Etiqueta="Capítulo de la norma">
                 <select @bind="f.Capitulo" disabled="@guardando">@Opciones(ListaCalidad.CapituloNorma, f.Capitulo)</select>
             </Campo>
@@ -462,7 +471,15 @@
 
     private sealed record FotoEnMovil(string Nombre, long Tamano);
 
-    private void QuitarSubgrupo() => f.CausaRaizSubgrupo = null;
+    // Al cambiar de grupo se vacía el subgrupo: el de antes es de otro grupo
+    private void ElegirCausaRaiz(string? grupo)
+    {
+        if (f.CausaRaiz != grupo)
+        {
+            f.CausaRaiz = grupo;
+            f.CausaRaizSubgrupo = null;
+        }
+    }
 
     // Cambia la clave del desplegable de operarios para que vuelva a "Añadir otro…"
     private int anadidosOperario;

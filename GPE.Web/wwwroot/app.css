@@ -617,5 +617,8 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
     font-weight: 600;
 }
 
-/* Un campo que ocupa toda la fila de la rejilla (textos largos, como el subgrupo de la causa raíz) */
-.rejilla-ficha .entera { grid-column: 1 / -1; }
+/* Subgrupos de la causa raíz: frases largas, en letra normal y debajo del grupo elegido */
+.subgrupos { padding-left: 14px; border-left: 3px solid var(--acento-suave); }
+.subgrupos .opciones { gap: 8px; }
+.subgrupos .opciones .opcion { font-weight: 400; font-size: 14px; padding: 8px 14px; }
+.subgrupos .opciones .opcion:has(input:checked) { font-weight: 600; }
