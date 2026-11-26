@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- App de Android de GPE (26/11/2026): enseña la web por dentro y avisa de las acciones nuevas
+       con el móvil bloqueado. Se compila con el SDK 10 de .NET (global.json), que es el que tiene
+       instalado Android. No está en GPE.slnx: el resto se compila con el SDK 11. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GPE.App</RootNamespace>
+    <ApplicationId>com.gpe.app</ApplicationId>
+    <ApplicationTitle>GPE</ApplicationTitle>
+    <!-- Subir los dos en cada APK nuevo: si no, el móvil no la deja instalar encima -->
+    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>1.1</ApplicationDisplayVersion>
+    <TrimMode>full</TrimMode>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+  </PropertyGroup>
+
+  <!-- Firma propia: siempre la misma clave, para que cada versión se instale encima de la anterior.
+       La clave y su contraseña NO van en git: están en %LOCALAPPDATA%\GPE\firma-app (guardar copia). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <AndroidKeyStore>true</AndroidKeyStore>
+    <AndroidSigningKeyStore>$(LOCALAPPDATA)\GPE\firma-app\gpe-app.keystore</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias>gpe</AndroidSigningKeyAlias>
+    <AndroidSigningStorePass>file:$(LOCALAPPDATA)\GPE\firma-app\clave.txt</AndroidSigningStorePass>
+    <AndroidSigningKeyPass>file:$(LOCALAPPDATA)\GPE\firma-app\clave.txt</AndroidSigningKeyPass>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Xamarin.AndroidX.Core" Version="1.15.0.2" />
+  </ItemGroup>
+</Project>

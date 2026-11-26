@@ -115,6 +115,38 @@ app.MapGet("/almacen/archivo/{id:int}", (int id, HttpContext http) =>
     return Results.File(contenido, tipo);
 });
 
+// Para la app de Android (26/11): sus acciones pendientes, para avisar de las nuevas con el móvil
+// bloqueado. La app pregunta cada poco con la misma sesión (cookie) con la que se entró en la web.
+// Sin sesión: 401 (la app espera a que entre). Con sesión pero sin "Mis acciones" (solo Calidad,
+// solo Almacén): 403 (la app deja de preguntar).
+app.MapGet("/acciones/avisos", (HttpContext http) =>
+{
+    if (!TrabajadorActual.HaEntrado(http.User))
+        return Results.Unauthorized();
+    if (!TrabajadorActual.VeAcciones(http.User))
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    try
+    {
+        string persona = TrabajadorActual.Nombre(http.User)!;
+        var pendientes = new TrabajadorWebServicio().ObtenerPendientes(persona);
+        return Results.Json(new
+        {
+            usuario = persona,
+            acciones = pendientes.Select(a => new
+            {
+                id = a.Id,
+                titulo = $"{TipoRegistro.Nombre(a.TipoRegistro)} {a.NumeroNc}".Trim()
+                         + (a.Prioridad == null ? "" : $" · Prioridad {a.Prioridad.ToLowerInvariant()}"),
+                texto = a.Accion
+            })
+        });
+    }
+    catch (DbException)
+    {
+        return Results.StatusCode(503);
+    }
+});
+
 app.MapGet("/acciones/salir", async (HttpContext http, string? volver) =>
 {
     await http.SignOutAsync();
