@@ -1243,12 +1243,14 @@ public class ModuloRutinaCalidad : UserControl
             : casilla?.Estado == EstadoCasilla.NoCorrecto ? "Abrir incidencia…"
             : null;
 
-        var panel = new OpcionesCasilla(titulo, seleccion.Count, numerico, casilla?.Estado, incidencia);
+        var panel = new OpcionesCasilla(titulo, seleccion.Count, numerico, casilla?.Estado, incidencia, casilla?.Comentario);
         panel.Abrir(this, grid.PointToScreen(donde), () =>
         {
             if (panel.EligioEstado)
                 Marcar(panel.SoloVacias ? seleccion.Where(c => casillas.GetValueOrDefault((c.Punto.Id, c.Seccion.Id))?.Estado == null) : seleccion,
                     panel.Estado);
+            if (una && panel.CambioComentario)
+                PonerComentario(punto, seccion, panel.Comentario);
             if (panel.PideIncidencia)
             {
                 // Se abre cuando el panel ya se ha cerrado del todo
@@ -1256,6 +1258,18 @@ public class ModuloRutinaCalidad : UserControl
                 else BeginInvoke(() => AbrirIncidencia(punto, seccion));
             }
         });
+    }
+
+    // Lo escrito en el panel de la casilla (vacío = se quita el comentario)
+    private void PonerComentario(RutinaPunto punto, RutinaSeccion seccion, string? texto)
+    {
+        var casilla = casillas.GetValueOrDefault((punto.Id, seccion.Id))
+            ?? new ResultadoRutina(punto.Id, seccion.Id, null, null, null);
+        var nueva = RutinaServicio.Normalizar(casilla with { Comentario = texto });
+        if (nueva == casilla) return;
+        Poner(nueva);
+        grid.Invalidate();
+        MarcarCambios();
     }
 
     private void AbrirIncidencia(RutinaPunto punto, RutinaSeccion seccion)

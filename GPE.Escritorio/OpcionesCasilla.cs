@@ -1,4 +1,5 @@
 using GPE.Datos;
+using GPE.Logica;
 
 namespace GPE.Escritorio;
 
@@ -10,12 +11,43 @@ public class OpcionesCasilla : PanelEmergente
     public string? Estado { get; private set; }
     public bool SoloVacias { get; private set; }   // "Todo correcto": solo en las que están vacías
     public bool PideIncidencia { get; private set; }
+    public bool CambioComentario { get; private set; }
+    public string? Comentario { get; private set; }
 
-    // incidencia: texto del botón ("Abrir incidencia…", "Ver incidencia 45") o null si no lleva
-    public OpcionesCasilla(string titulo, int casillas, bool numerico, string? estadoActual, string? incidencia)
+    private readonly TextBox? txtComentario;
+    private readonly string comentarioInicial = "";
+
+    // incidencia: texto del botón ("Abrir incidencia…", "Ver incidencia 45") o null si no lleva.
+    // comentario: el de la casilla. Solo con una casilla se puede ver y cambiar, como en el móvil.
+    public OpcionesCasilla(string titulo, int casillas, bool numerico, string? estadoActual, string? incidencia,
+        string? comentario = null)
     {
         var pila = Rejilla();
         AnadirAncho(pila, Titulo(titulo));
+
+        if (casillas == 1)
+        {
+            // Desde el móvil llegan saltos "\n"; el cuadro de texto de Windows necesita "\r\n"
+            comentarioInicial = comentario?.ReplaceLineEndings("\r\n") ?? "";
+            txtComentario = new TextBox
+            {
+                Multiline = true,
+                ScrollBars = ScrollBars.Vertical,
+                MaxLength = RutinaServicio.LargoComentario,
+                Size = new Size(AnchoDoble, 64),
+                Margin = new Padding(0, 0, 0, 10),
+                PlaceholderText = "Comentario (opcional)",
+                Text = comentarioInicial,
+                BackColor = comentario != null ? Tema.AcentoSuave : Color.White
+            };
+            AnadirAncho(pila, txtComentario);
+            // Se queda con lo escrito al cerrar el panel, salvo con Esc
+            FormClosing += (s, e) =>
+            {
+                if (!Cancelado && txtComentario.Text != comentarioInicial) CambioComentario = true;
+                Comentario = txtComentario.Text;
+            };
+        }
 
         bool varias = casillas > 1;
         if (varias && !numerico)
@@ -44,6 +76,15 @@ public class OpcionesCasilla : PanelEmergente
         vaciar.Enabled = varias || estadoActual != null || numerico;
         vaciar.Click += (s, e) => Elegir(null);
         AnadirAncho(pila, vaciar);
+
+        if (txtComentario != null)
+        {
+            var guardar = Tema.BotonSecundario("Guardar comentario", AnchoDoble);
+            guardar.Height = 44;
+            guardar.Margin = new Padding(0, 4, 0, 0);
+            guardar.Click += (s, e) => Close();
+            AnadirAncho(pila, guardar);
+        }
 
         if (incidencia != null)
         {
