@@ -162,12 +162,13 @@ public class ModuloRutinaCalidad : UserControl
         if (!pantallaCompleta)
         {
             PonerEscala(1f);
-            grid.Columns[0].Width = AnchoPunto;
+            var normales = columnas.Select(c => AnchoColumna(c.HeaderText)).ToList();
+            int anchoPuntoNormal = AnchoPuntoCon(disponible, normales.Sum(), Tema.FuentePequenaNegrita);
+            grid.Columns[0].Width = anchoPuntoNormal;
 
             // Cada máquina con su ancho normal; si sobra sitio (menú plegado, pantalla grande)
             // se reparte entre ellas para que la tabla llegue hasta el borde. Si no cabe, barra horizontal.
-            var normales = columnas.Select(c => AnchoColumna(c.HeaderText)).ToList();
-            int sobra = Math.Max(0, disponible - AnchoPunto - normales.Sum());
+            int sobra = Math.Max(0, disponible - anchoPuntoNormal - normales.Sum());
             for (int i = 0; i < columnas.Count; i++)
             {
                 int ancho = normales[i] + sobra / columnas.Count + (i < sobra % columnas.Count ? 1 : 0);
@@ -178,9 +179,10 @@ public class ModuloRutinaCalidad : UserControl
 
         // Si ni con lo mínimo cabe (pantalla pequeña), se encoge todo por igual, letra incluida
         var minimos = columnas.Select(c => AnchoColumnaCompacta(c.HeaderText)).ToList();
-        float escala = Math.Min(1f, (float)disponible / (AnchoPunto + minimos.Sum()));
+        int anchoPuntoBase = AnchoPuntoCon(disponible, minimos.Sum(), Tema.FuentePequenaNegrita);
+        float escala = Math.Min(1f, (float)disponible / (anchoPuntoBase + minimos.Sum()));
         PonerEscala(Math.Min(escala, escalaAlto));
-        int anchoPunto = (int)(AnchoPunto * escala);
+        int anchoPunto = (int)(anchoPuntoBase * escala);
         grid.Columns[0].Width = anchoPunto;
 
         // El sobrante se reparte a partes iguales; las que necesitan más se quedan con su mínimo
@@ -201,6 +203,17 @@ public class ModuloRutinaCalidad : UserControl
 
         for (int i = 0; i < columnas.Count; i++)
             if (columnas[i].Width != anchos[i]) columnas[i].Width = anchos[i];
+    }
+
+    // Columna de los puntos: 220 normalmente; con pocas columnas (Almacenes) crece con el sitio que
+    // sobra hasta que se lee el nombre más largo, sin pasar de la mitad de la tabla
+    private int AnchoPuntoCon(int disponible, int anchoColumnas, Font fuente)
+    {
+        int necesario = grid.Rows.Cast<DataGridViewRow>()
+            .Select(f => TextRenderer.MeasureText(f.Cells[0].Value as string ?? "", fuente).Width + 24)
+            .DefaultIfEmpty(AnchoPunto).Max();
+        int maximo = Math.Max(AnchoPunto, Math.Min(disponible - anchoColumnas, disponible / 2));
+        return Math.Clamp(necesario, AnchoPunto, maximo);
     }
 
     // Letra de la cabecera y de los puntos a la escala de la tabla (1 = tamaño normal)
