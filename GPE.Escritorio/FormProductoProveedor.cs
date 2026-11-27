@@ -16,6 +16,9 @@ public class FormProductoProveedor : Form
 
     private readonly TextBox txtCodigo = new();
     private readonly TextBox txtDescripcion = new();
+    // Solo en un producto nuevo: sus productos de TenDB (PrepararProductoTenDB)
+    private readonly ComboBox cmbTenDB = new() { DropDownStyle = ComboBoxStyle.DropDownList, MaxDropDownItems = 25 };
+    private readonly Label lblAvisoTenDB = new();
     private readonly ComboBox cmbEstado = CamposProveedor.ComboEstado();
     private readonly ComboBox cmbTipo;
     private readonly DateTimePicker dtpAlta = CamposProveedor.Fecha();
@@ -124,7 +127,8 @@ public class FormProductoProveedor : Form
         Shown += (s, e) =>
         {
             scroll.AutoScrollPosition = Point.Empty;
-            (nuevo ? txtCodigo : txtDescripcion).Focus();
+            Control primero = !nuevo ? txtDescripcion : cmbTenDB.Enabled ? cmbTenDB : txtCodigo;
+            primero.Focus();
         };
     }
 
@@ -137,6 +141,11 @@ public class FormProductoProveedor : Form
     {
         var tarjeta = Componentes.Tarjeta("Datos sobre productos");
         var rejilla = Componentes.Rejilla(4);
+        if (original.Id == 0)
+        {
+            PrepararProductoTenDB();
+            CamposProveedor.Ancho(rejilla, campos.Campo("Producto de TenDB", cmbTenDB, lblAvisoTenDB), 4);
+        }
         rejilla.Controls.Add(campos.Campo("Código", txtCodigo));
         CamposProveedor.Ancho(rejilla, campos.Campo("Descripción", txtDescripcion), 2);
         rejilla.Controls.Add(campos.Campo("Tipo producto", cmbTipo));
@@ -152,6 +161,49 @@ public class FormProductoProveedor : Form
         rejilla.Controls.Add(campos.Campo("A. alérgenos / Formaldehído", txtAnalisisAlergenos));
         tarjeta.Controls.Add(rejilla);
         return tarjeta;
+    }
+
+    // Producto nuevo: se elige entre los productos que este proveedor tiene en TenDB y que aún no están en GPE;
+    // código y descripción salen de ahí. Si no se puede leer TenDB o allí no tiene ninguno, se escriben a mano.
+    private void PrepararProductoTenDB()
+    {
+        lblAvisoTenDB.AutoSize = true;
+        lblAvisoTenDB.MaximumSize = new Size(900, 0);
+        lblAvisoTenDB.Font = Tema.FuentePequena;
+        lblAvisoTenDB.ForeColor = Tema.Suave;
+        lblAvisoTenDB.Margin = new Padding(0, 4, 0, 0);
+        lblAvisoTenDB.Text = "Productos de este proveedor en TenDB. El código y la descripción salen de ahí.";
+
+        List<ProductoTenDB> productos;
+        try
+        {
+            productos = servicio.ProductosTenDBSinDarDeAlta(proveedor);
+        }
+        catch (Exception ex) when (ex is DbException or InvalidOperationException)
+        {
+            cmbTenDB.Enabled = false;
+            lblAvisoTenDB.Text = "No se pudo leer TenDB: escribe el código y la descripción.\n" + ex.Message;
+            lblAvisoTenDB.ForeColor = Tema.Aviso;
+            return;
+        }
+
+        if (productos.Count == 0)
+        {
+            cmbTenDB.Enabled = false;
+            lblAvisoTenDB.Text = "En TenDB este proveedor no tiene productos que falten aquí: escribe el código y la descripción.";
+            lblAvisoTenDB.ForeColor = Tema.Aviso;
+            return;
+        }
+
+        cmbTenDB.Items.AddRange(productos.Cast<object>().ToArray());
+        txtCodigo.ReadOnly = true;
+        txtDescripcion.ReadOnly = true;
+        cmbTenDB.SelectedIndexChanged += (s, e) =>
+        {
+            if (cmbTenDB.SelectedItem is not ProductoTenDB elegido) return;
+            txtCodigo.Text = elegido.Codigo;
+            txtDescripcion.Text = elegido.Descripcion;
+        };
     }
 
     // ANALISIS DE EUROCHOC (columnas AA-AC)

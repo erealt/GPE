@@ -38,6 +38,16 @@ public class ProveedorServicio
         }
     }
 
+    // Productos de TenDB de este proveedor que aún no tiene en GPE, para elegir uno al crear un producto
+    public List<ProductoTenDB> ProductosTenDBSinDarDeAlta(Proveedor proveedor)
+    {
+        if (proveedor.Numero is not int numero) return new();
+        var enGpe = repositorio.ObtenerProductos(proveedor.Id)
+            .Select(x => x.Codigo?.Trim().ToUpperInvariant()).ToHashSet();
+        return new TenDBRepositorio().ProductosDeProveedor(numero)
+            .Where(x => !enGpe.Contains(x.Codigo.ToUpperInvariant())).ToList();
+    }
+
     // Proveedores de TenDB que aún no están en GPE, para elegir uno al crear un proveedor
     public List<ProveedorTenDB> ProveedoresTenDBSinDarDeAlta()
     {
