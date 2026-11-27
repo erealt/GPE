@@ -24,4 +24,9 @@
     <Content Include="conexion.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Conexión de solo lectura a TenDB (nombres de proveedores). Lleva contraseña: no se sube a git -->
+  <ItemGroup Condition="Exists('tendb.txt')">
+    <Content Include="tendb.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

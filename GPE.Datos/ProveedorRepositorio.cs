@@ -377,6 +377,43 @@ public class ProveedorRepositorio
         return (int)comando.ExecuteScalar() > 0;
     }
 
+    // Nombre y fecha de alta como están en TenDB, a los proveedores con ese Nº que los tengan distintos.
+    // Devuelve cuántos ha cambiado.
+    public int ActualizarDesdeTenDB(IEnumerable<ProveedorTenDB> deTenDB)
+    {
+        const string sql = @"
+            UPDATE PROVEEDOR SET nombre = @nombre, fecha_alta = @alta
+            WHERE numero = @numero
+              AND (nombre COLLATE Latin1_General_BIN <> @nombre
+                   OR ISNULL(fecha_alta, '19000101') <> ISNULL(@alta, '19000101'));";
+
+        using var conexion = Conexion.Abrir();
+        using var transaccion = conexion.BeginTransaction();
+        int cambiados = 0;
+        foreach (var p in deTenDB)
+        {
+            using var comando = new SqlCommand(sql, conexion, transaccion);
+            comando.Parameters.AddWithValue("@numero", p.Codigo);
+            comando.Parameters.AddWithValue("@nombre", p.Nombre);
+            comando.Parameters.Add("@alta", System.Data.SqlDbType.Date).Value = (object?)p.FechaAlta ?? DBNull.Value;
+            cambiados += comando.ExecuteNonQuery();
+        }
+        transaccion.Commit();
+        return cambiados;
+    }
+
+    // Nº de todos los proveedores de GPE
+    public HashSet<int> Numeros()
+    {
+        using var conexion = Conexion.Abrir();
+        using var comando = new SqlCommand("SELECT numero FROM PROVEEDOR WHERE numero IS NOT NULL;", conexion);
+        using var lector = comando.ExecuteReader();
+        var numeros = new HashSet<int>();
+        while (lector.Read())
+            numeros.Add(lector.GetInt32(0));
+        return numeros;
+    }
+
     // Un proveedor nuevo; devuelve su id
     public int Insertar(Proveedor p, int usuarioId)
     {

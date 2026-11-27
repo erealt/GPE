@@ -16,3 +16,6 @@ Despliegue/paquete/
 
 # Conexión con contraseña que se genera al preparar el paquete
 GPE.Escritorio/conexion.txt
+
+# Conexión de solo lectura a TenDB, con contraseña
+GPE.Escritorio/tendb.txt

@@ -22,6 +22,7 @@ public class ModuloProveedores : UserControl
 
     private readonly ProveedorServicio servicio = new();
     private List<ProveedorConProductos> registros = new();
+    private string? errorTenDB;   // si no se pudo leer TenDB, se avisa junto al contador
     private bool limpiando;
 
     private readonly TextBox txtBuscar = new();
@@ -323,6 +324,7 @@ public class ModuloProveedores : UserControl
     {
         try
         {
+            errorTenDB = servicio.ActualizarDesdeTenDB();
             registros = servicio.ObtenerProveedores();
         }
         catch (DbException ex)
@@ -483,7 +485,9 @@ public class ModuloProveedores : UserControl
     {
         int revisar = visibles.Count(p => p.Proveedor.Revisar != null);
         lblContador.Text = $"{visibles.Count} {(visibles.Count == 1 ? "proveedor" : "proveedores")}"
-            + (revisar > 0 ? $"  ·  ⚠ {revisar} con datos distintos en el Excel" : "");
+            + (revisar > 0 ? $"  ·  ⚠ {revisar} con datos distintos en el Excel" : "")
+            + (errorTenDB != null ? "  ·  ⚠ No se pudo leer TenDB: nombres y fechas pueden no estar al día" : "");
+        lblContador.ForeColor = errorTenDB != null ? Tema.Aviso : Tema.Texto;
 
         lblVacio.Text = registros.Count == 0
             ? "Todavía no hay proveedores. Pulsa «+ Nuevo proveedor» para añadir el primero."

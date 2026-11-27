@@ -18,7 +18,10 @@ public class FormProveedor : Form
     private bool hayCambios;
 
     private readonly TextBox txtNumero = new();
-    private readonly TextBox txtNombre = new();
+    // El nombre se elige de los proveedores de TenDB (PrepararNombre)
+    private readonly ComboBox cmbNombre = new() { DropDownStyle = ComboBoxStyle.DropDownList, MaxDropDownItems = 25 };
+    private readonly Label lblAvisoNombre = new();
+    private bool conTenDB;   // proveedor nuevo y se ha podido leer la lista de TenDB
     private readonly DateTimePicker dtpAlta = CamposProveedor.Fecha();
     private readonly ComboBox cmbEstado = CamposProveedor.ComboEstado();
     private readonly ComboBox cmbTipo;
@@ -114,6 +117,12 @@ public class FormProveedor : Form
         Controls.Add(scroll);
 
         Poner(original);
+        if (conTenDB)
+        {
+            // Nº y fecha de alta salen del proveedor de TenDB que se elija
+            txtNumero.Text = "";
+            CamposProveedor.PonerFecha(dtpAlta, null);
+        }
         ActualizarNotas();
 
         // A partir de aquí, cualquier cambio cuenta como "sin guardar" y recalcula las notas
@@ -122,6 +131,13 @@ public class FormProveedor : Form
             hayCambios = true;
             ActualizarNotas();
         }, productos.Filtro);
+        // Sin TenDB el nombre se escribe, y escribir no cambia la selección
+        if (cmbNombre.DropDownStyle == ComboBoxStyle.DropDown)
+            cmbNombre.TextChanged += (s, e) =>
+            {
+                hayCambios = true;
+                ActualizarNotas();
+            };
         FormClosing += AvisarCambiosSinGuardar;
 
         // El primer campo coge el foco y la página bajaría hasta él: se vuelve arriba
@@ -130,7 +146,7 @@ public class FormProveedor : Form
             productos.QuitarSeleccion();
             certificados.QuitarSeleccion();
             scroll.AutoScrollPosition = Point.Empty;
-            if (nuevo) txtNombre.Focus();
+            if (nuevo) cmbNombre.Focus();
         };
     }
 
@@ -186,6 +202,54 @@ public class FormProveedor : Form
         ncs = lista.Registros;
         PonerNotaReclamaciones();
         ActualizarNotas();   // la evaluación cambia con la nota de reclamaciones
+    }
+
+    // Nº, nombre y fecha de alta son los de TenDB y aquí no se cambian. La lista de Proveedores ya los ha
+    // copiado de TenDB al abrirse. Proveedor nuevo: se elige uno de TenDB que aún no esté en GPE y se ponen su
+    // Nº (el Código de TenDB) y su fecha de alta. Si no se puede leer TenDB, se escriben a mano y se avisa debajo.
+    private void PrepararNombre()
+    {
+        lblAvisoNombre.AutoSize = true;
+        lblAvisoNombre.MaximumSize = new Size(700, 0);
+        lblAvisoNombre.Font = Tema.FuentePequena;
+        lblAvisoNombre.ForeColor = Tema.Suave;
+        lblAvisoNombre.Margin = new Padding(0, 4, 0, 0);
+        lblAvisoNombre.Text = "El Nº, el nombre y la fecha de alta vienen de TenDB.";
+
+        if (original.Id != 0)
+        {
+            cmbNombre.Items.Add(original.Nombre);
+            BloquearDatosTenDB();
+            return;
+        }
+
+        try
+        {
+            cmbNombre.DisplayMember = nameof(ProveedorTenDB.Nombre);
+            cmbNombre.Items.AddRange(servicio.ProveedoresTenDBSinDarDeAlta().Cast<object>().ToArray());
+            conTenDB = true;
+            BloquearDatosTenDB();
+            cmbNombre.Enabled = true;
+            cmbNombre.SelectedIndexChanged += (s, e) =>
+            {
+                if (cmbNombre.SelectedItem is not ProveedorTenDB elegido) return;
+                txtNumero.Text = elegido.Codigo.ToString();
+                CamposProveedor.PonerFecha(dtpAlta, elegido.FechaAlta);
+            };
+        }
+        catch (Exception ex) when (ex is DbException or InvalidOperationException)
+        {
+            cmbNombre.DropDownStyle = ComboBoxStyle.DropDown;
+            lblAvisoNombre.Text = "No se pudo leer la lista de TenDB: escribe el Nº, el nombre y la fecha de alta.\n" + ex.Message;
+            lblAvisoNombre.ForeColor = Tema.Aviso;
+        }
+    }
+
+    private void BloquearDatosTenDB()
+    {
+        cmbNombre.Enabled = false;
+        txtNumero.ReadOnly = true;
+        dtpAlta.Enabled = false;
     }
 
     private int? SiguienteNumero()
@@ -253,7 +317,8 @@ public class FormProveedor : Form
         var tarjeta = Componentes.Tarjeta("Datos sobre proveedor");
         var rejilla = Componentes.Rejilla(4);
         rejilla.Controls.Add(campos.Campo("Nº", txtNumero));
-        CamposProveedor.Ancho(rejilla, campos.Campo("Nombre", txtNombre), 2);
+        PrepararNombre();
+        CamposProveedor.Ancho(rejilla, campos.Campo("Nombre", cmbNombre, lblAvisoNombre), 2);
         rejilla.Controls.Add(campos.Campo("Fecha alta", dtpAlta));
         rejilla.Controls.Add(campos.Campo("Estado", cmbEstado));
         rejilla.Controls.Add(campos.Campo("Tipo", cmbTipo));
@@ -327,7 +392,7 @@ public class FormProveedor : Form
     private void Poner(Proveedor p)
     {
         txtNumero.Text = p.Numero?.ToString() ?? "";
-        txtNombre.Text = p.Nombre;
+        cmbNombre.Text = p.Nombre;
         CamposProveedor.PonerEstado(cmbEstado, p.Baja);
         CamposProveedor.PonerTipo(cmbTipo, p.Tipo);
         CamposProveedor.PonerFecha(dtpAlta, p.FechaAlta);
@@ -347,7 +412,7 @@ public class FormProveedor : Form
     private Proveedor Leer() => original with
     {
         Numero = int.TryParse(txtNumero.Text.Trim(), out int numero) ? numero : null,
-        Nombre = txtNombre.Text,
+        Nombre = cmbNombre.Text,
         Baja = CamposProveedor.LeerBaja(cmbEstado),
         Tipo = CamposProveedor.LeerTipo(cmbTipo),
         FechaAlta = CamposProveedor.LeerFecha(dtpAlta),
@@ -408,7 +473,7 @@ public class FormProveedor : Form
         var controles = new Dictionary<string, Control>
         {
             [nameof(Proveedor.Numero)] = txtNumero,
-            [nameof(Proveedor.Nombre)] = txtNombre,
+            [nameof(Proveedor.Nombre)] = cmbNombre,
             [nameof(Proveedor.EnsayoMotivo)] = dtpEnsayo,
             [nameof(Proveedor.AuditoriaMotivo)] = dtpAuditoria,
             [nameof(Proveedor.RfaAnio)] = txtRfa

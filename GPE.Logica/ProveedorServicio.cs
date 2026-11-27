@@ -22,6 +22,29 @@ public class ProveedorServicio
             .ToList();
     }
 
+    // Nº, nombre y fecha de alta son los de TenDB, donde se dan de alta y se cambian los proveedores.
+    // Al abrir la lista se copian a GPE los que allí sean distintos; así las NC, los PDF y la web también los ven.
+    // Si TenDB no responde, devuelve el error y se sigue con lo que hay en GPE.
+    public string? ActualizarDesdeTenDB()
+    {
+        try
+        {
+            repositorio.ActualizarDesdeTenDB(new TenDBRepositorio().Proveedores());
+            return null;
+        }
+        catch (Exception ex) when (ex is System.Data.Common.DbException or InvalidOperationException)
+        {
+            return ex.Message;
+        }
+    }
+
+    // Proveedores de TenDB que aún no están en GPE, para elegir uno al crear un proveedor
+    public List<ProveedorTenDB> ProveedoresTenDBSinDarDeAlta()
+    {
+        var enGpe = repositorio.Numeros();
+        return new TenDBRepositorio().Proveedores().Where(p => !enGpe.Contains(p.Codigo)).ToList();
+    }
+
     // Evaluación (A/B/C) de un proveedor con sus NC de ahora; null si no existe o no tiene notas
     public string? EvaluacionActual(int proveedorId) =>
         ObtenerProveedores().Select(p => p.Proveedor).Where(p => p.Id == proveedorId).Select(Evaluacion).FirstOrDefault();
@@ -87,7 +110,7 @@ public class ProveedorServicio
     {
         var errores = new List<(string, string)>();
         if (p.Nombre == "")
-            errores.Add((nameof(Proveedor.Nombre), "Escribe el nombre del proveedor."));
+            errores.Add((nameof(Proveedor.Nombre), "Falta el nombre del proveedor."));
         else if (p.Nombre.Length > 200)
             errores.Add((nameof(Proveedor.Nombre), "El nombre no puede pasar de 200 letras."));
 
