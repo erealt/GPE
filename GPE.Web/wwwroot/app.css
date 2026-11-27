@@ -654,3 +654,8 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
 .observacion-cabeza { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .observacion-cabeza select { flex: 1; }
 .guardar-observaciones { height: 52px; font-size: 16px; margin-bottom: 30px; }
+
+/* Control diario: elegir el día, como Día / ◀ ▶ / Hoy del escritorio */
+.dia-rutina { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.dia-rutina input[type="date"] { width: auto; flex: 0 1 180px; height: 42px; }
+.dia-rutina .revision { height: 42px; min-width: 46px; }

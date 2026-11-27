@@ -35,6 +35,15 @@ else
         <p class="suave progreso">@Progreso()</p>
     </div>
 
+    @* Como en el escritorio: cualquier día hasta hoy, con flechas y "Hoy" *@
+    <div class="dia-rutina">
+        <button class="revision" disabled="@guardando" @onclick="() => CambiarDia(fecha.AddDays(-1))" title="Día anterior">◀</button>
+        <input type="date" value="@fecha.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"
+               disabled="@guardando" @onchange="ElegirDia" />
+        <button class="revision" disabled="@(guardando || fecha >= DateTime.Today)" @onclick="() => CambiarDia(fecha.AddDays(1))" title="Día siguiente">▶</button>
+        <button class="revision" disabled="@(guardando || fecha == DateTime.Today)" @onclick="() => CambiarDia(DateTime.Today)">Hoy</button>
+    </div>
+
     <div class="revisiones">
         @foreach (var r in revisiones)
         {
@@ -277,7 +286,7 @@ else
     [CascadingParameter] private Task<AuthenticationState> EstadoSesion { get; set; } = default!;
 
     private readonly RutinaServicio servicio = new();
-    private readonly DateTime fecha = DateTime.Today;
+    private DateTime fecha = DateTime.Today;
     private Usuario? usuario;        // lo que marque queda a su nombre en el historial
 
     private PlantillaRutina? plantilla;
@@ -353,6 +362,27 @@ else
         var todas = plantilla!.Secciones.SelectMany(s => plantilla.Puntos.Where(p => Editable(p, s)).Select(p => (p, s))).ToList();
         int hechas = todas.Count(c => Rellena(Casilla(c.p, c.s)));
         return $"{hechas} de {todas.Count} casillas";
+    }
+
+    // Día: se puede ver y rellenar cualquier día hasta hoy, como en el escritorio
+
+    private void ElegirDia(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dia))
+            CambiarDia(dia);
+    }
+
+    private void CambiarDia(DateTime dia)
+    {
+        dia = dia.Date;
+        if (dia > DateTime.Today || dia == fecha) return;
+        fecha = dia;
+        CerrarPanel();
+        avisoGuardada = null;
+        revisiones = new();   // la revisión nueva sin casillas era del otro día
+        Cargar();
+        revision = revisiones.Count > 0 ? revisiones.Max(r => r.Numero) : 1;
+        if (verObservaciones) AbrirObservaciones();
     }
 
     // Revisiones y plantas
