@@ -1,4 +1,5 @@
-@* Ficha nueva de incidencia, no conformidad o acción de mejora para la web: las mismas fases y campos
+@* Ficha de incidencia, no conformidad o acción de mejora para la web (nueva, o una ya guardada si
+   Borrador.Id no es 0, para añadirle algo): las mismas fases y campos
    que FormNoConformidad del escritorio (registro, clasificación, fotos, acción inmediata, análisis con
    los 5 porqués, corrección y cierre), con las mismas reglas del servicio. *@
 
@@ -42,7 +43,8 @@
         <div class="rejilla-ficha">
             <Campo Etiqueta="Nº">
                 <input value="@(numeroPrevisto ?? "Sin número")" readonly />
-                <span class="pequeno suave">@(numeroPrevisto == null ? "Las acciones de mejora no llevan número." : "Automático: se asigna al guardar.")</span>
+                <span class="pequeno suave">@(numeroPrevisto == null ? "Las acciones de mejora no llevan número."
+                    : Borrador.Id != 0 && numeroPrevisto == Borrador.Numero ? "Ya guardado." : "Automático: se asigna al guardar.")</span>
             </Campo>
             <Campo Etiqueta="Fecha detectado" Error="@Error(nameof(NoConformidad.FechaDetectado))">
                 <input type="date" max="@Hoy" @bind="f.FechaDetectado" @bind:after="ActualizarNumero" disabled="@guardando" />
@@ -164,6 +166,10 @@
         @if (errorFotos != null)
         {
             <p class="error-campo">@errorFotos</p>
+        }
+        @if (fotosGuardadas > 0)
+        {
+            <p class="suave pequeno">Ya tiene @fotosGuardadas @(fotosGuardadas == 1 ? "foto guardada" : "fotos guardadas"). Las que hagas ahora se añaden.</p>
         }
         @if (leyendoFotos)
         {
@@ -317,6 +323,7 @@
     // Una fila de las tablas de acciones del escritorio (TablaAcciones)
     private sealed class FilaAccion
     {
+        public int Id { get; set; }   // 0: nueva; si no, la guardada (para no borrarla y volver a crearla)
         public required string Clase { get; init; }
         public bool Hecha { get; set; }
         public string Accion { get; set; } = "";
@@ -330,16 +337,18 @@
             && string.IsNullOrWhiteSpace(Responsable) && string.IsNullOrWhiteSpace(Prioridad) && string.IsNullOrWhiteSpace(Observaciones);
 
         public AccionNc Leer() =>
-            NoConformidadServicio.NormalizarAccion(new AccionNc(0, Clase, Accion, Fecha, Responsable, Observaciones, Hecha, Prioridad));
+            NoConformidadServicio.NormalizarAccion(new AccionNc(Id, Clase, Accion, Fecha, Responsable, Observaciones, Hecha, Prioridad));
     }
 
     private Ficha f = new();
     private List<FilaAccion> acciones = new();
     private readonly List<ArchivoNuevo> fotos = new();
+    private int fotosGuardadas;   // las que ya tiene un registro guardado: se quedan, las nuevas se añaden
 
     // Lo que se guarda en el móvil (las fotos van aparte)
     private sealed record Guardado(Ficha Ficha, List<FilaAccion> Acciones);
     private bool borradorListo;      // no se escribe hasta haber leído lo que hubiera
+    private bool guardada;           // ni después de guardar
     private string? ultimoGuardado;
     private bool recuperada;
 
@@ -366,20 +375,36 @@
             TipoNc = b.Tipo,
             Cliente = b.Cliente,
             ProveedorId = b.ProveedorId,
+            Seguridad = b.SeguridadAlimentaria switch { true => "si", false => "no", null => null },
             Problema = b.Problema,
             FechaPrevista = b.FechaPrevista,
+            FechaFin = b.FechaFin,
             McPccBpm = b.McPccBpm,
             Parametro = b.Parametro,
             Operario = b.Operario,
+            Preguntas = Enumerable.Range(0, NoConformidad.NumeroPorQues).Select(i => b.PorQues?.ElementAtOrDefault(i)?.Pregunta).ToArray(),
+            Respuestas = Enumerable.Range(0, NoConformidad.NumeroPorQues).Select(i => b.PorQues?.ElementAtOrDefault(i)?.Respuesta).ToArray(),
             CausaRaiz = b.CausaRaiz,
             CausaRaizSubgrupo = b.CausaRaizSubgrupo,
-            Capitulo = b.CapituloNorma
+            Capitulo = b.CapituloNorma,
+            Coste = b.CosteEconomico?.ToString("0.##", new System.Globalization.CultureInfo("es-ES")),
+            Horas = b.HorasManoObra?.ToString("0.##", new System.Globalization.CultureInfo("es-ES"))
         };
         try
         {
             listas = servicio.ObtenerListas();
             clientes = servicio.ObtenerClientes();
             proveedores = servicio.ObtenerProveedores();
+            // Ya guardado (se vuelve a abrir para añadir algo): sus acciones y cuántas fotos tiene
+            if (b.Id != 0)
+            {
+                acciones = servicio.ObtenerAcciones(b.Id).Select(a => new FilaAccion
+                {
+                    Id = a.Id, Clase = a.Clase, Hecha = a.Hecha, Accion = a.Accion, Fecha = a.Fecha,
+                    Responsable = a.Responsable, Prioridad = a.Prioridad, Observaciones = a.Observaciones
+                }).ToList();
+                fotosGuardadas = servicio.ObtenerFotos(b.Id).Count;
+            }
         }
         catch (DbException ex)
         {
@@ -399,7 +424,9 @@
                 borradorListo = true;
                 return;
             }
-            if (!borradorListo) return;
+            // Ya guardada: quien abrió la ficha borra el borrador; si se escribiera otra vez, al volver
+            // a entrar se recuperaría lo de antes como si no se hubiera guardado
+            if (!borradorListo || guardada) return;
             // Después de cada cambio: es poco texto, se escribe entero
             string json = System.Text.Json.JsonSerializer.Serialize(new Guardado(f, acciones));
             if (json == ultimoGuardado) return;
@@ -606,7 +633,7 @@
     {
         try
         {
-            numeroPrevisto = servicio.NumeroPrevisto(Registro(null, null), null);
+            numeroPrevisto = servicio.NumeroPrevisto(Registro(null, null), Borrador.Id != 0 ? Borrador : null);
         }
         catch (DbException)
         {
@@ -713,6 +740,7 @@
             int id;
             using (Sesion.Como(Usuario))
                 id = servicio.Guardar(registro, leidas, fotos);
+            guardada = true;
 
             // La evaluación del proveedor sale de sus NC: si pasa a pedir más controles, se avisa
             string? avisoProveedor = null;

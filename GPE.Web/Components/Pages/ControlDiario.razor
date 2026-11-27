@@ -111,7 +111,7 @@ else
         <div class="fondo-panel"></div>
         <div class="panel-casilla panel-ficha">
             <div class="panel-titulo">
-                <strong>Registrar · @fichaPunto.Nombre · @fichaMaquina.Nombre</strong>
+                <strong>@(fichaBorrador.Id == 0 ? "Registrar" : $"Nº {fichaBorrador.Numero ?? "sin número"}") · @fichaPunto.Nombre · @fichaMaquina.Nombre</strong>
                 <button class="quitar" @onclick="CerrarFicha">✕</button>
             </div>
             <FichaNoConformidad Borrador="fichaBorrador" Usuario="usuario!" ClaveBorrador="@ClaveFicha(fichaPunto, fichaMaquina)"
@@ -136,6 +136,16 @@ else
             @if (UnaCasilla is var (punto, seccion))
             {
                 var actual = Casilla(punto, seccion);
+                @* Arriba, a la vista: lo registrado se puede volver a abrir para añadir algo *@
+                @if (actual?.NoConformidadId != null)
+                {
+                    <div class="registrada">
+                        <span>Registrada: nº @(actual.NumeroIncidencia ?? "sin número")</span>
+                        <button class="principal" disabled="@guardando" @onclick="() => AbrirIncidencia(punto, seccion)">
+                            Abrir para añadir algo
+                        </button>
+                    </div>
+                }
                 @if (punto.Numerico)
                 {
                     <div class="campo">
@@ -163,11 +173,7 @@ else
                         @(guardando ? "Guardando..." : "Guardar")
                     </button>
                 </div>
-                @if (actual?.NoConformidadId != null)
-                {
-                    <p class="pequeno suave">Registrada: nº @(actual.NumeroIncidencia ?? "sin número")</p>
-                }
-                else if (actual?.Estado == EstadoCasilla.NoCorrecto)
+                @if (actual?.NoConformidadId == null && actual?.Estado == EstadoCasilla.NoCorrecto)
                 {
                     <button class="secundario ancho" disabled="@guardando" @onclick="() => AbrirIncidencia(punto, seccion)">
                         Registrar incidencia o no conformidad
@@ -432,7 +438,8 @@ else
     }
 
     // Registro de una casilla NO, como "Abrir incidencia…" del escritorio: la ficha entera en blanco
-    // con lo que ya se sabe de la casilla; al guardarla se apunta en la casilla.
+    // con lo que ya se sabe de la casilla; al guardarla se apunta en la casilla. Si ya está registrada,
+    // se vuelve a abrir la guardada para añadirle algo.
     private (RutinaPunto Punto, RutinaSeccion Maquina, NoConformidad Borrador)? ficha;
     private string? avisoGuardada;
 
@@ -440,8 +447,32 @@ else
     {
         var casilla = Casilla(p, s);
         var rev = revisiones.FirstOrDefault(r => r.Numero == revision);
-        if (casilla?.Estado != EstadoCasilla.NoCorrecto || rev == null) return;
+        if (casilla == null || rev == null) return;
 
+        // Ya registrada: se vuelve a abrir la guardada para añadirle algo
+        if (casilla.NoConformidadId is int id)
+        {
+            NoConformidad? guardada;
+            try
+            {
+                guardada = new NoConformidadServicio().ObtenerRegistro(id);
+            }
+            catch (DbException ex)
+            {
+                panelError = "No se ha podido abrir la incidencia. Comprueba la conexión. " + ex.Message;
+                return;
+            }
+            if (guardada == null)
+            {
+                panelError = "Esta incidencia ya no existe: puede que la hayan borrado.";
+                return;
+            }
+            CerrarPanel();
+            ficha = (p, s, guardada);
+            return;
+        }
+
+        if (casilla.Estado != EstadoCasilla.NoCorrecto) return;
         CerrarPanel();
         ficha = (p, s, RutinaServicio.BorradorIncidencia(fecha, rev, p, s, casilla));
     }
@@ -509,7 +540,7 @@ else
         }
         if (clave == null) return;
 
-        // Solo si es de esta persona, de hoy y la casilla sigue en NO sin registrar; si no, ya no sirve
+        // Solo si es de esta persona y de hoy (casilla en NO o ya registrada); si no, ya no sirve
         var partes = clave.Split('|');
         var p = partes.Length == 5 ? plantilla.Puntos.FirstOrDefault(x => x.Id.ToString() == partes[3]) : null;
         var s = partes.Length == 5 ? plantilla.Secciones.FirstOrDefault(x => x.Id.ToString() == partes[4]) : null;

@@ -449,6 +449,12 @@ td { padding: 14px 16px; border-top: 1px solid var(--linea); }
     box-shadow: 0 -6px 24px rgba(20, 35, 30, .18);
 }
 .panel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.panel-casilla .registrada {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    padding: 10px 12px; margin-bottom: 12px; border-radius: var(--radio);
+    background: var(--acento-suave); color: var(--acento-oscuro); font-weight: 600;
+}
+.panel-casilla .registrada button { height: 42px; }
 .panel-casilla .estados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .panel-casilla .estado { height: 50px; border: 2px solid transparent; font-size: 15px; }
 .panel-casilla .estado.marcado { border-color: currentColor; }

@@ -1,4 +1,4 @@
--- Responsables de las acciones de NC (lista PERSONA), 25/11/2026.
+-- Responsables de las acciones de NC (lista PERSONA), 25/11/2026; 26/11 + Belen G, Alba y Celia.
 -- Deja activas solo estas personas, en este orden; las demás se desactivan (no se borran: las
 -- acciones antiguas siguen mostrando su responsable). Se puede ejecutar más de una vez.
 -- No lleva USE: se elige la base de datos al ejecutarlo, con -d. Con sqlcmd, usar -f 65001.
@@ -18,7 +18,11 @@ INSERT INTO @personas (valor, orden) VALUES
     (N'José', 6),
     (N'Diego', 7),
     (N'Esteban', 8),
-    (N'Pepelu', 9);
+    (N'Pepelu', 9),
+    -- Añadidas el 26/11
+    (N'Belen G', 10),
+    (N'Alba', 11),
+    (N'Celia', 12);
 
 BEGIN TRANSACTION;
 
