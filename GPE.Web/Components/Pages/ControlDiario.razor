@@ -51,10 +51,81 @@ else
     <div class="pestanas-planta">
         @foreach (var p in Planta.Todas)
         {
-            <button class="revision @(p == planta ? "elegida" : "")" @onclick="() => ElegirPlanta(p)">@Planta.Nombre(p)</button>
+            <button class="revision @(p == planta && !verObservaciones ? "elegida" : "")" @onclick="() => ElegirPlanta(p)">@Planta.Nombre(p)</button>
         }
+        <button class="revision @(verObservaciones ? "elegida" : "")" @onclick="AbrirObservaciones">Observaciones</button>
     </div>
 
+    @if (verObservaciones)
+    {
+        <div class="observaciones-dia">
+            <section class="tarjeta">
+                <h2>Caja de herramientas</h2>
+                <p class="suave pequeno">Quién la tiene hoy y cómo está.</p>
+                <label class="campo">
+                    <span>Operario</span>
+                    <select @bind="obsCajaOperario" disabled="@guardando">
+                        <option value="">Elige quién la tiene…</option>
+                        @if (obsCajaOperario is string actualOp && actualOp != "" && !operarios.Contains(actualOp))
+                        {
+                            <option value="@actualOp">@actualOp</option>
+                        }
+                        @foreach (var o in operarios)
+                        {
+                            <option value="@o">@o</option>
+                        }
+                    </select>
+                </label>
+                <span class="etiqueta-campo">Estado</span>
+                <div class="estados">
+                    <button class="estado @(obsCajaEstado == "OK" ? "ok marcado" : "")" disabled="@guardando"
+                            @onclick='() => obsCajaEstado = obsCajaEstado == "OK" ? null : "OK"'>✓&nbsp; OK</button>
+                    <button class="estado @(obsCajaEstado == "No OK" ? "no marcado" : "")" disabled="@guardando"
+                            @onclick='() => obsCajaEstado = obsCajaEstado == "No OK" ? null : "No OK"'>✗&nbsp; No OK</button>
+                </div>
+            </section>
+
+            <section class="tarjeta">
+                <h2>Depósitos</h2>
+                <p class="suave pequeno">Temperaturas fuera de rango y lo que haya que contar de los depósitos.</p>
+                <textarea rows="3" maxlength="@RutinaServicio.LargoComentario" placeholder="Por ejemplo: El nº8 está a 40 (rango: 42-48)."
+                          @bind="obsDepositos" disabled="@guardando"></textarea>
+            </section>
+
+            <section class="tarjeta">
+                <h2>Observaciones por sección</h2>
+                <p class="suave pequeno">Elige la sección y escribe. ✕ para quitarla.</p>
+                @foreach (var nota in obsNotas)
+                {
+                    <div class="observacion-seccion">
+                        <div class="observacion-cabeza">
+                            <select @bind="nota.SeccionId" disabled="@guardando">
+                                <option value="0">Elige la sección…</option>
+                                @foreach (var s in plantilla.Secciones)
+                                {
+                                    <option value="@s.Id">@s.Nombre</option>
+                                }
+                            </select>
+                            <button class="quitar" disabled="@guardando" @onclick="() => obsNotas.Remove(nota)" title="Quitar la observación">✕</button>
+                        </div>
+                        <textarea rows="2" maxlength="@RutinaServicio.LargoComentario" placeholder="Observación"
+                                  @bind="nota.Texto" disabled="@guardando"></textarea>
+                    </div>
+                }
+                <button class="secundario ancho" disabled="@guardando" @onclick="() => obsNotas.Add(new NotaSeccion())">+ Añadir observación</button>
+            </section>
+
+            @if (obsError != null)
+            {
+                <p class="error-campo">@obsError</p>
+            }
+            <button class="principal ancho guardar-observaciones" disabled="@guardando" @onclick="GuardarObservaciones">
+                @(guardando ? "Guardando..." : "Guardar observaciones")
+            </button>
+        </div>
+    }
+    else
+    {
     <div class="leyenda">
         @foreach (var estado in EstadoCasilla.Todos)
         {
@@ -105,6 +176,7 @@ else
             </tbody>
         </table>
     </div>
+    }
 
     @if (ficha is var (fichaPunto, fichaMaquina, fichaBorrador))
     {
@@ -260,6 +332,8 @@ else
                 revision = revisiones.Max(r => r.Numero);
 
             resultados = datos.Resultados.ToDictionary(r => (r.Revision, r.PuntoId, r.SeccionId));
+            rutinaDia = datos.Rutina;
+            observacionesDia = datos.Observaciones;
             error = null;
         }
         catch (DbException ex)
@@ -306,7 +380,85 @@ else
     private void ElegirPlanta(string p)
     {
         planta = p;
+        verObservaciones = false;
         CerrarPanel();
+    }
+
+    // Observaciones del pie de la hoja, como la pestaña Observaciones del escritorio.
+    // Se escriben aquí y se guardan todas juntas con el botón.
+
+    private bool verObservaciones;
+    private Rutina? rutinaDia;
+    private List<ObservacionRutina> observacionesDia = new();
+    private List<string> operarios = new();
+    private string? obsCajaOperario;
+    private string? obsCajaEstado;
+    private string? obsDepositos;
+    private List<NotaSeccion> obsNotas = new();
+    private string? obsError;
+
+    private class NotaSeccion
+    {
+        public int SeccionId { get; set; }
+        public string? Texto { get; set; }
+    }
+
+    private void AbrirObservaciones()
+    {
+        CerrarPanel();
+        Cargar();
+        if (operarios.Count == 0)
+        {
+            try
+            {
+                operarios = (new NoConformidadServicio().ObtenerListas().GetValueOrDefault(ListaCalidad.Operario) ?? new())
+                    .Select(o => o.Valor).ToList();
+            }
+            catch (DbException)
+            {
+                // Sin la lista se puede seguir: el operario ya apuntado sigue saliendo
+            }
+        }
+        obsCajaOperario = rutinaDia?.CajaOperario;
+        obsCajaEstado = rutinaDia?.CajaEstado;
+        obsDepositos = rutinaDia?.Depositos;
+        obsNotas = observacionesDia.Select(o => new NotaSeccion { SeccionId = o.SeccionId, Texto = o.Texto }).ToList();
+        obsError = null;
+        verObservaciones = true;
+    }
+
+    private async Task GuardarObservaciones()
+    {
+        if (obsNotas.Any(n => n.SeccionId == 0 && !string.IsNullOrWhiteSpace(n.Texto)))
+        {
+            obsError = "Elige la sección de cada observación.";
+            return;
+        }
+        guardando = true;
+        obsError = null;
+        avisoGuardada = null;
+        await Task.Yield();
+        try
+        {
+            using (Sesion.Como(usuario!))
+                servicio.GuardarObservaciones(fecha, obsCajaOperario, obsCajaEstado, obsDepositos,
+                    obsNotas.Where(n => n.SeccionId != 0).Select(n => new ObservacionRutina(n.SeccionId, n.Texto ?? "")).ToList(),
+                    plantilla!);
+            avisoGuardada = "Observaciones guardadas.";
+            AbrirObservaciones();   // vuelve a leerlas, ya limpias
+        }
+        catch (ReglaNegocioException ex)
+        {
+            obsError = ex.Message;
+        }
+        catch (DbException ex)
+        {
+            obsError = "No se ha guardado. Comprueba la conexión y prueba otra vez. " + ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
     }
 
     // Panel

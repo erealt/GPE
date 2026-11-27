@@ -471,6 +471,39 @@ public class RutinaRepositorio
         transaccion.Commit();
     }
 
+    // Web del control diario: caja de herramientas, depósitos y observaciones por sección de un día, sin
+    // tocar las casillas. Crea la ronda si no la hay y cambia su versión, como GuardarCasilla.
+    public void GuardarObservacionesDia(Rutina rutina, IReadOnlyList<ObservacionRutina> observaciones, int usuarioId)
+    {
+        using var conexion = Conexion.Abrir();
+        using var transaccion = conexion.BeginTransaction();
+
+        int rutinaId;
+        using (var comando = new SqlCommand(@"
+            DECLARE @id INT = (SELECT id FROM RUTINA WITH (UPDLOCK, HOLDLOCK) WHERE fecha = @fecha);
+            IF @id IS NULL
+            BEGIN
+                INSERT INTO RUTINA (fecha, caja_operario, caja_estado, depositos, creado_por)
+                VALUES (@fecha, @caja_operario, @caja_estado, @depositos, @usuario);
+                SET @id = CAST(SCOPE_IDENTITY() AS INT);
+            END
+            ELSE
+                UPDATE RUTINA SET caja_operario = @caja_operario, caja_estado = @caja_estado, depositos = @depositos
+                WHERE id = @id;
+            SELECT @id;", conexion, transaccion))
+        {
+            comando.Parameters.AddWithValue("@fecha", rutina.Fecha.Date);
+            comando.Parameters.AddWithValue("@caja_operario", (object?)rutina.CajaOperario ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@caja_estado", (object?)rutina.CajaEstado ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@depositos", (object?)rutina.Depositos ?? DBNull.Value);
+            comando.Parameters.AddWithValue("@usuario", usuarioId);
+            rutinaId = (int)comando.ExecuteScalar();
+        }
+
+        GuardarObservaciones(rutinaId, observaciones, conexion, transaccion);
+        transaccion.Commit();
+    }
+
     // Apunta en la casilla la incidencia que se ha abierto desde ella. false si la casilla ya no existe.
     public bool Vincular(int rutinaId, int revision, int puntoId, int seccionId, int noConformidadId)
     {

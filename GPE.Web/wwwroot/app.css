@@ -519,11 +519,11 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
 }
 
 /* Móvil en vertical: la columna de los puntos más estrecha para que quepan más máquinas,
-   cabeceras sin espaciado que parten las palabras largas (PRODUCTO FINAL, AMBIENTE) y plantas en una fila */
+   cabeceras sin espaciado que parten las palabras largas (PRODUCTO FINAL, AMBIENTE) y plantas de dos en dos */
 @media (max-width: 600px) {
     .tabla-rutina .col-punto { min-width: 110px; max-width: 120px; font-size: 12px; padding: 6px 8px; letter-spacing: 0; }
     .tabla-rutina thead th { min-width: 54px; max-width: 54px; font-size: 9px; letter-spacing: 0; padding: 5px 1px; overflow-wrap: anywhere; }
-    .pestanas-planta .revision { flex: 1 1 0; min-width: 0; padding: 0 6px; }
+    .pestanas-planta .revision { flex: 1 1 calc(50% - 4px); min-width: 0; padding: 0 6px; }
 }
 
 /* Móvil en horizontal: poco alto, se aprovecha para la tabla */
@@ -631,3 +631,26 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
 .subgrupos .opciones { gap: 8px; }
 .subgrupos .opciones .opcion { font-weight: 400; font-size: 14px; padding: 8px 14px; }
 .subgrupos .opciones .opcion:has(input:checked) { font-weight: 600; }
+
+/* Control diario: pestaña Observaciones (caja de herramientas, depósitos y por sección), como en el escritorio */
+.observaciones-dia { max-width: 760px; }
+.observaciones-dia .tarjeta { padding: 16px 18px; margin-bottom: 14px; }
+.observaciones-dia h2 { font-size: 18px; margin: 0 0 2px; }
+.observaciones-dia .tarjeta > p.pequeno { margin: 0 0 12px; }
+.observaciones-dia .campo span, .observaciones-dia .etiqueta-campo {
+    font-size: 13px; font-weight: 600; color: var(--suave); margin-bottom: 6px; display: block;
+}
+.observaciones-dia select { height: 46px; }
+.observaciones-dia .estados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.observaciones-dia .estado:not(.marcado) {
+    height: 48px; background: white; color: var(--texto); border: 2px solid var(--borde); font-size: 15px;
+}
+.observaciones-dia .estado { height: 48px; font-size: 15px; border: 2px solid var(--borde); }
+.observaciones-dia .estado.marcado { border-color: currentColor; }
+.observacion-seccion {
+    padding: 10px; margin-bottom: 10px; border: 1px solid var(--borde); border-radius: var(--radio-control);
+    background: var(--cabecera-tabla);
+}
+.observacion-cabeza { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.observacion-cabeza select { flex: 1; }
+.guardar-observaciones { height: 52px; font-size: 16px; margin-bottom: 30px; }

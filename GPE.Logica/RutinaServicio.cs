@@ -94,6 +94,30 @@ public class RutinaServicio
             lista.Add(resultado);
         }
 
+        var (limpia, notas) = LimpiarObservaciones(rutina, observaciones, plantilla);
+        return repositorio.Guardar(limpia, revisiones, lista, notas, usuario.Id)
+            ?? throw new ReglaNegocioException(MensajeModificado);
+    }
+
+    // Web del control diario: guarda las observaciones del pie de la hoja (caja de herramientas, depósitos
+    // y por sección) sin tocar las casillas. Si aún no hay ronda ese día, la crea.
+    public void GuardarObservaciones(DateTime fecha, string? cajaOperario, string? cajaEstado, string? depositos,
+        IEnumerable<ObservacionRutina> observaciones, PlantillaRutina plantilla)
+    {
+        if (Sesion.UsuarioActual is not Usuario usuario)
+            throw new ReglaNegocioException("No hay ningún usuario elegido.");
+        if (fecha.Date > DateTime.Today)
+            throw new ReglaNegocioException("No se puede rellenar la ronda de un día que todavía no ha llegado.");
+
+        var (rutina, notas) = LimpiarObservaciones(
+            new Rutina(0, fecha.Date, cajaOperario, cajaEstado, depositos, null), observaciones, plantilla);
+        repositorio.GuardarObservacionesDia(rutina, notas, usuario.Id);
+    }
+
+    // Quita espacios, deja en null lo vacío y comprueba largos y secciones. Las observaciones vacías no se guardan.
+    private static (Rutina Rutina, List<ObservacionRutina> Notas) LimpiarObservaciones(Rutina rutina,
+        IEnumerable<ObservacionRutina> observaciones, PlantillaRutina plantilla)
+    {
         static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
         rutina = rutina with
         {
@@ -116,9 +140,7 @@ public class RutinaServicio
                 throw new ReglaNegocioException($"Una observación no puede pasar de {LargoComentario} caracteres.");
             notas.Add(new ObservacionRutina(observacion.SeccionId, texto));
         }
-
-        return repositorio.Guardar(rutina, revisiones, lista, notas, usuario.Id)
-            ?? throw new ReglaNegocioException(MensajeModificado);
+        return (rutina, notas);
     }
 
     // Web del control diario: guarda una casilla en el momento, sin pisar lo que marque otra persona.
