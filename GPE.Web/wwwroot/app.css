@@ -518,9 +518,12 @@ label.boton-foto.secundario { color: var(--texto); border-color: var(--borde); }
     font-size: 14px; overflow-wrap: anywhere;
 }
 
-/* Móvil en vertical: la columna de los puntos más estrecha para que quepan más máquinas */
+/* Móvil en vertical: la columna de los puntos más estrecha para que quepan más máquinas,
+   cabeceras sin espaciado que parten las palabras largas (PRODUCTO FINAL, AMBIENTE) y plantas en una fila */
 @media (max-width: 600px) {
-    .tabla-rutina .col-punto { min-width: 110px; max-width: 120px; font-size: 12px; padding: 6px 8px; }
+    .tabla-rutina .col-punto { min-width: 110px; max-width: 120px; font-size: 12px; padding: 6px 8px; letter-spacing: 0; }
+    .tabla-rutina thead th { min-width: 54px; max-width: 54px; font-size: 9px; letter-spacing: 0; padding: 5px 1px; overflow-wrap: anywhere; }
+    .pestanas-planta .revision { flex: 1 1 0; min-width: 0; padding: 0 6px; }
 }
 
 /* Móvil en horizontal: poco alto, se aprovecha para la tabla */

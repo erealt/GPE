@@ -37,8 +37,6 @@ public class ModuloRutinaCalidad : UserControl
     private readonly Button btnNuevaRevision = Tema.BotonSecundario("+ Nueva revisión", 160);
     private readonly ToolTip ayuda = new();
 
-    private static readonly string[] Plantas = { Planta.Baja, Planta.Superior };
-
     private readonly RadioButton pestanaObservaciones = new();
     private Control panelObservaciones = null!;
 
@@ -836,7 +834,7 @@ public class ModuloRutinaCalidad : UserControl
     private Control CrearPestanasPlanta()
     {
         var pestanas = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
-        foreach (string planta in Plantas)
+        foreach (string planta in Planta.Todas)
         {
             var boton = new RadioButton
             {

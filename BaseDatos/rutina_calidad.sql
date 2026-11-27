@@ -8,12 +8,12 @@ GO
 CREATE TABLE RUTINA_SECCION (
     id INT IDENTITY(1,1) PRIMARY KEY,
     nombre NVARCHAR(50) NOT NULL,
-    planta NVARCHAR(10) NOT NULL,                 -- BAJA o SUPERIOR
+    planta NVARCHAR(10) NOT NULL,                 -- BAJA, SUPERIOR o ALMACEN
     seccion_calidad NVARCHAR(150) NULL,
     orden INT NOT NULL,
     activo BIT NOT NULL CONSTRAINT DF_rutina_seccion_activo DEFAULT 1,
     CONSTRAINT UQ_rutina_seccion UNIQUE (nombre),
-    CONSTRAINT CK_rutina_seccion_planta CHECK (planta IN ('BAJA', 'SUPERIOR'))
+    CONSTRAINT CK_rutina_seccion_planta CHECK (planta IN ('BAJA', 'SUPERIOR', 'ALMACEN'))
 );
 
 -- Filas de la hoja. Los numéricos (PESOS) llevan valor; mc_pcc_bpm se propone en la incidencia.

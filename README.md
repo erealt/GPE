@@ -15,6 +15,7 @@ Los datos se guardan en SQL Server. Este documento explica cómo está organizad
    - [`crear_tablas.sql`](BaseDatos/crear_tablas.sql): tablas de devoluciones y del DeCA. Ya da de alta la fábrica, los cuatro roles (los tres de devoluciones y Calidad) y los seis estados (apartado 3).
    - [`no_conformidades.sql`](BaseDatos/no_conformidades.sql): tablas de calidad y opciones de los desplegables (la hoja LISTAS del Excel).
    - [`rutina_calidad.sql`](BaseDatos/rutina_calidad.sql): tablas de la rutina del supervisor de calidad, con las máquinas y los puntos de control de la hoja de chequeos diarios.
+   - [`rutina_almacenes.sql`](BaseDatos/rutina_almacenes.sql): la pestaña Almacenes de la rutina (hoja RG-AL-01, condiciones y limpieza de almacenes). Después de `rutina_calidad.sql`; se puede ejecutar más de una vez.
    - [`control_agua.sql`](BaseDatos/control_agua.sql): tablas del control de agua (hoja AGUA del Excel de calidad), con los puntos de agua que se revisan.
    - [`rutina_revisiones.sql`](BaseDatos/rutina_revisiones.sql): solo en bases de datos creadas antes de que la rutina tuviera varias revisiones por día. Se puede ejecutar más de una vez.
    - [`deca_normativa.sql`](BaseDatos/deca_normativa.sql): solo en bases de datos creadas antes de añadir al DeCA el cargador contractual, la matrícula del remolque y los lugares de carga y descarga. Se puede ejecutar más de una vez.

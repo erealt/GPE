@@ -13,6 +13,7 @@ public class FormNuevoRutina : Form
     private readonly TextBox txtNombre = new();
     private readonly RadioButton rbBaja = new() { Text = Planta.Nombre(Planta.Baja), AutoSize = true, Checked = true };
     private readonly RadioButton rbSuperior = new() { Text = Planta.Nombre(Planta.Superior), AutoSize = true };
+    private readonly RadioButton rbAlmacen = new() { Text = Planta.Nombre(Planta.Almacen), AutoSize = true };
     private readonly CheckBox chkNumerico = new() { Text = "Dato numérico", AutoSize = true };
 
     public FormNuevoRutina(bool esMaquina)
@@ -44,6 +45,7 @@ public class FormNuevoRutina : Form
             var plantas = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 15) };
             plantas.Controls.Add(rbBaja);
             plantas.Controls.Add(rbSuperior);
+            plantas.Controls.Add(rbAlmacen);
             layout.Controls.Add(new Label { Text = "Planta", AutoSize = true, Font = Tema.FuentePequenaNegrita });
             layout.Controls.Add(plantas);
         }
@@ -81,7 +83,7 @@ public class FormNuevoRutina : Form
         try
         {
             if (esMaquina)
-                servicio.AnadirSeccion(txtNombre.Text, rbSuperior.Checked ? Planta.Superior : Planta.Baja);
+                servicio.AnadirSeccion(txtNombre.Text, rbAlmacen.Checked ? Planta.Almacen : rbSuperior.Checked ? Planta.Superior : Planta.Baja);
             else
                 servicio.AnadirPunto(txtNombre.Text, chkNumerico.Checked);
         }

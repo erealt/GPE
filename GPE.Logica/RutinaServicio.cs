@@ -156,7 +156,7 @@ public class RutinaServicio
             throw new ReglaNegocioException("Escribe el nombre de la máquina.");
         if (nombre.Length > LargoNombreSeccion)
             throw new ReglaNegocioException($"El nombre no puede pasar de {LargoNombreSeccion} caracteres.");
-        if (planta != Planta.Baja && planta != Planta.Superior)
+        if (!Planta.Todas.Contains(planta))
             throw new ReglaNegocioException("Elige la planta.");
         if (!repositorio.AnadirSeccion(nombre, planta))
             throw new ReglaNegocioException($"Ya hay una máquina llamada \"{nombre}\".");

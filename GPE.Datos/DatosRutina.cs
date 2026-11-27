@@ -25,8 +25,17 @@ public static class Planta
 {
     public const string Baja = "BAJA";
     public const string Superior = "SUPERIOR";
+    public const string Almacen = "ALMACEN";    // hoja RG-AL-01, condiciones y limpieza de almacenes
 
-    public static string Nombre(string planta) => planta == Baja ? "Planta baja" : "Planta superior";
+    public static readonly string[] Todas = { Baja, Superior, Almacen };
+
+    public static string Nombre(string planta) => planta switch
+    {
+        Baja => "Planta baja",
+        Superior => "Planta superior",
+        Almacen => "Almacenes",
+        _ => planta
+    };
 }
 
 // Columna de la hoja (máquina o sección). SeccionCalidad: la de sus incidencias, o null.

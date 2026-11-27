@@ -49,7 +49,7 @@ else
     </div>
 
     <div class="pestanas-planta">
-        @foreach (var p in new[] { Planta.Baja, Planta.Superior })
+        @foreach (var p in Planta.Todas)
         {
             <button class="revision @(p == planta ? "elegida" : "")" @onclick="() => ElegirPlanta(p)">@Planta.Nombre(p)</button>
         }
